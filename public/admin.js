@@ -477,6 +477,10 @@ function renderTeams(project) {
 const settingEls = {
   title: document.getElementById('set-title'),
   displayStyle: document.getElementById('set-display-style'),
+  styleFree: document.getElementById('set-style-free'),
+  titleFree: document.getElementById('set-title-free'),
+  resetTitlePos: document.getElementById('reset-title-pos'),
+  titleDecor: document.getElementById('set-title-decor'),
   columns: document.getElementById('set-columns'),
   density: document.getElementById('set-density'),
   sortBy: document.getElementById('set-sortby'),
@@ -490,8 +494,10 @@ const settingEls = {
   bgImageInput: document.getElementById('set-bg-image'),
   bgImagePreview: document.getElementById('bg-image-preview'),
   bgImageClear: document.getElementById('set-bg-image-clear'),
-  cardBgEnabled: document.getElementById('set-card-bg-enabled'),
+  cardBgMode: document.getElementById('set-card-bg-mode'),
   cardBg: document.getElementById('set-card-bg'),
+  cardOpacity: document.getElementById('set-card-opacity'),
+  cardAcrylicBlur: document.getElementById('set-card-acrylic-blur'),
   cardRadius: document.getElementById('set-card-radius'),
   bgTypeRadios: document.querySelectorAll('input[name="bg-type"]'),
   layoutMode: document.getElementById('set-layout-mode'),
@@ -520,6 +526,8 @@ const settingEls = {
 const columnsVal = document.getElementById('columns-val');
 const radiusVal = document.getElementById('radius-val');
 const memberScaleVal = document.getElementById('member-scale-val');
+const cardOpacityVal = document.getElementById('card-opacity-val');
+const cardBlurVal = document.getElementById('card-blur-val');
 const avatarSizeVal = document.getElementById('avatar-size-val');
 const glassBlurVal = document.getElementById('glass-blur-val');
 const glassOpacityVal = document.getElementById('glass-opacity-val');
@@ -553,6 +561,9 @@ const adv = {
   cardShadow: document.getElementById('set-card-shadow'),
   teamBarWidth: document.getElementById('set-team-bar-width'),
   teamBarVal: document.getElementById('team-bar-val'),
+  showTeamAccent: document.getElementById('set-show-team-accent'),
+  teamAccentColorEnabled: document.getElementById('set-team-accent-color-enabled'),
+  teamAccentColor: document.getElementById('set-team-accent-color'),
   avatarBorderWidth: document.getElementById('set-avatar-border-width'),
   avatarBorderVal: document.getElementById('avatar-border-val'),
   avatarShape: document.getElementById('set-avatar-shape'),
@@ -584,6 +595,16 @@ function pushSetting(key, value, immediate) {
 settingEls.title.addEventListener('input', () => pushSetting('title', settingEls.title.value));
 settingEls.displayStyle.addEventListener('change', () =>
   pushSetting('displayStyle', settingEls.displayStyle.value, true));
+settingEls.styleFree.addEventListener('change', () =>
+  pushSetting('styleFreeConfig', settingEls.styleFree.checked, true));
+settingEls.titleFree.addEventListener('change', () =>
+  pushSetting('titleFree', settingEls.titleFree.checked, true));
+settingEls.resetTitlePos.addEventListener('click', () => {
+  projectOp('updateSettings', { patch: { titleX: 50, titleY: 8 } })
+    .catch((e) => toast(e.message));
+});
+settingEls.titleDecor.addEventListener('change', () =>
+  pushSetting('titleDecor', settingEls.titleDecor.value, true));
 settingEls.columns.addEventListener('input', () => {
   columnsVal.textContent = settingEls.columns.value;
   pushSetting('columns', Number(settingEls.columns.value));
@@ -626,16 +647,30 @@ settingEls.bgImageClear.addEventListener('click', () => {
   projectOp('updateSettings', { patch: { bgImage: null, bgType: 'color' } }).catch((e) => toast(e.message));
 });
 
-// ---- 卡片 ----
-settingEls.cardBgEnabled.addEventListener('change', () => {
-  const on = settingEls.cardBgEnabled.checked;
-  settingEls.cardBg.disabled = !on;
-  projectOp('updateSettings', { patch: { cardBg: on ? settingEls.cardBg.value : '' } })
-    .catch((e) => toast(e.message));
+// ---- 卡片底色：跟随主题 / 纯色 / 半透明 / 亚克力 ----
+function updateCardBgControls() {
+  const mode = settingEls.cardBgMode.value;
+  settingEls.cardBg.disabled = mode === 'auto';
+  settingEls.cardOpacity.disabled = !(mode === 'translucent' || mode === 'acrylic');
+  settingEls.cardAcrylicBlur.disabled = mode !== 'acrylic';
+}
+
+settingEls.cardBgMode.addEventListener('change', () => {
+  updateCardBgControls();
+  pushSetting('cardBgMode', settingEls.cardBgMode.value, true);
 });
 settingEls.cardBg.addEventListener('input', () => {
-  if (settingEls.cardBgEnabled.checked) pushSetting('cardBg', settingEls.cardBg.value);
+  if (settingEls.cardBgMode.value !== 'auto') pushSetting('cardBg', settingEls.cardBg.value);
 });
+settingEls.cardOpacity.addEventListener('input', () => {
+  cardOpacityVal.textContent = Math.round(Number(settingEls.cardOpacity.value) * 100);
+  pushSetting('cardOpacity', Number(settingEls.cardOpacity.value));
+});
+settingEls.cardAcrylicBlur.addEventListener('input', () => {
+  cardBlurVal.textContent = settingEls.cardAcrylicBlur.value;
+  pushSetting('cardAcrylicBlur', Number(settingEls.cardAcrylicBlur.value));
+});
+updateCardBgControls();
 settingEls.cardRadius.addEventListener('input', () => {
   radiusVal.textContent = settingEls.cardRadius.value;
   pushSetting('cardRadius', Number(settingEls.cardRadius.value));
@@ -751,7 +786,7 @@ advRanges.forEach(([input, label, key, fmt]) => {
   });
 
 [[adv.titleRule, 'showTitleRule'], [adv.showRank, 'showRank'],
-  [adv.showScoreBar, 'showScoreBar']]
+  [adv.showScoreBar, 'showScoreBar'], [adv.showTeamAccent, 'showTeamAccent']]
   .forEach(([input, key]) => {
     input.addEventListener('change', () => pushSetting(key, input.checked, true));
   });
@@ -770,6 +805,7 @@ bindAdvColorToggle(adv.titleColorEnabled, adv.titleColor, 'titleColor');
 bindAdvColorToggle(adv.cardBorderColorEnabled, adv.cardBorderColor, 'cardBorderColor');
 bindAdvColorToggle(adv.textColorEnabled, adv.textColor, 'textColor');
 bindAdvColorToggle(adv.rankColorEnabled, adv.rankColor, 'rankColor');
+bindAdvColorToggle(adv.teamAccentColorEnabled, adv.teamAccentColor, 'teamAccentColor');
 
 [[adv.positiveColor, 'positiveColor'], [adv.negativeColor, 'negativeColor']]
   .forEach(([input, key]) => {
@@ -818,6 +854,9 @@ function renderSettings(settings) {
     settingEls.title.value = settings.title;
   }
   settingEls.displayStyle.value = settings.displayStyle || 'lecture';
+  settingEls.styleFree.checked = Boolean(settings.styleFreeConfig);
+  settingEls.titleFree.checked = Boolean(settings.titleFree);
+  settingEls.titleDecor.value = settings.titleDecor || 'auto';
   if (Number(settingEls.columns.value) !== settings.columns) {
     settingEls.columns.value = settings.columns;
     columnsVal.textContent = settings.columns;
@@ -865,15 +904,22 @@ function renderSettings(settings) {
     settingEls.bgImagePreview.classList.add('hidden');
   }
 
-  // 卡片
-  settingEls.cardBgEnabled.checked = Boolean(settings.cardBg);
-  settingEls.cardBg.disabled = !settings.cardBg;
-  if (settings.cardBg) {
-    if (settingEls.cardBg.value !== settings.cardBg) settingEls.cardBg.value = settings.cardBg;
-  } else {
-    // 未自定义时，取色器预置为当前主题卡片色
-    settingEls.cardBg.value = settings.theme === 'light' ? '#ffffff' : '#1a1f26';
+  // 卡片底色
+  settingEls.cardBgMode.value = settings.cardBgMode || 'auto';
+  updateCardBgControls();
+  if (document.activeElement !== settingEls.cardBg) {
+    const themeCard = settings.theme === 'light' ? '#ffffff' : '#1a1f26';
+    const color = settings.cardBg || themeCard;
+    if (settingEls.cardBg.value !== color) settingEls.cardBg.value = color;
   }
+  if (Number(settingEls.cardOpacity.value) !== settings.cardOpacity) {
+    settingEls.cardOpacity.value = settings.cardOpacity;
+  }
+  cardOpacityVal.textContent = Math.round(settings.cardOpacity * 100);
+  if (Number(settingEls.cardAcrylicBlur.value) !== settings.cardAcrylicBlur) {
+    settingEls.cardAcrylicBlur.value = settings.cardAcrylicBlur;
+  }
+  cardBlurVal.textContent = settings.cardAcrylicBlur;
   if (Number(settingEls.cardRadius.value) !== settings.cardRadius) {
     settingEls.cardRadius.value = settings.cardRadius;
     radiusVal.textContent = settings.cardRadius;
@@ -942,6 +988,7 @@ function renderSettings(settings) {
   adv.titleRule.checked = settings.showTitleRule !== false;
   adv.showRank.checked = settings.showRank !== false;
   adv.showScoreBar.checked = settings.showScoreBar !== false;
+  adv.showTeamAccent.checked = settings.showTeamAccent !== false;
 
   syncAdvRange(adv.fontScale, adv.fontScaleVal, settings.fontScale, fmtNum);
   syncAdvRange(adv.titleSize, adv.titleSizeVal, settings.titleSize, fmtAuto);
@@ -962,6 +1009,7 @@ function renderSettings(settings) {
   syncAdvColorToggle(adv.textColorEnabled, adv.textColor, settings.textColor,
     settings.theme === 'light' ? '#191d23' : '#e9e5dc');
   syncAdvColorToggle(adv.rankColorEnabled, adv.rankColor, settings.rankColor, settings.accent);
+  syncAdvColorToggle(adv.teamAccentColorEnabled, adv.teamAccentColor, settings.teamAccentColor, settings.accent);
 
   if (document.activeElement !== adv.positiveColor && adv.positiveColor.value !== settings.positiveColor) {
     adv.positiveColor.value = settings.positiveColor;

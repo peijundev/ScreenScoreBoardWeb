@@ -24,7 +24,12 @@ const DEFAULT_SETTINGS = {
   bgColor: '',              // '' = 跟随主题
   bgImage: null,            // avatars/xxx.png
   cardBg: '',               // '' = 跟随主题
+  cardBgMode: 'auto',       // auto | custom | translucent | acrylic
+  cardOpacity: 0.55,        // 半透明/亚克力不透明度 0.15–1
+  cardAcrylicBlur: 12,      // 亚克力模糊 px（0–40）
   cardRadius: 10,           // 0–32
+  showTeamAccent: true,     // 团队卡左侧色条
+  teamAccentColor: '',      // '' = 使用强调色
   layoutMode: 'auto',       // auto | free（自由布局：百分比坐标）
   memberScale: 1,           // 成员小卡片缩放 0.6–2
   avatarPosition: 'left',   // left | right | top | bottom（头像相对姓名）
@@ -49,6 +54,11 @@ const DEFAULT_SETTINGS = {
   fontScale: 1,             // 姓名/分数/成员字号缩放 0.7–1.5
   titleSize: 0,             // 标题字号 px；0 = 自动
   titleAlign: 'auto',       // auto（跟随风格）| center | left | right
+  titleDecor: 'auto',       // auto（跟随风格）| plain（纯标题，去掉胶囊/竖条）
+  styleFreeConfig: false,   // true = 高级外观设置覆盖风格皮肤的固定排版
+  titleFree: false,         // 标题自由位置（可在预览中拖动）
+  titleX: 50,               // 标题中心 X（视口百分比 0–100）
+  titleY: 8,                // 标题中心 Y（视口百分比 0–100）
   titleColor: '',           // '' = 跟随主题
   showTitleRule: true,      // 标题下方短横线
   boardMaxWidth: 1800,      // 卡片区最大宽度 px（900–2600）
@@ -100,6 +110,10 @@ function normalizeProject(raw) {
   // 旧版本：毛玻璃开关 → 卡片样式
   if (p.settings && !p.settings.cardStyle) {
     settings.cardStyle = p.settings.glassEnabled ? 'glass' : 'solid';
+  }
+  // 旧版本：有自定义卡片底色 → 迁移为「自定义纯色」模式
+  if (p.settings && p.settings.cardBgMode == null) {
+    settings.cardBgMode = p.settings.cardBg ? 'custom' : 'auto';
   }
   delete settings.glassEnabled;
 
@@ -292,7 +306,8 @@ function intRange(v, lo, hi, message) {
 const SETTINGS_VALIDATORS = {
   title: (v) => needString(v, '标题', 30),
   displayStyle: (v) =>
-    (['lecture', 'ppt', 'seewo', 'kde', 'custom'].includes(v)
+    (['lecture', 'ppt', 'seewo', 'kde', 'custom',
+      'guofeng', 'ink', 'modern', 'neon', 'poster'].includes(v)
       ? v
       : (() => { throw new OpError('显示风格非法'); })()),
   columns: (v) => {
@@ -317,6 +332,18 @@ const SETTINGS_VALIDATORS = {
     if (v === '' || v == null) return '';
     return /^#[0-9a-fA-F]{6}$/.test(v) ? v : (() => { throw new OpError('卡片底色须为 #rrggbb 或留空'); })();
   },
+  cardBgMode: (v) =>
+    (['auto', 'custom', 'translucent', 'acrylic'].includes(v)
+      ? v
+      : (() => { throw new OpError('卡片底色模式非法'); })()),
+  cardOpacity: (v) => {
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0.15 || n > 1) throw new OpError('卡片不透明度须在 0.15–1 之间');
+    return Math.round(n * 100) / 100;
+  },
+  cardAcrylicBlur: (v) => intRange(v, 0, 40, '亚克力模糊须为 0–40'),
+  showTeamAccent: (v) => Boolean(v),
+  teamAccentColor: (v) => hexOrEmpty(v, '团队色条颜色须为 #rrggbb 或留空'),
   cardRadius: (v) => {
     const n = Number(v);
     if (!Number.isInteger(n) || n < 0 || n > 32) throw new OpError('圆角须为 0–32 的整数');
@@ -397,6 +424,20 @@ const SETTINGS_VALIDATORS = {
   titleSize: (v) => intRange(v, 0, 120, '标题字号须为 0–120 的整数（0=自动）'),
   titleAlign: (v) =>
     (['auto', 'center', 'left', 'right'].includes(v) ? v : (() => { throw new OpError('标题对齐非法'); })()),
+  titleDecor: (v) =>
+    (['auto', 'plain'].includes(v) ? v : (() => { throw new OpError('标题装饰取值非法'); })()),
+  styleFreeConfig: (v) => Boolean(v),
+  titleFree: (v) => Boolean(v),
+  titleX: (v) => {
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0 || n > 100) throw new OpError('标题位置 X 须在 0–100 之间');
+    return Math.round(n * 100) / 100;
+  },
+  titleY: (v) => {
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0 || n > 100) throw new OpError('标题位置 Y 须在 0–100 之间');
+    return Math.round(n * 100) / 100;
+  },
   titleColor: (v) => hexOrEmpty(v, '标题颜色须为 #rrggbb 或留空'),
   showTitleRule: (v) => Boolean(v),
   boardMaxWidth: (v) => intRange(v, 900, 2600, '页面最大宽度须为 900–2600'),

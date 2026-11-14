@@ -24,11 +24,15 @@
   /* 高级外观（由 display.js 注入） */
   --font-scale: 1;
   --title-size: initial;
+  --title-x: 50%;
+  --title-y: 8%;
   --board-max: 1800px;
   --gap-override: initial;
   --card-pad-override: initial;
   --card-border-width: 1px;
   --team-bar-w: 4px;
+  --team-accent-color: initial;
+  --card-blur: 12px;
   --avatar-border-w: 1px;
   --avatar-radius: 50%;
   --rank-size: 15px;
@@ -330,7 +334,7 @@ body.edit-mode .edit-hint {
 
 /* ---- 团队卡片：顶部信息条 + 成员网格 ---- */
 .team-card {
-  border-left: var(--team-bar-w, 4px) solid var(--accent);
+  border-left: var(--team-bar-w, 4px) solid var(--team-accent-color, var(--accent));
   display: flex;
   flex-direction: column;
 }
@@ -634,7 +638,7 @@ body[data-display-style="ppt"] .topbar {
   padding: 30px 40px 16px;
 }
 body[data-display-style="ppt"] .topbar h1 {
-  font-size: clamp(32px, 3.4vw, 52px);
+  font-size: var(--title-size, clamp(32px, 3.4vw, 52px));
   padding-left: 18px;
   border-left: 7px solid var(--accent);
   letter-spacing: 0.02em;
@@ -669,7 +673,7 @@ body[data-display-style="seewo"] .topbar h1 {
   color: #fff;
   padding: 10px 38px;
   border-radius: 999px;
-  font-size: clamp(28px, 3.2vw, 46px);
+  font-size: var(--title-size, clamp(28px, 3.2vw, 46px));
   box-shadow: 0 8px 20px rgba(31, 83, 140, 0.18);
 }
 body[data-display-style="seewo"] .card {
@@ -728,7 +732,7 @@ body[data-display-style="kde"][data-theme="light"] .topbar {
   border-bottom: 1px solid #cfd4da;
 }
 body[data-display-style="kde"] .topbar h1 {
-  font-size: 20px;
+  font-size: var(--title-size, 20px);
   letter-spacing: 0;
   color: var(--text);
 }
@@ -741,15 +745,207 @@ body[data-display-style="kde"] .card {
   border-radius: 0;
   box-shadow: none;
 }
-body[data-display-style="kde"] .team-card { border-left: 4px solid var(--accent); }
+body[data-display-style="kde"] .team-card {
+  border-left-width: var(--team-bar-w, 4px);
+  border-left-color: var(--team-accent-color, var(--accent));
+}
 body[data-display-style="kde"] .rank { opacity: 1; color: var(--text-dim); }
 body[data-display-style="kde"] .score-bar { height: 3px; }
 
 /* ---------- 自由配置：只保留基础排版，装饰元素交给现有设置 ---------- */
 body[data-display-style="custom"] .topbar::after { display: none; }
-body[data-display-style="custom"] .topbar h1 { font-size: clamp(24px, 2.8vw, 38px); }
+body[data-display-style="custom"] .topbar h1 { font-size: var(--title-size, clamp(24px, 2.8vw, 38px)); }
 body[data-display-style="custom"] .rank,
 body[data-display-style="custom"] .score-bar { display: none; }
+
+/* ---------- 古风雅集：宣纸、宋楷标题、朱砂印章式标题线 ---------- */
+body[data-display-style="guofeng"][data-theme] {
+  --bg-fallback: #f3ecdc;
+  --card: #fbf5e8;
+  --card-border: #cdbb9e;
+  --text: #2b2118;
+  --text-dim: #7c6a55;
+  --scrim: rgba(243, 236, 220, 0.68);
+  --card-img-veil: rgba(250, 244, 230, 0.72);
+  background-color: #f3ecdc;
+  font-family: "Noto Serif CJK SC", "Songti SC", "STSong", "SimSun", serif;
+}
+body[data-display-style="guofeng"] .topbar h1 {
+  font-family: inherit;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+}
+body[data-display-style="guofeng"] .topbar::after {
+  width: 20px;
+  height: 20px;
+  background: #b03a2e;
+  border-radius: 2px;
+  transform: rotate(-4deg);
+}
+body[data-display-style="guofeng"] .card {
+  border-radius: 6px;
+  box-shadow: 0 2px 0 rgba(90, 60, 30, 0.12);
+}
+body[data-display-style="guofeng"] .member { background: rgba(176, 140, 92, 0.12); }
+
+/* ---------- 水墨：黑白灰、宋体、墨色笔触标题线 ---------- */
+body[data-display-style="ink"][data-theme] {
+  --bg-fallback: #f7f7f4;
+  --card: #ffffff;
+  --card-border: #d8d8d2;
+  --text: #1b1b19;
+  --text-dim: #6f6f68;
+  --scrim: rgba(247, 247, 244, 0.7);
+  --card-img-veil: rgba(255, 255, 255, 0.75);
+  background-color: #f7f7f4;
+  font-family: "Noto Serif CJK SC", "Songti SC", "STSong", "SimSun", serif;
+}
+body[data-display-style="ink"] .topbar h1 {
+  font-family: inherit;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+body[data-display-style="ink"] .topbar::after {
+  width: 140px;
+  height: 6px;
+  background: linear-gradient(90deg, #1b1b19, rgba(27, 27, 25, 0));
+}
+body[data-display-style="ink"] .card {
+  border-radius: 2px;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
+}
+body[data-display-style="ink"] .team-card { border-left-color: #1b1b19; }
+body[data-display-style="ink"] .rank { color: #1b1b19; }
+body[data-display-style="ink"] .score-bar { background: #1b1b19; }
+body[data-display-style="ink"] .score-pos { color: #2f6b4f; }
+body[data-display-style="ink"] .score-neg { color: #a33a3a; }
+
+/* ---------- 现代极简：左对齐超粗标题、细边框、浅几何卡片 ---------- */
+body[data-display-style="modern"][data-theme="light"] {
+  --bg-fallback: #f4f6f8;
+  --card: #ffffff;
+  --card-border: #e1e5ea;
+  --text: #0f1419;
+  --text-dim: #6b7280;
+  background-color: #f4f6f8;
+}
+body[data-display-style="modern"][data-theme="dark"] {
+  --bg-fallback: #101418;
+  --card: #171c22;
+  --card-border: #2a313a;
+  --text: #eef2f6;
+  --text-dim: #8b95a1;
+  background-color: #101418;
+}
+body[data-display-style="modern"] .topbar {
+  align-items: flex-start;
+  text-align: left;
+  max-width: none;
+  padding: 30px 40px 14px;
+}
+body[data-display-style="modern"] .topbar h1 {
+  font-size: var(--title-size, clamp(30px, 3.4vw, 50px));
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+body[data-display-style="modern"] .topbar::after { display: none; }
+body[data-display-style="modern"] .board {
+  max-width: none;
+  padding: 10px 40px 48px;
+}
+body[data-display-style="modern"] .card {
+  border-radius: 2px;
+  box-shadow: none;
+}
+body[data-display-style="modern"] .team-card { border-left-width: 3px; }
+body[data-display-style="modern"] .rank { font-weight: 800; opacity: 1; }
+
+/* ---------- 赛博霓虹：深空底、网格、青色发光 ---------- */
+body[data-display-style="neon"][data-theme] {
+  --bg-fallback: #08080f;
+  --card: #12101f;
+  --card-border: #2c2950;
+  --text: #eae8ff;
+  --text-dim: #8d88b8;
+  --scrim: rgba(5, 5, 12, 0.6);
+  --card-img-veil: rgba(8, 8, 15, 0.6);
+  background-color: #08080f;
+  background-image:
+    linear-gradient(rgba(0, 229, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 229, 255, 0.05) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+body[data-display-style="neon"] .topbar h1 {
+  color: #eaf9ff;
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 18px rgba(0, 229, 255, 0.55);
+}
+body[data-display-style="neon"] .topbar::after {
+  background: #00e5ff;
+  box-shadow: 0 0 18px rgba(0, 229, 255, 0.8);
+}
+body[data-display-style="neon"] .card {
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  border-radius: 2px;
+  box-shadow: 0 0 18px rgba(0, 229, 255, 0.12), inset 0 0 24px rgba(0, 229, 255, 0.06);
+}
+body[data-display-style="neon"] .team-card { border-left: 3px solid #ff2fb3; }
+body[data-display-style="neon"] .rank {
+  color: #ff2fb3;
+  text-shadow: 0 0 10px rgba(255, 47, 179, 0.7);
+}
+body[data-display-style="neon"] .score-bar {
+  background: #00e5ff;
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.8);
+}
+body[data-display-style="neon"] .score-pos { color: #39ff88; }
+body[data-display-style="neon"] .score-neg { color: #ff4d6d; }
+
+/* ---------- 海报展板：粗黑边框、硬投影、整版标题线 ---------- */
+body[data-display-style="poster"][data-theme] {
+  --bg-fallback: #e9e8e3;
+  --card: #fffef8;
+  --card-border: #111111;
+  --text: #111111;
+  --text-dim: #5a5a55;
+  --scrim: rgba(233, 232, 227, 0.7);
+  --card-img-veil: rgba(255, 254, 248, 0.7);
+  background-color: #e9e8e3;
+}
+body[data-display-style="poster"] .topbar {
+  align-items: flex-start;
+  text-align: left;
+  max-width: none;
+  padding: 26px 32px 12px;
+}
+body[data-display-style="poster"] .topbar h1 {
+  font-size: var(--title-size, clamp(34px, 4vw, 60px));
+  font-weight: 900;
+  letter-spacing: -0.01em;
+}
+body[data-display-style="poster"] .topbar::after {
+  width: 100%;
+  height: 6px;
+  background: #111111;
+}
+body[data-display-style="poster"] .board {
+  max-width: none;
+  padding: 16px 32px 48px;
+}
+body[data-display-style="poster"] .card {
+  border: 2px solid #111111;
+  border-radius: 0;
+  box-shadow: 6px 6px 0 #111111;
+}
+body[data-display-style="poster"] .team-card { border-left-width: 8px; }
+body[data-display-style="poster"] .rank {
+  color: #111111;
+  font-weight: 900;
+  font-size: calc(var(--rank-size, 15px) + 4px);
+  opacity: 1;
+}
+body[data-display-style="poster"] .score-bar { background: #111111; height: 6px; }
+body[data-display-style="poster"] .member { background: #f1eee4; }
 
 /* ============================================================
    高级外观覆盖：放在最后，优先级高于风格皮肤
@@ -768,3 +964,65 @@ body[data-title-align="right"] .topbar::after { margin-left: auto; margin-right:
 body[data-title-color="custom"] .topbar h1 { color: var(--title-color); }
 body[data-rank-color="custom"] .rank { color: var(--rank-color); }
 body[data-card-shadow="custom"] .card { box-shadow: var(--card-shadow); }
+
+/* 卡片底色：半透明 / 亚克力（不透明度与模糊可调） */
+body[data-card-surface="translucent"] .card,
+body[data-card-surface="translucent"] .member {
+  background-color: var(--card);
+}
+body[data-card-surface="acrylic"] .card,
+body[data-card-surface="acrylic"] .member {
+  background-color: var(--card);
+  -webkit-backdrop-filter: blur(var(--card-blur, 12px));
+  backdrop-filter: blur(var(--card-blur, 12px));
+}
+
+/* 团队卡左侧色条可关闭 */
+body[data-team-accent="off"] .team-card { border-left-width: 0 !important; }
+
+/* 标题自由位置：可在管理端预览中拖动到任意位置 */
+body[data-title-free="on"] .topbar {
+  position: fixed;
+  left: var(--title-x, 50%);
+  top: var(--title-y, 8%);
+  transform: translate(-50%, -50%);
+  z-index: 25;
+  width: max-content;
+  max-width: 92vw;
+  padding: 0;
+  border-bottom: none;
+  background: transparent;
+}
+body.edit-mode[data-title-free="on"] .topbar,
+body.preview-embed[data-title-free="on"] .topbar {
+  cursor: grab;
+  touch-action: none;
+}
+body.edit-mode[data-title-free="on"] .topbar.dragging,
+body.preview-embed[data-title-free="on"] .topbar.dragging {
+  cursor: grabbing;
+  outline: 2px dashed var(--accent);
+  outline-offset: 8px;
+}
+
+/* 纯标题：去掉风格自带的标题装饰（希沃胶囊、PPT 竖条、KDE 标题栏底色） */
+body[data-title-decor="plain"] .topbar {
+  background: transparent;
+  border-bottom: none;
+}
+body[data-title-decor="plain"] .topbar h1 {
+  background: none;
+  color: var(--title-color, var(--text));
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+body[data-title-decor="plain"] .topbar::after { display: none; }
+
+/* 风格自由配置：用高级外观设置覆盖风格皮肤的固定卡片样式 */
+body[data-style-free="on"] .card {
+  border-radius: var(--radius);
+  border-width: var(--card-border-width, 1px);
+  box-shadow: var(--card-shadow, none);
+}

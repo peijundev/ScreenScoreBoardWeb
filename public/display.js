@@ -13,6 +13,10 @@ let currentProjectId = new URLSearchParams(location.search).get('project') || nu
 const isEdit = new URLSearchParams(location.search).get('edit') === '1';
 if (isEdit) document.body.classList.add('edit-mode');
 
+// 管理端预览 iframe：标题自由位置时允许直接拖动，无需开启编辑布局
+const inPreviewFrame = window.parent !== window;
+if (inPreviewFrame) document.body.classList.add('preview-embed');
+
 const board = document.getElementById('board');
 const emptyTip = document.getElementById('empty-tip');
 const titleEl = document.getElementById('board-title');
@@ -339,7 +343,11 @@ function applyAdvancedAppearance(settings) {
   const root = document.documentElement;
   const body = document.body;
 
-  body.style.fontFamily = FONT_STACKS[settings.fontFamily] || FONT_STACKS.system;
+  // 古风/水墨默认使用宋体；用户显式选字体时以用户设置为准
+  const serifStyles = ['guofeng', 'ink'];
+  const fontKey = settings.fontFamily === 'system' && serifStyles.includes(settings.displayStyle)
+    ? 'serif' : settings.fontFamily;
+  body.style.fontFamily = FONT_STACKS[fontKey] || FONT_STACKS.system;
 
   setVar(root.style, '--font-scale', String(settings.fontScale));
   setVar(root.style, '--title-size', settings.titleSize ? settings.titleSize + 'px' : '');
@@ -348,6 +356,8 @@ function applyAdvancedAppearance(settings) {
   setVar(root.style, '--card-pad-override', settings.cardPad ? settings.cardPad + 'px' : '');
   setVar(root.style, '--card-border-width', settings.cardBorderWidth + 'px');
   setVar(root.style, '--team-bar-w', settings.teamAccentWidth + 'px');
+  setVar(root.style, '--team-accent-color', settings.teamAccentColor || '');
+  body.dataset.teamAccent = settings.showTeamAccent === false ? 'off' : 'on';
   setVar(root.style, '--avatar-border-w', settings.avatarBorderWidth + 'px');
   setVar(root.style, '--avatar-radius', settings.avatarShape === 'square' ? '0px' : '50%');
   setVar(root.style, '--rank-size', settings.rankSize + 'px');
@@ -373,6 +383,11 @@ function applyAdvancedAppearance(settings) {
   }
 
   body.dataset.titleAlign = settings.titleAlign;
+  body.dataset.titleDecor = settings.titleDecor || 'auto';
+  body.dataset.styleFree = settings.styleFreeConfig ? 'on' : 'off';
+  body.dataset.titleFree = settings.titleFree ? 'on' : 'off';
+  setVar(root.style, '--title-x', settings.titleX + '%');
+  setVar(root.style, '--title-y', settings.titleY + '%');
   body.dataset.titleRule = settings.showTitleRule ? 'on' : 'off';
   body.dataset.showRank = settings.showRank ? '1' : '0';
   body.dataset.showBar = settings.showScoreBar ? '1' : '0';
@@ -399,8 +414,22 @@ function applyAppearance(settings) {
     document.documentElement.style.removeProperty('--member-avatar-base');
   }
 
-  if (settings.cardBg) document.body.style.setProperty('--card', settings.cardBg);
-  else document.body.style.removeProperty('--card');
+  // 卡片底色：跟随主题 / 自定义纯色 / 半透明 / 亚克力
+  const themeCard = settings.theme === 'light' ? '#ffffff' : '#1a1f26';
+  const baseCard = settings.cardBg || themeCard;
+  const cardMode = settings.cardBgMode || 'auto';
+  document.body.dataset.cardSurface = cardMode;
+  if (cardMode === 'translucent' || cardMode === 'acrylic') {
+    document.body.style.setProperty('--card', hexToRgba(baseCard, settings.cardOpacity));
+    document.body.style.setProperty('--card-blur', settings.cardAcrylicBlur + 'px');
+  } else if (cardMode === 'custom') {
+    document.body.style.setProperty('--card', baseCard);
+    document.body.style.removeProperty('--card-blur');
+  } else {
+    if (settings.cardBg) document.body.style.setProperty('--card', settings.cardBg);
+    else document.body.style.removeProperty('--card');
+    document.body.style.removeProperty('--card-blur');
+  }
 
   // 卡片样式（毛玻璃 / 新拟态 / 霓虹 / 渐变 / 纸片）
   document.body.dataset.cardStyle = settings.cardStyle;
@@ -709,6 +738,8 @@ function onPointerDown(e) {
   }
   interacting = true;
   drag.el.classList.add('dragging');
+  try { drag.el.setPointerCapture(e.pointerId); } catch (_) {}
+  listenParentPointerUp();
 }
 
 function onPointerMove(e) {
@@ -745,7 +776,7 @@ function onPointerMove(e) {
   el.style.height = round2(h) + '%';
 }
 
-function onPointerUp() {
+function finishCardDrag() {
   if (!drag) return;
   const { el } = drag;
   const layout = {
@@ -764,6 +795,7 @@ function onPointerUp() {
   el.classList.remove('dragging');
   drag = null;
   interacting = false;
+  unlistenParentPointerUp();
   const op = isMember
     ? conn.sendOp('setMemberLayout', { projectId: currentProjectId, personId, layout })
     : conn.sendOp('setLayout', { projectId: currentProjectId, kind, id, layout });
@@ -773,6 +805,37 @@ function onPointerUp() {
     pendingState = null;
     renderState();
   }
+}
+
+function onPointerUp() {
+  finishCardDrag();
+}
+
+// 在 iframe 预览里拖拽时，如果指针离开 iframe 松手，pointerup 不会回到本页，
+// 这里同时在父文档上监听，并在失焦/离开页面时强制结束，避免拖拽状态卡死。
+let parentDoc = null;
+function listenParentPointerUp() {
+  if (parentDoc || window.parent === window) return;
+  try {
+    parentDoc = window.parent.document;
+    parentDoc.addEventListener('pointerup', endAllDrags, true);
+    parentDoc.addEventListener('pointercancel', endAllDrags, true);
+  } catch (_) {
+    parentDoc = null;
+  }
+}
+function unlistenParentPointerUp() {
+  if (!parentDoc) return;
+  try {
+    parentDoc.removeEventListener('pointerup', endAllDrags, true);
+    parentDoc.removeEventListener('pointercancel', endAllDrags, true);
+  } catch (_) {}
+  parentDoc = null;
+}
+function endAllDrags() {
+  finishTitleDrag();
+  finishCardDrag();
+  unlistenParentPointerUp();
 }
 
 // ---------- 项目选择 ----------
@@ -797,10 +860,76 @@ function renderState() {
   render(project);
 }
 
+// ---------- 标题自由拖动（编辑模式 + 标题自由位置） ----------
+let titleDrag = null;
+
+function onTitlePointerDown(e) {
+  if (!currentSettings || !currentSettings.titleFree) return;
+  // 真实显示端只在 ?edit=1 时可调；管理端预览 iframe 里可直接拖标题
+  if (!isEdit && !inPreviewFrame) return;
+  const header = e.target.closest('.topbar');
+  if (!header) return;
+  if (e.target.closest('a, button, input, select')) return;
+  e.preventDefault();
+  const rect = header.getBoundingClientRect();
+  titleDrag = {
+    header,
+    dx: e.clientX - (rect.left + rect.width / 2),
+    dy: e.clientY - (rect.top + rect.height / 2),
+  };
+  interacting = true;
+  header.classList.add('dragging');
+  try { header.setPointerCapture(e.pointerId); } catch (_) {}
+  listenParentPointerUp();
+}
+
+function onTitlePointerMove(e) {
+  if (!titleDrag) return;
+  e.preventDefault();
+  const x = clamp(((e.clientX - titleDrag.dx) / window.innerWidth) * 100, 2, 98);
+  const y = clamp(((e.clientY - titleDrag.dy) / window.innerHeight) * 100, 2, 98);
+  document.documentElement.style.setProperty('--title-x', round2(x) + '%');
+  document.documentElement.style.setProperty('--title-y', round2(y) + '%');
+}
+
+function finishTitleDrag() {
+  if (!titleDrag) return;
+  const x = round2(parseFloat(document.documentElement.style.getPropertyValue('--title-x')) || 50);
+  const y = round2(parseFloat(document.documentElement.style.getPropertyValue('--title-y')) || 8);
+  titleDrag.header.classList.remove('dragging');
+  titleDrag = null;
+  interacting = false;
+  unlistenParentPointerUp();
+  conn.sendOp('updateSettings', {
+    projectId: currentProjectId,
+    patch: { titleX: x, titleY: y },
+  }).catch(() => {});
+  if (pendingState) {
+    currentState = pendingState;
+    pendingState = null;
+    renderState();
+  }
+}
+
+function onTitlePointerUp() {
+  finishTitleDrag();
+}
+
 window.addEventListener('pointerdown', onPointerDown);
 window.addEventListener('pointermove', onPointerMove);
 window.addEventListener('pointerup', onPointerUp);
 window.addEventListener('pointercancel', onPointerUp);
+window.addEventListener('pointerdown', onTitlePointerDown);
+window.addEventListener('pointermove', onTitlePointerMove);
+window.addEventListener('pointerup', onTitlePointerUp);
+window.addEventListener('pointercancel', onTitlePointerUp);
+
+// 安全兜底：失焦/离开预览 iframe/页面隐藏时结束拖拽，避免状态卡死
+window.addEventListener('blur', endAllDrags);
+document.addEventListener('pointerleave', endAllDrags);
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) endAllDrags();
+});
 
 const conn = connectWS(
   (state) => {

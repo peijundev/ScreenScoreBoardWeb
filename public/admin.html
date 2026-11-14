@@ -47,6 +47,11 @@
             <option value="ppt">PPT 演示</option>
             <option value="seewo">希沃白板</option>
             <option value="kde">KDE 桌面</option>
+            <option value="guofeng">古风雅集</option>
+            <option value="ink">水墨</option>
+            <option value="modern">现代极简</option>
+            <option value="neon">赛博霓虹</option>
+            <option value="poster">海报展板</option>
             <option value="custom">自由配置</option>
           </select>
         </label>
@@ -81,7 +86,7 @@
         </label>
       </div>
 
-      <p class="preview-hint">默认与显示端 1:1 复刻（不含编辑控件）；勾选「编辑布局」后可拖动卡片、拉右下角调整大小。预览窗口可拖动设置面板，边看边调。</p>
+      <p class="preview-hint">默认与显示端 1:1 复刻（不含编辑控件）；勾选「编辑布局」后可拖动卡片、拉右下角调整大小；开启「标题自由位置」后可直接在预览里拖动标题。预览窗口可拖动设置面板，边看边调。</p>
       <div class="preview-frame-wrap" id="preview-wrap">
         <div class="preview-stage" id="preview-stage">
           <iframe id="display-preview" src="/display" title="显示端预览"></iframe>
@@ -149,8 +154,28 @@
               <option value="ppt">PPT 演示</option>
               <option value="seewo">希沃白板</option>
               <option value="kde">KDE 桌面</option>
+              <option value="guofeng">古风雅集</option>
+              <option value="ink">水墨</option>
+              <option value="modern">现代极简</option>
+              <option value="neon">赛博霓虹</option>
+              <option value="poster">海报展板</option>
               <option value="custom">自由配置</option>
             </select>
+          </label>
+          <label>标题对齐
+            <select id="set-title-align">
+              <option value="auto">跟随风格</option>
+              <option value="center">居中</option>
+              <option value="left">居左</option>
+              <option value="right">居右</option>
+            </select>
+          </label>
+          <label class="check">
+            <input id="set-title-free" type="checkbox"> 标题自由位置（在预览中拖动）
+          </label>
+          <button id="reset-title-pos" class="btn small" type="button">重置标题位置</button>
+          <label class="check">
+            <input id="set-style-free" type="checkbox"> 风格自由配置（覆盖风格的固定排版）
           </label>
           <label>每行列数 <span id="columns-val">4</span>
             <input id="set-columns" type="range" min="1" max="8" step="1">
@@ -222,11 +247,22 @@
           <label>强调色
             <input id="set-accent" type="color">
           </label>
-          <label class="check">
-            <input id="set-card-bg-enabled" type="checkbox"> 自定义卡片底色
+          <label>卡片底色
+            <select id="set-card-bg-mode">
+              <option value="auto">跟随主题</option>
+              <option value="custom">自定义纯色</option>
+              <option value="translucent">半透明</option>
+              <option value="acrylic">亚克力</option>
+            </select>
           </label>
-          <label id="card-bg-label">卡片底色
-            <input id="set-card-bg" type="color" disabled>
+          <label>底色颜色
+            <input id="set-card-bg" type="color">
+          </label>
+          <label>卡片不透明度 <span id="card-opacity-val">55</span>%
+            <input id="set-card-opacity" type="range" min="0.15" max="1" step="0.05">
+          </label>
+          <label>亚克力模糊 <span id="card-blur-val">12</span> px
+            <input id="set-card-acrylic-blur" type="range" min="0" max="40" step="1">
           </label>
           <label>卡片圆角 <span id="radius-val">10</span> px
             <input id="set-card-radius" type="range" min="0" max="32" step="1">
@@ -265,12 +301,10 @@
           <label>标题字号 <span id="title-size-val">自动</span>
             <input id="set-title-size" type="range" min="0" max="120" step="2">
           </label>
-          <label>标题对齐
-            <select id="set-title-align">
+          <label>标题装饰
+            <select id="set-title-decor">
               <option value="auto">跟随风格</option>
-              <option value="center">居中</option>
-              <option value="left">居左</option>
-              <option value="right">居右</option>
+              <option value="plain">纯标题（去掉胶囊/竖条/标题栏底色）</option>
             </select>
           </label>
           <label class="check">
@@ -311,6 +345,15 @@
           </label>
           <label>团队色条宽度 <span id="team-bar-val">4</span> px
             <input id="set-team-bar-width" type="range" min="0" max="12" step="1">
+          </label>
+          <label class="check">
+            <input id="set-show-team-accent" type="checkbox"> 显示团队色条
+          </label>
+          <label class="check">
+            <input id="set-team-accent-color-enabled" type="checkbox"> 自定义团队色条颜色
+          </label>
+          <label>团队色条颜色
+            <input id="set-team-accent-color" type="color" disabled>
           </label>
           <label>头像边框宽度 <span id="avatar-border-val">1</span> px
             <input id="set-avatar-border-width" type="range" min="0" max="6" step="1">

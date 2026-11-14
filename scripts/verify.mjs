@@ -218,9 +218,16 @@ async function main() {
   await adminOp('updateSettings', { patch: { displayStyle: 'seewo' } });
   s = await viewer.waitState((st) => P(st).settings.displayStyle === 'seewo');
   assert(true, '显示风格同步');
-  await adminOp('updateSettings', { patch: { displayStyle: 'poster' } }).catch((e) => {
+  await adminOp('updateSettings', { patch: { displayStyle: 'hologram' } }).catch((e) => {
     assert(/显示风格/.test(e.message), '非法显示风格被拒绝');
   });
+  for (const style of ['guofeng', 'ink', 'modern', 'neon', 'poster']) {
+    await adminOp('updateSettings', { patch: { displayStyle: style } });
+    await viewer.waitState((st) => P(st).settings.displayStyle === style);
+  }
+  assert(true, '新增显示风格均可用');
+  await adminOp('updateSettings', { patch: { displayStyle: 'seewo' } });
+  await viewer.waitState((st) => P(st).settings.displayStyle === 'seewo');
 
   await adminOp('updateSettings', {
     patch: {
@@ -273,6 +280,46 @@ async function main() {
     assert(/压暗/.test(e.message), '非法压暗倍率被拒绝');
   });
 
+  await adminOp('updateSettings', {
+    patch: {
+      cardBgMode: 'acrylic', cardBg: '#101820', cardOpacity: 0.4, cardAcrylicBlur: 20,
+      showTeamAccent: false, teamAccentColor: '#00ff00', teamAccentWidth: 7,
+    },
+  });
+  s = await viewer.waitState((st) => P(st).settings.cardBgMode === 'acrylic');
+  assert(P(s).settings.cardOpacity === 0.4 && P(s).settings.cardAcrylicBlur === 20 &&
+    P(s).settings.showTeamAccent === false && P(s).settings.teamAccentColor === '#00ff00' &&
+    P(s).settings.teamAccentWidth === 7, '半透明/亚克力与团队色条设置同步');
+  await adminOp('updateSettings', { patch: { cardBgMode: 'frosted' } }).catch((e) => {
+    assert(/底色模式/.test(e.message), '非法卡片底色模式被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { cardOpacity: 2 } }).catch((e) => {
+    assert(/不透明度/.test(e.message), '非法卡片不透明度被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { cardAcrylicBlur: 99 } }).catch((e) => {
+    assert(/亚克力模糊/.test(e.message), '非法亚克力模糊被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { teamAccentColor: 'red' } }).catch((e) => {
+    assert(/团队色条颜色/.test(e.message), '非法团队色条颜色被拒绝');
+  });
+
+  await adminOp('updateSettings', {
+    patch: { styleFreeConfig: true, titleDecor: 'plain', titleAlign: 'left' },
+  });
+  s = await viewer.waitState((st) => P(st).settings.styleFreeConfig === true);
+  assert(P(s).settings.titleDecor === 'plain' && P(s).settings.titleAlign === 'left',
+    '风格自由配置/标题装饰/标题对齐同步');
+  await adminOp('updateSettings', { patch: { titleDecor: 'fancy' } }).catch((e) => {
+    assert(/标题装饰/.test(e.message), '非法标题装饰被拒绝');
+  });
+
+  await adminOp('updateSettings', { patch: { titleFree: true, titleX: 30, titleY: 20 } });
+  s = await viewer.waitState((st) => P(st).settings.titleFree === true);
+  assert(P(s).settings.titleX === 30 && P(s).settings.titleY === 20, '标题自由位置同步');
+  await adminOp('updateSettings', { patch: { titleX: 200 } }).catch((e) => {
+    assert(/标题位置/.test(e.message), '非法标题位置被拒绝');
+  });
+
   // 非法参数
   await adminOp('updateSettings', { patch: { columns: 99 } }).catch((e) => assert(/列数/.test(e.message), '排版参数越界被拒绝'));
   await adminOp('updateSettings', { patch: { cardStyle: 'hologram' } }).catch((e) => assert(/卡片样式/.test(e.message), '非法卡片样式被拒绝'));
@@ -319,6 +366,13 @@ async function main() {
   assert(rp.settings.fontFamily === 'serif' && rp.settings.titleSize === 72 &&
     rp.settings.cardBorderWidth === 3 && rp.settings.showRank === false,
     '重启后高级外观设置恢复');
+  assert(rp.settings.cardBgMode === 'acrylic' && rp.settings.cardOpacity === 0.4 &&
+    rp.settings.showTeamAccent === false && rp.settings.teamAccentColor === '#00ff00',
+    '重启后半透明/亚克力与团队色条设置恢复');
+  assert(rp.settings.styleFreeConfig === true && rp.settings.titleDecor === 'plain' &&
+    rp.settings.titleAlign === 'left', '重启后风格自由配置/标题设置恢复');
+  assert(rp.settings.titleFree === true && rp.settings.titleX === 30 && rp.settings.titleY === 20,
+    '重启后标题自由位置恢复');
   assert(rp.settings.scoreEffect === 'spotlight' && rp.settings.customSound === soundUp.path &&
     rp.settings.spotlightScope === 'person_team' && rp.settings.spotlightWidth === 700 &&
     rp.settings.spotlightHeight === 420, '重启后居中突显/范围/宽高/自定义音效恢复');
