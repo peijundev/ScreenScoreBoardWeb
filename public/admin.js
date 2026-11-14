@@ -1,5 +1,5 @@
 'use strict';
-/* global avatarURL, connectWS, uploadAvatar, escapeHTML */
+/* global avatarURL, connectWS, uploadAvatar, uploadSound, escapeHTML */
 /* 管理端：所有操作经 WS op，渲染由广播驱动（不做乐观更新） */
 
 let currentState = null;
@@ -340,6 +340,7 @@ function renderTeams(project) {
 // ============ 排版设置 ============
 const settingEls = {
   title: document.getElementById('set-title'),
+  displayStyle: document.getElementById('set-display-style'),
   columns: document.getElementById('set-columns'),
   density: document.getElementById('set-density'),
   sortBy: document.getElementById('set-sortby'),
@@ -366,12 +367,16 @@ const settingEls = {
   glassBlur: document.getElementById('set-glass-blur'),
   glassOpacity: document.getElementById('set-glass-opacity'),
   scoreEffect: document.getElementById('set-score-effect'),
+  spotlightScope: document.getElementById('set-spotlight-scope'),
   fxDuration: document.getElementById('set-fx-duration'),
   fxOnlyPositive: document.getElementById('set-fx-only-positive'),
   fxColorEnabled: document.getElementById('set-fx-color-enabled'),
   fxColor: document.getElementById('set-fx-color'),
   sound: document.getElementById('set-sound'),
   soundVolume: document.getElementById('set-sound-volume'),
+  customSoundInput: document.getElementById('set-custom-sound'),
+  customSoundName: document.getElementById('custom-sound-name'),
+  clearCustomSound: document.getElementById('clear-custom-sound'),
 };
 const columnsVal = document.getElementById('columns-val');
 const radiusVal = document.getElementById('radius-val');
@@ -392,6 +397,8 @@ function pushSetting(key, value, immediate) {
 }
 
 settingEls.title.addEventListener('input', () => pushSetting('title', settingEls.title.value));
+settingEls.displayStyle.addEventListener('change', () =>
+  pushSetting('displayStyle', settingEls.displayStyle.value, true));
 settingEls.columns.addEventListener('input', () => {
   columnsVal.textContent = settingEls.columns.value;
   pushSetting('columns', Number(settingEls.columns.value));
@@ -483,6 +490,9 @@ settingEls.glassOpacity.addEventListener('input', () => {
 settingEls.scoreEffect.addEventListener('change', () => {
   pushSetting('scoreEffect', settingEls.scoreEffect.value, true);
 });
+settingEls.spotlightScope.addEventListener('change', () => {
+  pushSetting('spotlightScope', settingEls.spotlightScope.value, true);
+});
 settingEls.fxDuration.addEventListener('input', () => {
   fxDurationVal.textContent = settingEls.fxDuration.value;
   pushSetting('scoreEffectDuration', Number(settingEls.fxDuration.value));
@@ -496,6 +506,18 @@ settingEls.sound.addEventListener('change', () => {
 settingEls.soundVolume.addEventListener('input', () => {
   soundVolumeVal.textContent = Math.round(Number(settingEls.soundVolume.value) * 100);
   pushSetting('soundVolume', Number(settingEls.soundVolume.value));
+});
+settingEls.customSoundInput.addEventListener('change', async () => {
+  const file = settingEls.customSoundInput.files[0];
+  if (!file) return;
+  try {
+    const path = await uploadSound(file);
+    await projectOp('updateSettings', { patch: { customSound: path } });
+  } catch (e) { toast(e.message); }
+  settingEls.customSoundInput.value = '';
+});
+settingEls.clearCustomSound.addEventListener('click', () => {
+  projectOp('updateSettings', { patch: { customSound: '' } }).catch((e) => toast(e.message));
 });
 settingEls.fxColorEnabled.addEventListener('change', () => {
   const on = settingEls.fxColorEnabled.checked;
@@ -524,6 +546,7 @@ function renderSettings(settings) {
   if (document.activeElement !== settingEls.title && settingEls.title.value !== settings.title) {
     settingEls.title.value = settings.title;
   }
+  settingEls.displayStyle.value = settings.displayStyle || 'lecture';
   if (Number(settingEls.columns.value) !== settings.columns) {
     settingEls.columns.value = settings.columns;
     columnsVal.textContent = settings.columns;
@@ -592,6 +615,7 @@ function renderSettings(settings) {
     glassOpacityVal.textContent = Math.round(settings.glassOpacity * 100);
   }
   settingEls.scoreEffect.value = settings.scoreEffect;
+  settingEls.spotlightScope.value = settings.spotlightScope || 'person';
   if (Number(settingEls.fxDuration.value) !== settings.scoreEffectDuration) {
     settingEls.fxDuration.value = settings.scoreEffectDuration;
     fxDurationVal.textContent = settings.scoreEffectDuration;
@@ -602,6 +626,9 @@ function renderSettings(settings) {
     settingEls.soundVolume.value = settings.soundVolume;
     soundVolumeVal.textContent = Math.round(settings.soundVolume * 100);
   }
+  settingEls.customSoundName.textContent = settings.customSound
+    ? settings.customSound.replace(/^sounds\//, '')
+    : '未设置（内置合成音）';
   settingEls.fxColorEnabled.checked = Boolean(settings.scoreEffectColor);
   settingEls.fxColor.disabled = !settings.scoreEffectColor;
   if (settings.scoreEffectColor) {

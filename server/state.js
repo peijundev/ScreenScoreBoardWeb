@@ -7,9 +7,11 @@ const { createStorage } = require('./storage');
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
 const AVATAR_DIR = path.join(DATA_DIR, 'avatars');
+const SOUND_DIR = path.join(DATA_DIR, 'sounds');
 
 const DEFAULT_SETTINGS = {
   title: '计分板',
+  displayStyle: 'lecture',  // lecture | ppt | seewo | kde | custom
   columns: 4,
   density: 'comfortable',   // comfortable | compact
   sortBy: 'score',          // score | created
@@ -31,12 +33,14 @@ const DEFAULT_SETTINGS = {
   cardStyle: 'solid',       // solid | glass | neumorph | neon | gradient | paper
   glassBlur: 12,            // 毛玻璃模糊强度 px（0–40）
   glassOpacity: 0.55,       // 毛玻璃卡片不透明度（0.15–0.95）
-  scoreEffect: 'bounce',    // none | bounce | glow | float | shake | confetti
+  scoreEffect: 'bounce',    // none | bounce | glow | float | shake | confetti | spotlight
+  spotlightScope: 'person', // person（只突显人物）| person_team（人物 + 团队）
   scoreEffectDuration: 700, // 特效时长 ms（200–3000）
   scoreEffectColor: '',     // '' = 自动（加分绿/减分红）；或 #rrggbb
   scoreEffectOnlyPositive: false, // 仅加分触发特效
   soundEnabled: false,      // 记分音效
   soundVolume: 0.5,         // 音效音量 0–1
+  customSound: '',          // '' = 内置合成音；否则 sounds/xxx.mp3
 };
 
 const storage = createStorage();
@@ -131,6 +135,7 @@ function normalizeState(raw) {
 // ---------- 初始化 ----------
 async function init() {
   fs.mkdirSync(AVATAR_DIR, { recursive: true });
+  fs.mkdirSync(SOUND_DIR, { recursive: true });
   await storage.init();
   const raw = await storage.load();
   const normalized = normalizeState(raw);
@@ -176,8 +181,18 @@ async function flushSave() {
   await doSave();
 }
 
-process.on('SIGINT', () => { void flushSave().finally(() => process.exit(0)); });
-process.on('SIGTERM', () => { void flushSave().finally(() => process.exit(0)); });
+let shuttingDown = false;
+async function shutdown() {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  await Promise.race([flushSave(), new Promise((r) => setTimeout(r, 3000))]);
+  try {
+    await Promise.race([storage.close(), new Promise((r) => setTimeout(r, 2000))]);
+  } catch (_) {}
+  process.exit(0);
+}
+process.on('SIGINT', () => { void shutdown(); });
+process.on('SIGTERM', () => { void shutdown(); });
 
 // ---------- 校验辅助 ----------
 class OpError extends Error {}
@@ -234,6 +249,10 @@ function needEntity(project, kind, id) {
 
 const SETTINGS_VALIDATORS = {
   title: (v) => needString(v, '标题', 30),
+  displayStyle: (v) =>
+    (['lecture', 'ppt', 'seewo', 'kde', 'custom'].includes(v)
+      ? v
+      : (() => { throw new OpError('显示风格非法'); })()),
   columns: (v) => {
     const n = Number(v);
     if (!Number.isInteger(n) || n < 1 || n > 8) throw new OpError('列数须为 1–8 的整数');
@@ -293,9 +312,13 @@ const SETTINGS_VALIDATORS = {
     return Math.round(n * 100) / 100;
   },
   scoreEffect: (v) =>
-    (['none', 'bounce', 'glow', 'float', 'shake', 'confetti'].includes(v)
+    (['none', 'bounce', 'glow', 'float', 'shake', 'confetti', 'spotlight'].includes(v)
       ? v
       : (() => { throw new OpError('加分特效类型非法'); })()),
+  spotlightScope: (v) =>
+    (['person', 'person_team'].includes(v)
+      ? v
+      : (() => { throw new OpError('突显范围非法'); })()),
   scoreEffectDuration: (v) => {
     const n = Number(v);
     if (!Number.isInteger(n) || n < 200 || n > 3000) throw new OpError('特效时长须为 200–3000 的整数');
@@ -311,6 +334,12 @@ const SETTINGS_VALIDATORS = {
     const n = Number(v);
     if (!Number.isFinite(n) || n < 0 || n > 1) throw new OpError('音效音量须在 0–1 之间');
     return Math.round(n * 100) / 100;
+  },
+  customSound: (v) => {
+    if (v === '' || v == null) return '';
+    return typeof v === 'string' && /^sounds\/[\w.-]+$/.test(v)
+      ? v
+      : (() => { throw new OpError('音效文件路径非法'); })();
   },
 };
 
@@ -442,11 +471,8 @@ module.exports = {
   init,
   applyOp,
   save,
-  flushSave,
   OpError,
-  DATA_DIR,
   AVATAR_DIR,
-  DEFAULT_SETTINGS,
+  SOUND_DIR,
   storageKind: storage.kind,
-  closeStorage: () => storage.close(),
 };

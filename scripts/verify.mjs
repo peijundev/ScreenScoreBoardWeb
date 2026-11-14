@@ -26,7 +26,8 @@ const PNG = Buffer.from(
 );
 
 function startServer(extraEnv = {}) {
-  const proc = spawn('node', ['server/index.js'], {
+  // 用运行测试的同一个 Node，避免多版本 Node 下原生模块 ABI 不一致
+  const proc = spawn(process.execPath, ['server/index.js'], {
     env: { ...process.env, PORT: String(PORT), DATA_DIR, ...extraEnv },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -128,6 +129,20 @@ async function main() {
   r = await fetch(BASE + '/api/avatar', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: Buffer.from('nope') });
   assert(r.status === 415, '伪造图片返回 415');
 
+  console.log('自定义音效上传:');
+  const WAV = Buffer.alloc(64);
+  WAV.write('RIFF', 0, 'ascii');
+  WAV.writeUInt32LE(56, 4);
+  WAV.write('WAVE', 8, 'ascii');
+  WAV.write('fmt ', 12, 'ascii');
+  r = await fetch(BASE + '/api/sound', { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: WAV });
+  const soundUp = await r.json();
+  assert(r.ok && /^sounds\/[0-9a-f]+\.wav$/.test(soundUp.path), '上传 WAV 音效返回 path');
+  r = await fetch(BASE + '/' + soundUp.path);
+  assert(r.ok && Buffer.from(await r.arrayBuffer()).equals(WAV), '音效文件可取回且一致');
+  r = await fetch(BASE + '/api/sound', { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: Buffer.from('not audio') });
+  assert(r.status === 415, '伪造音频返回 415');
+
   console.log('WebSocket 同步:');
   const viewer = wsClient('viewer');
   const admin = wsClient('admin');
@@ -200,6 +215,26 @@ async function main() {
   s = await viewer.waitState((st) => P(st).settings.cardStyle === 'neon');
   assert(P(s).settings.scoreEffect === 'confetti' && P(s).settings.soundVolume === 0.6, '卡片样式/特效/音效同步');
 
+  await adminOp('updateSettings', { patch: { displayStyle: 'seewo' } });
+  s = await viewer.waitState((st) => P(st).settings.displayStyle === 'seewo');
+  assert(true, '显示风格同步');
+  await adminOp('updateSettings', { patch: { displayStyle: 'poster' } }).catch((e) => {
+    assert(/显示风格/.test(e.message), '非法显示风格被拒绝');
+  });
+
+  await adminOp('updateSettings', {
+    patch: { scoreEffect: 'spotlight', spotlightScope: 'person_team', customSound: soundUp.path },
+  });
+  s = await viewer.waitState((st) => P(st).settings.scoreEffect === 'spotlight');
+  assert(P(s).settings.customSound === soundUp.path && P(s).settings.spotlightScope === 'person_team',
+    '居中突显特效/突显范围/自定义音效同步');
+  await adminOp('updateSettings', { patch: { customSound: '../../etc/passwd' } }).catch((e) => {
+    assert(/音效文件路径/.test(e.message), '非法音效路径被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { spotlightScope: 'team_only' } }).catch((e) => {
+    assert(/突显范围/.test(e.message), '非法突显范围被拒绝');
+  });
+
   // 非法参数
   await adminOp('updateSettings', { patch: { columns: 99 } }).catch((e) => assert(/列数/.test(e.message), '排版参数越界被拒绝'));
   await adminOp('updateSettings', { patch: { cardStyle: 'hologram' } }).catch((e) => assert(/卡片样式/.test(e.message), '非法卡片样式被拒绝'));
@@ -242,6 +277,9 @@ async function main() {
   assert(rp.people[pid].layout.x === 0 && rp.people[pid].layout.w === 8 &&
     rp.people[pid].memberLayout.w === 20, '重启后卡片布局恢复');
   assert(rp.settings.cardStyle === 'neon' && rp.settings.columns === 5 && rp.settings.avatarSize === 96, '重启后外观设置恢复');
+  assert(rp.settings.displayStyle === 'seewo', '重启后显示风格恢复');
+  assert(rp.settings.scoreEffect === 'spotlight' && rp.settings.customSound === soundUp.path &&
+    rp.settings.spotlightScope === 'person_team', '重启后居中突显/突显范围/自定义音效恢复');
   assert(Object.keys(restored.projects).length === 1, '重启后项目列表恢复');
 
   console.log('存储后端（SQLite）:');

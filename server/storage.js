@@ -163,4 +163,4 @@ function createStorage() {
   }
 }
 
-module.exports = { createStorage, DATA_DIR };
+module.exports = { createStorage };

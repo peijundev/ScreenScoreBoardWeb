@@ -5,11 +5,12 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { serveStatic, send, PUBLIC_DIR } = require('./static');
-const { state, init: initState, AVATAR_DIR, storageKind } = require('./state');
+const { state, init: initState, AVATAR_DIR, SOUND_DIR, storageKind } = require('./state');
 const { attachWSS } = require('./wss');
 
 const PORT = Number(process.env.PORT) || 3000;
-const MAX_UPLOAD = 2 * 1024 * 1024; // 2 MB
+const MAX_IMAGE = 2 * 1024 * 1024; // 2 MB
+const MAX_SOUND = 5 * 1024 * 1024; // 5 MB
 
 // 魔数 → 扩展名（不信任客户端声明的 Content-Type）
 function sniffImage(buf) {
@@ -20,15 +21,25 @@ function sniffImage(buf) {
   return null;
 }
 
-function handleAvatarUpload(req, res) {
+function sniffAudio(buf) {
+  if (buf.length >= 12 && buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WAVE') return 'wav';
+  if (buf.length >= 4 && buf.toString('ascii', 0, 4) === 'OggS') return 'ogg';
+  if (buf.length >= 3 && buf.toString('ascii', 0, 3) === 'ID3') return 'mp3';
+  if (buf.length >= 2 && buf[0] === 0xff && (buf[1] & 0xe0) === 0xe0) return 'mp3';
+  if (buf.length >= 8 && buf.toString('ascii', 4, 8) === 'ftyp') return 'm4a';
+  return null;
+}
+
+// 通用二进制上传：大小限制 + 魔数校验 + 服务端随机文件名
+function handleUpload(req, res, opts) {
   const chunks = [];
   let size = 0;
   let aborted = false;
   req.on('data', (c) => {
     size += c.length;
-    if (size > MAX_UPLOAD) {
+    if (size > opts.maxBytes) {
       aborted = true;
-      send(res, 413, JSON.stringify({ error: '文件超过 2MB 上限' }), { 'Content-Type': 'application/json' });
+      send(res, 413, JSON.stringify({ error: '文件超过 ' + Math.round(opts.maxBytes / 1024 / 1024) + 'MB 上限' }), { 'Content-Type': 'application/json' });
       req.destroy();
       return;
     }
@@ -40,13 +51,13 @@ function handleAvatarUpload(req, res) {
     if (buf.length === 0) {
       return send(res, 400, JSON.stringify({ error: '空文件' }), { 'Content-Type': 'application/json' });
     }
-    const ext = sniffImage(buf);
+    const ext = opts.sniff(buf);
     if (!ext) {
-      return send(res, 415, JSON.stringify({ error: '仅支持 png/jpeg/webp/gif 图片' }), { 'Content-Type': 'application/json' });
+      return send(res, 415, JSON.stringify({ error: opts.unsupported }), { 'Content-Type': 'application/json' });
     }
     const name = crypto.randomBytes(8).toString('hex') + '.' + ext;
-    fs.writeFileSync(path.join(AVATAR_DIR, name), buf);
-    send(res, 200, JSON.stringify({ path: 'avatars/' + name }), { 'Content-Type': 'application/json' });
+    fs.writeFileSync(path.join(opts.dir, name), buf);
+    send(res, 200, JSON.stringify({ path: opts.prefix + '/' + name }), { 'Content-Type': 'application/json' });
   });
   req.on('error', () => {});
 }
@@ -66,10 +77,23 @@ const server = http.createServer((req, res) => {
     return send(res, 200, JSON.stringify(state), { 'Content-Type': 'application/json' });
   }
   if (req.method === 'POST' && p === '/api/avatar') {
-    return handleAvatarUpload(req, res);
+    return handleUpload(req, res, {
+      dir: AVATAR_DIR, prefix: 'avatars', maxBytes: MAX_IMAGE,
+      sniff: sniffImage, unsupported: '仅支持 png/jpeg/webp/gif 图片',
+    });
+  }
+  if (req.method === 'POST' && p === '/api/sound') {
+    return handleUpload(req, res, {
+      dir: SOUND_DIR, prefix: 'sounds', maxBytes: MAX_SOUND,
+      sniff: sniffAudio, unsupported: '仅支持 wav/ogg/mp3/m4a 音频',
+    });
   }
   if (req.method === 'GET' && p.startsWith('/avatars/')) {
     if (serveStatic(res, AVATAR_DIR, p.slice('/avatars'.length))) return;
+    return send(res, 404, 'Not Found');
+  }
+  if (req.method === 'GET' && p.startsWith('/sounds/')) {
+    if (serveStatic(res, SOUND_DIR, p.slice('/sounds'.length))) return;
     return send(res, 404, 'Not Found');
   }
   if (req.method === 'GET' && /\.[a-z0-9]+$/i.test(p)) {

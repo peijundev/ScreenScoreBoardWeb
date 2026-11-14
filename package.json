@@ -9,12 +9,15 @@
     "verify": "node scripts/verify.mjs"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "dependencies": {
     "better-sqlite3": "^12.11.1",
     "mysql2": "^3.24.6",
     "pg": "^8.23.1",
     "ws": "^8.18.0"
+  },
+  "allowScripts": {
+    "better-sqlite3@12.11.1": true
   }
 }

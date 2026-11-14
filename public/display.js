@@ -69,6 +69,17 @@ document.addEventListener('keydown', getAudioCtx, { once: true });
 function playScoreSound(delta, settings) {
   if (!settings.soundEnabled) return;
   if (settings.scoreEffectOnlyPositive && delta < 0) return;
+
+  // 自定义音效优先
+  if (settings.customSound) {
+    try {
+      const audio = new Audio('/' + settings.customSound);
+      audio.volume = Math.max(0, Math.min(1, settings.soundVolume));
+      audio.play().catch(() => {});
+    } catch (_) {}
+    return;
+  }
+
   const ctx = getAudioCtx();
   if (!ctx || ctx.state !== 'running') return;
   const t = ctx.currentTime;
@@ -109,6 +120,44 @@ function spawnConfetti(el, colors, duration) {
   }
   el.appendChild(layer);
   setTimeout(() => layer.remove(), duration + 500);
+}
+
+// ---------- 居中放大突显：克隆卡片到屏幕中央放大再缩回 ----------
+// els 可以是单张卡片，也可以是「人物 + 团队」两张，一起放大展示
+function spawnSpotlight(els, settings) {
+  const total = Math.max(1200, settings.scoreEffectDuration + 600);
+
+  const overlay = document.createElement('div');
+  overlay.className = 'spotlight-overlay';
+  overlay.style.setProperty('--spot-duration', total + 'ms');
+
+  const stack = document.createElement('div');
+  stack.className = 'spotlight-stack';
+  stack.style.setProperty('--spot-duration', total + 'ms');
+
+  for (const el of els) {
+    const rect = el.getBoundingClientRect();
+    const clone = el.cloneNode(true);
+    clone.querySelectorAll('.resize-handle, .fx-delta, .confetti-layer').forEach((n) => n.remove());
+    ['position', 'left', 'top', 'right', 'bottom', 'width', 'height', 'transform', 'animation', 'zoom']
+      .forEach((p) => clone.style.removeProperty(p));
+    clone.classList.remove('dragging');
+    clone.removeAttribute('data-person');
+    clone.removeAttribute('data-kind');
+    clone.removeAttribute('data-id');
+
+    const isCard = el.classList.contains('card');
+    const baseW = isCard ? rect.width * 1.15 : rect.width * 1.6;
+    const box = document.createElement('div');
+    box.className = 'spotlight-item';
+    box.style.width = Math.min(Math.max(baseW, isCard ? 300 : 240), isCard ? 620 : 420) + 'px';
+    box.appendChild(clone);
+    stack.appendChild(box);
+  }
+
+  overlay.appendChild(stack);
+  document.body.appendChild(overlay);
+  setTimeout(() => overlay.remove(), total + 250);
 }
 
 // 卡片通用属性：数据标识 + 自由布局坐标 + 卡面图
@@ -238,6 +287,7 @@ function teamCardHTML(team, members, settings, deltas, layout, editable, meta) {
 function applyAppearance(settings) {
   document.body.dataset.theme = settings.theme;
   document.body.dataset.density = settings.density;
+  document.body.dataset.displayStyle = settings.displayStyle || 'lecture';
   document.documentElement.style.setProperty('--cols', settings.columns);
   document.documentElement.style.setProperty('--accent', settings.accent);
   document.documentElement.style.setProperty('--radius', settings.cardRadius + 'px');
@@ -420,6 +470,28 @@ function render(project) {
       const id = it.kind === 'person' ? it.person.id : it.team.id;
       const el = board.querySelector('[data-kind="' + it.kind + '"][data-id="' + id + '"]');
       if (el) spawnConfetti(el, colors, settings.scoreEffectDuration);
+    }
+  }
+  if (settings.scoreEffect === 'spotlight') {
+    const scope = settings.spotlightScope || 'person';
+    const changed = Object.values(project.people).filter((p) => {
+      const d = deltas.get(p.id);
+      return d && !(settings.scoreEffectOnlyPositive && d < 0);
+    });
+    // 一次只突显一位（避免批量更新时多个全屏层叠在一起）
+    const p = changed[0];
+    if (p) {
+      const memberEl = board.querySelector('.member[data-person="' + p.id + '"]');
+      const personEl = memberEl ||
+        board.querySelector('.card[data-kind="person"][data-id="' + p.id + '"]');
+      if (personEl) {
+        const els = [personEl];
+        if (scope === 'person_team' && p.teamId) {
+          const teamEl = board.querySelector('.card[data-kind="team"][data-id="' + p.teamId + '"]');
+          if (teamEl) els.push(teamEl);
+        }
+        spawnSpotlight(els, settings);
+      }
     }
   }
 

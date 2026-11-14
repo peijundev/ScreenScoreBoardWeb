@@ -4,6 +4,22 @@
   --accent: #e8a33d;
   --radius: 10px;
   --member-scale: 1;
+
+  /* 以下变量由 display.js 在运行时注入；这里声明默认值，
+     一来给静态检查一个可解析的定义，二来在 JS 未设置时行为不变 */
+  --card-img: none;
+  --person-avatar: initial;      /* initial = 由 var() 的兜底值接管 */
+  --team-avatar: initial;
+  --avatar-70: 44px;
+  --member-avatar-base: initial;
+  --glass-bg: rgba(26, 31, 38, 0.55);
+  --glass-blur: 12px;
+  --fx-color: var(--accent);
+  --fx-duration: 700ms;
+  --spot-duration: 1400ms;
+  --dx: 0px;
+  --dy: 0px;
+  --rot: 0deg;
 }
 body[data-theme="dark"] {
   --bg-fallback: #12161c;
@@ -15,6 +31,7 @@ body[data-theme="dark"] {
   --card-img-veil: rgba(10, 12, 16, 0.62);
   --neu-dark: rgba(0, 0, 0, 0.55);
   --neu-light: rgba(255, 255, 255, 0.045);
+  --spot-scrim: rgba(0, 0, 0, 0.5);
 }
 body[data-theme="light"] {
   --bg-fallback: #e9ebee;
@@ -26,12 +43,14 @@ body[data-theme="light"] {
   --card-img-veil: rgba(255, 255, 255, 0.66);
   --neu-dark: rgba(163, 177, 198, 0.6);
   --neu-light: rgba(255, 255, 255, 0.95);
+  --spot-scrim: rgba(255, 255, 255, 0.55);
 }
 /* 大屏展示：字号与留白按「远处也能看清」定 */
 body[data-density="comfortable"] {
   --gap: 24px;
   --card-pad: 24px;
   --avatar: 96px;
+  --avatar-70: calc(var(--avatar) * 0.7);
   --score-size: 64px;
   --name-size: 22px;
   --member-avatar: 44px;
@@ -40,6 +59,7 @@ body[data-density="compact"] {
   --gap: 14px;
   --card-pad: 14px;
   --avatar: 64px;
+  --avatar-70: calc(var(--avatar) * 0.7);
   --score-size: 44px;
   --name-size: 17px;
   --member-avatar: 32px;
@@ -264,7 +284,6 @@ body.edit-mode .edit-hint {
   font-weight: 700;
   line-height: 1;
 }
-.person-card .person-score.flash { animation: flash .7s ease; }
 
 /* 头像相对姓名的位置：左 / 右 / 上 / 下 */
 .person-card.av-right .person-name { order: 1; }
@@ -302,8 +321,8 @@ body.edit-mode .edit-hint {
   border-bottom: 1px solid var(--card-border);
 }
 .team-head img {
-  width: var(--team-avatar, calc(var(--avatar) * 0.7));
-  height: var(--team-avatar, calc(var(--avatar) * 0.7));
+  width: var(--team-avatar, var(--avatar-70));
+  height: var(--team-avatar, var(--avatar-70));
   border-radius: 50%;
   object-fit: cover;
   border: 1px solid var(--card-border);
@@ -379,7 +398,6 @@ body.edit-mode .edit-hint {
   font-weight: 700;
   line-height: 1.25;
 }
-.member-score.flash { animation: flash .7s ease; }
 .member-empty {
   color: var(--text-dim);
   font-size: 13px;
@@ -532,7 +550,181 @@ body[data-score-effect="shake"] .fx { animation: fx-shake var(--fx-duration, 700
   }
 }
 
+/* 居中放大突显：克隆卡片放大到屏幕中央再缩回 */
+.spotlight-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--spot-scrim);
+  pointer-events: none;
+  animation: spot-fade var(--spot-duration, 1400ms) ease forwards;
+}
+.spotlight-stack {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 20px;
+  max-width: 92vw;
+  max-height: 82vh;
+  animation: spot-pop var(--spot-duration, 1400ms) cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+.spotlight-item { max-height: 80vh; }
+.spotlight-item > * {
+  width: 100%;
+  max-height: 80vh;
+  overflow: auto;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+}
+@keyframes spot-pop {
+  0% { transform: scale(0.72); opacity: 0; }
+  16% { transform: scale(1.08); opacity: 1; }
+  72% { transform: scale(1.04); opacity: 1; }
+  100% { transform: scale(0.84); opacity: 0; }
+}
+@keyframes spot-fade {
+  0% { opacity: 0; }
+  12% { opacity: 1; }
+  78% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .fx, .dot.connecting { animation: none !important; }
-  .fx-delta, .confetti-layer { display: none; }
+  .fx-delta, .confetti-layer, .spotlight-overlay { display: none; }
 }
+
+/* ============================================================
+   显示风格皮肤（由 settings.displayStyle 控制）
+   lecture = 基础样式（大屏讲演）
+   ============================================================ */
+
+/* ---------- PPT 演示：左上大标题 + 强调色竖条，卡片像幻灯片 ---------- */
+body[data-display-style="ppt"][data-theme="dark"] { --bg-fallback: #14181f; }
+body[data-display-style="ppt"][data-theme="light"] { --bg-fallback: #f2f4f7; }
+
+body[data-display-style="ppt"] .topbar {
+  align-items: flex-start;
+  text-align: left;
+  padding: 30px 40px 16px;
+}
+body[data-display-style="ppt"] .topbar h1 {
+  font-size: clamp(32px, 3.4vw, 52px);
+  padding-left: 18px;
+  border-left: 7px solid var(--accent);
+  letter-spacing: 0.02em;
+}
+body[data-display-style="ppt"] .topbar::after { display: none; }
+body[data-display-style="ppt"] .board { padding: 10px 40px 48px; }
+body[data-display-style="ppt"] .card {
+  border-radius: 4px;
+  border-top: 4px solid var(--accent);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.14);
+}
+body[data-display-style="ppt"] .team-card { border-left: 1px solid var(--card-border); }
+body[data-display-style="ppt"] .rank { color: var(--accent); opacity: 1; }
+
+/* ---------- 希沃白板：明亮课堂风格，圆角胶囊标题 + 大圆角卡片 ---------- */
+body[data-display-style="seewo"][data-theme] {
+  --bg-fallback: #eef5fb;
+  --card: #ffffff;
+  --card-border: #d8e6f3;
+  --text: #1e2b3a;
+  --text-dim: #6a7c8f;
+  --scrim: rgba(255, 255, 255, 0.6);
+  --card-img-veil: rgba(255, 255, 255, 0.7);
+  --neu-dark: rgba(160, 190, 220, 0.45);
+  --neu-light: rgba(255, 255, 255, 0.9);
+  background-color: #eef5fb;
+}
+body[data-display-style="seewo"] .topbar { padding: 26px 24px 14px; }
+body[data-display-style="seewo"] .topbar::after { display: none; }
+body[data-display-style="seewo"] .topbar h1 {
+  background: var(--accent);
+  color: #fff;
+  padding: 10px 38px;
+  border-radius: 999px;
+  font-size: clamp(28px, 3.2vw, 46px);
+  box-shadow: 0 8px 20px rgba(31, 83, 140, 0.18);
+}
+body[data-display-style="seewo"] .card {
+  border: none;
+  border-top: 6px solid var(--accent);
+  border-radius: 22px;
+  box-shadow: 0 10px 26px rgba(31, 83, 140, 0.12);
+}
+body[data-display-style="seewo"] .team-card { border-left: none; }
+body[data-display-style="seewo"] .member {
+  background: #f2f7fc;
+  border-radius: 14px;
+}
+body[data-display-style="seewo"] .rank {
+  background: var(--accent);
+  color: #fff;
+  border-radius: 999px;
+  padding: 1px 9px;
+  top: calc(var(--card-pad) * 0.45);
+  right: calc(var(--card-pad) * 0.6);
+  opacity: 1;
+}
+body[data-display-style="seewo"] .score-bar { height: 6px; border-radius: 999px; }
+
+/* ---------- KDE 桌面：Breeze 配色、方角、平铺标题栏 ---------- */
+body[data-display-style="kde"][data-theme="dark"] {
+  --bg-fallback: #232629;
+  --card: #2a2e32;
+  --card-border: #3b4045;
+  --text: #eff0f1;
+  --text-dim: #7f8c8d;
+  --scrim: rgba(27, 30, 32, 0.55);
+  --card-img-veil: rgba(27, 30, 32, 0.6);
+  background-color: #232629;
+}
+body[data-display-style="kde"][data-theme="light"] {
+  --bg-fallback: #eff0f1;
+  --card: #fcfcfc;
+  --card-border: #bdc3c7;
+  --text: #232629;
+  --text-dim: #7f8c8d;
+  --scrim: rgba(255, 255, 255, 0.55);
+  --card-img-veil: rgba(255, 255, 255, 0.65);
+  background-color: #eff0f1;
+}
+body[data-display-style="kde"] .topbar {
+  align-items: flex-start;
+  text-align: left;
+  max-width: none;
+  padding: 12px 20px;
+  background: #31363b;
+  border-bottom: 1px solid #1b1e20;
+}
+body[data-display-style="kde"][data-theme="light"] .topbar {
+  background: #fcfcfc;
+  border-bottom: 1px solid #cfd4da;
+}
+body[data-display-style="kde"] .topbar h1 {
+  font-size: 20px;
+  letter-spacing: 0;
+  color: var(--text);
+}
+body[data-display-style="kde"] .topbar::after { display: none; }
+body[data-display-style="kde"] .board {
+  max-width: none;
+  padding: 14px 20px 40px;
+}
+body[data-display-style="kde"] .card {
+  border-radius: 0;
+  box-shadow: none;
+}
+body[data-display-style="kde"] .team-card { border-left: 4px solid var(--accent); }
+body[data-display-style="kde"] .rank { opacity: 1; color: var(--text-dim); }
+body[data-display-style="kde"] .score-bar { height: 3px; }
+
+/* ---------- 自由配置：只保留基础排版，装饰元素交给现有设置 ---------- */
+body[data-display-style="custom"] .topbar::after { display: none; }
+body[data-display-style="custom"] .topbar h1 { font-size: clamp(24px, 2.8vw, 38px); }
+body[data-display-style="custom"] .rank,
+body[data-display-style="custom"] .score-bar { display: none; }

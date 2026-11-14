@@ -93,3 +93,15 @@ async function uploadAvatar(file) {
   if (!res.ok) throw new Error(data.error || ('上传失败 (' + res.status + ')'));
   return data.path;
 }
+
+// 上传自定义音效：POST 裸二进制，返回服务端 path
+async function uploadSound(file) {
+  const res = await fetch('/api/sound', {
+    method: 'POST',
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    body: file,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || ('上传失败 (' + res.status + ')'));
+  return data.path;
+}

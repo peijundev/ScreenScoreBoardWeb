@@ -45,4 +45,4 @@ function serveStatic(res, baseDir, urlPath) {
   return true;
 }
 
-module.exports = { serveStatic, send, PUBLIC_DIR, MIME };
+module.exports = { serveStatic, send, PUBLIC_DIR };

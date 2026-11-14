@@ -15,6 +15,7 @@
     <button id="project-delete" class="btn small danger" type="button">删除项目</button>
     <button id="settings-open" class="btn small" type="button">排版设置</button>
     <span id="conn-dot" class="dot connecting" title="连接状态"></span>
+    <!--suppress HtmlUnknownTarget -->
     <a class="open-display" href="/display" target="_blank">打开显示端</a>
   </header>
   <div id="toast" class="toast hidden"></div>
@@ -42,7 +43,7 @@
       <h2>人员</h2>
       <form id="add-person-form" class="add-form">
         <img id="person-avatar-preview" class="avatar-preview" alt="头像预览">
-        <input id="person-name" type="text" maxlength="20" placeholder="姓名" required>
+        <input id="person-name" type="text" maxlength="20" placeholder="姓名" aria-label="姓名" required>
         <label class="file-btn">
           选择头像
           <input id="person-avatar" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
@@ -57,7 +58,7 @@
       <h2>团队</h2>
       <form id="add-team-form" class="add-form">
         <img id="team-avatar-preview" class="avatar-preview" alt="头像预览">
-        <input id="team-name" type="text" maxlength="20" placeholder="团队名" required>
+        <input id="team-name" type="text" maxlength="20" placeholder="团队名" aria-label="团队名" required>
         <label class="file-btn">
           选择头像
           <input id="team-avatar" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
@@ -91,6 +92,15 @@
 
         <div class="set-group">
           <h3>版式</h3>
+          <label>显示风格
+            <select id="set-display-style">
+              <option value="lecture">大屏讲演</option>
+              <option value="ppt">PPT 演示</option>
+              <option value="seewo">希沃白板</option>
+              <option value="kde">KDE 桌面</option>
+              <option value="custom">自由配置</option>
+            </select>
+          </label>
           <label>每行列数 <span id="columns-val">4</span>
             <input id="set-columns" type="range" min="1" max="8" step="1">
           </label>
@@ -204,7 +214,14 @@
               <option value="float">飘浮数字</option>
               <option value="shake">抖动</option>
               <option value="confetti">彩带</option>
+              <option value="spotlight">居中放大突显</option>
               <option value="none">关闭</option>
+            </select>
+          </label>
+          <label>突显范围（居中放大时）
+            <select id="set-spotlight-scope">
+              <option value="person">只突显人物</option>
+              <option value="person_team">人物 + 团队</option>
             </select>
           </label>
           <label>特效时长 <span id="fx-duration-val">700</span> ms
@@ -225,6 +242,14 @@
           <label>音效音量 <span id="sound-volume-val">50</span>%
             <input id="set-sound-volume" type="range" min="0" max="1" step="0.05">
           </label>
+          <div class="sound-row">
+            <label class="file-btn">
+              自定义音效
+              <input id="set-custom-sound" type="file" accept="audio/wav,audio/ogg,audio/mpeg,audio/mp4,.wav,.ogg,.mp3,.m4a" hidden>
+            </label>
+            <span id="custom-sound-name" class="hint">未设置（内置合成音）</span>
+            <button id="clear-custom-sound" class="btn small" type="button">清除</button>
+          </div>
         </div>
       </div>
   </dialog>
