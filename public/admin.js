@@ -11,6 +11,13 @@ const projectAddBtn = document.getElementById('project-add');
 const projectRenameBtn = document.getElementById('project-rename');
 const projectDeleteBtn = document.getElementById('project-delete');
 const previewFrame = document.getElementById('display-preview');
+const settingsDialog = document.getElementById('settings-dialog');
+const settingsOpenBtn = document.getElementById('settings-open');
+const settingsCloseBtn = document.getElementById('settings-close');
+const previewOutBtn = document.getElementById('preview-out');
+const previewInBtn = document.getElementById('preview-in');
+const previewResetBtn = document.getElementById('preview-reset');
+const previewZoomLabel = document.getElementById('preview-zoom-label');
 let toastTimer = null;
 
 function toast(msg) {
@@ -108,6 +115,41 @@ projectDeleteBtn.addEventListener('click', async () => {
     selectProject(null);
   } catch (e) { toast(e.message); }
 });
+
+// ============ 排版设置弹窗 ============
+settingsOpenBtn.addEventListener('click', () => {
+  if (!settingsDialog.open) settingsDialog.showModal();
+});
+settingsCloseBtn.addEventListener('click', () => settingsDialog.close());
+settingsDialog.addEventListener('click', (e) => {
+  if (e.target === settingsDialog) settingsDialog.close();
+});
+
+// ============ 预览缩放 ============
+let previewZoom = 1;
+try { previewZoom = Number(localStorage.getItem('previewZoom')) || 1; } catch (_) {}
+
+function applyPreviewZoom() {
+  previewZoom = Math.min(1.6, Math.max(0.5, Math.round(previewZoom * 100) / 100));
+  // 优先用 zoom；不支持时退化为 transform + 尺寸补偿
+  if (window.CSS && CSS.supports && CSS.supports('zoom', '1.2')) {
+    previewFrame.style.zoom = String(previewZoom);
+    previewFrame.style.transform = '';
+    previewFrame.style.width = '100%';
+    previewFrame.style.height = '100%';
+  } else {
+    previewFrame.style.zoom = '';
+    previewFrame.style.transform = 'scale(' + previewZoom + ')';
+    previewFrame.style.width = (100 / previewZoom) + '%';
+    previewFrame.style.height = (100 / previewZoom) + '%';
+  }
+  previewZoomLabel.textContent = Math.round(previewZoom * 100) + '%';
+  try { localStorage.setItem('previewZoom', String(previewZoom)); } catch (_) {}
+}
+previewOutBtn.addEventListener('click', () => { previewZoom -= 0.1; applyPreviewZoom(); });
+previewInBtn.addEventListener('click', () => { previewZoom += 0.1; applyPreviewZoom(); });
+previewResetBtn.addEventListener('click', () => { previewZoom = 1; applyPreviewZoom(); });
+applyPreviewZoom();
 
 // ============ 人员面板 ============
 const personNameInput = document.getElementById('person-name');

@@ -13,6 +13,7 @@
     <button id="project-add" class="btn small" type="button">新建项目</button>
     <button id="project-rename" class="btn small" type="button">重命名</button>
     <button id="project-delete" class="btn small danger" type="button">删除项目</button>
+    <button id="settings-open" class="btn small" type="button">排版设置</button>
     <span id="conn-dot" class="dot connecting" title="连接状态"></span>
     <a class="open-display" href="/display" target="_blank">打开显示端</a>
   </header>
@@ -21,9 +22,19 @@
   <main class="panels">
     <!-- 显示端预览 -->
     <section class="panel preview-panel">
-      <h2>显示端预览</h2>
-      <p class="preview-hint">开启「自由布局」后，可在预览中拖动卡片移动位置、拖右下角调整大小；团队内成员小卡片同样可以单独拖动和缩放。</p>
-      <iframe id="display-preview" src="/display?edit=1" title="显示端预览"></iframe>
+      <div class="panel-head">
+        <h2>显示端预览</h2>
+        <div class="preview-tools">
+          <button id="preview-out" class="btn small" type="button" title="缩小预览">−</button>
+          <span id="preview-zoom-label">100%</span>
+          <button id="preview-in" class="btn small" type="button" title="放大预览">+</button>
+          <button id="preview-reset" class="btn small" type="button">重置</button>
+        </div>
+      </div>
+      <p class="preview-hint">开启「自由布局」后，可在预览中拖动卡片移动位置、拖右下角调整大小；团队内成员小卡片同样可以单独拖动和缩放。右上角可缩放预览。</p>
+      <div class="preview-frame-wrap">
+        <iframe id="display-preview" src="/display?edit=1" title="显示端预览"></iframe>
+      </div>
     </section>
 
     <!-- 人员面板 -->
@@ -56,9 +67,14 @@
       <div id="teams-list" class="teams-list"></div>
     </section>
 
-    <!-- 排版设置面板 -->
-    <section class="panel">
+  </main>
+
+  <!-- 排版设置弹窗 -->
+  <dialog id="settings-dialog" class="settings-dialog">
+    <header class="dialog-header">
       <h2>排版设置</h2>
+      <button id="settings-close" class="btn small" type="button">关闭</button>
+    </header>
       <div class="settings-form">
         <div class="set-group">
           <h3>内容</h3>
@@ -211,8 +227,7 @@
           </label>
         </div>
       </div>
-    </section>
-  </main>
+  </dialog>
 
   <script src="/shared.js"></script>
   <script src="/admin.js"></script>

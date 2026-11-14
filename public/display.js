@@ -171,23 +171,36 @@ function memberHTML(m, settings, delta, layout, editable) {
   );
 }
 
-function personCardHTML(p, delta, layout, editable, settings) {
+function rankHTML(meta) {
+  return meta && meta.rank != null ? '<span class="rank">' + meta.rank + '</span>' : '';
+}
+
+function barHTML(meta) {
+  if (!meta) return '';
+  const cls = 'score-bar' + (meta.value < 0 ? ' score-bar-neg' : '') +
+    (meta.value === 0 ? ' score-bar-zero' : '');
+  return '<span class="' + cls + '" style="width:' + meta.barPct + '%"></span>';
+}
+
+function personCardHTML(p, delta, layout, editable, settings, meta) {
   const c = cardAttrs('person', p, layout);
   const cls = c.cls + ' av-' + settings.avatarPosition;
   const fx = fxAttrs(settings, delta);
   return (
     '<div class="' + cls + '"' + c.attrs + '>' +
+      rankHTML(meta) +
       '<img src="' + avatarURL(p) + '" alt="">' +
       '<div class="person-name">' + escapeHTML(p.name) + '</div>' +
       '<div class="score person-score ' + scoreClass(p.score) + fx.cls + '">' +
         fx.badge + p.score +
       '</div>' +
+      barHTML(meta) +
       resizeHandleHTML(editable) +
     '</div>'
   );
 }
 
-function teamCardHTML(team, members, settings, deltas, layout, editable) {
+function teamCardHTML(team, members, settings, deltas, layout, editable, meta) {
   const total = members.reduce((s, m) => s + m.score, 0);
   let teamDelta = 0;
   for (const m of members) {
@@ -205,6 +218,7 @@ function teamCardHTML(team, members, settings, deltas, layout, editable) {
   const c = cardAttrs('team', team, layout);
   return (
     '<div class="' + c.cls + '"' + c.attrs + '>' +
+      rankHTML(meta) +
       '<div class="team-head av-' + settings.avatarPosition + '">' +
         '<img src="' + avatarURL(team, 64) + '" alt="">' +
         '<div class="team-name">' + escapeHTML(team.name) + '</div>' +
@@ -215,6 +229,7 @@ function teamCardHTML(team, members, settings, deltas, layout, editable) {
       '<div class="team-members' + (freeMembers ? ' free' : '') + '">' +
         (membersHTML || '<div class="member-empty">暂无成员</div>') +
       '</div>' +
+      barHTML(meta) +
       resizeHandleHTML(editable) +
     '</div>'
   );
@@ -348,6 +363,22 @@ function render(project) {
   prevScores = Object.fromEntries(people.map((p) => [p.id, p.score]));
 
   const items = buildItems(project, settings);
+
+  // 展板式信息：按分数展示时的名次 + 相对分数条
+  const itemScore = (it) => it.kind === 'person'
+    ? it.person.score
+    : it.members.reduce((sum, m) => sum + m.score, 0);
+  const maxAbs = Math.max(1, ...items.map((it) => Math.abs(itemScore(it))));
+  const ranked = settings.sortBy === 'score' && settings.sortOrder === 'desc';
+  const metaFor = (it, i) => {
+    const value = itemScore(it);
+    return {
+      rank: ranked ? i + 1 : null,
+      value,
+      barPct: Math.min(100, Math.round((Math.abs(value) / maxAbs) * 100)),
+    };
+  };
+
   const free = settings.layoutMode === 'free';
   board.classList.toggle('free', free);
 
@@ -357,16 +388,18 @@ function render(project) {
     board.innerHTML = items.map((it, i) => {
       const saved = it.kind === 'person' ? it.person.layout : it.team.layout;
       const layout = saved || fallback[i];
+      const meta = metaFor(it, i);
       return it.kind === 'person'
-        ? personCardHTML(it.person, deltas.get(it.person.id), layout, editable, settings)
-        : teamCardHTML(it.team, it.members, settings, deltas, layout, editable);
+        ? personCardHTML(it.person, deltas.get(it.person.id), layout, editable, settings, meta)
+        : teamCardHTML(it.team, it.members, settings, deltas, layout, editable, meta);
     }).join('');
   } else {
-    board.innerHTML = items.map((it) =>
-      it.kind === 'person'
-        ? personCardHTML(it.person, deltas.get(it.person.id), null, false, settings)
-        : teamCardHTML(it.team, it.members, settings, deltas, null, false)
-    ).join('');
+    board.innerHTML = items.map((it, i) => {
+      const meta = metaFor(it, i);
+      return it.kind === 'person'
+        ? personCardHTML(it.person, deltas.get(it.person.id), null, false, settings, meta)
+        : teamCardHTML(it.team, it.members, settings, deltas, null, false, meta);
+    }).join('');
   }
 
   applyAutoAvatarSizes();

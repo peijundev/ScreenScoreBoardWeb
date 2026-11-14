@@ -27,21 +27,22 @@ body[data-theme="light"] {
   --neu-dark: rgba(163, 177, 198, 0.6);
   --neu-light: rgba(255, 255, 255, 0.95);
 }
+/* 大屏展示：字号与留白按「远处也能看清」定 */
 body[data-density="comfortable"] {
-  --gap: 20px;
-  --card-pad: 18px;
-  --avatar: 64px;
-  --score-size: 40px;
-  --name-size: 18px;
-  --member-avatar: 36px;
+  --gap: 24px;
+  --card-pad: 24px;
+  --avatar: 96px;
+  --score-size: 64px;
+  --name-size: 22px;
+  --member-avatar: 44px;
 }
 body[data-density="compact"] {
-  --gap: 12px;
-  --card-pad: 12px;
-  --avatar: 44px;
-  --score-size: 28px;
-  --name-size: 15px;
-  --member-avatar: 28px;
+  --gap: 14px;
+  --card-pad: 14px;
+  --avatar: 64px;
+  --score-size: 44px;
+  --name-size: 17px;
+  --member-avatar: 32px;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -53,7 +54,8 @@ body {
   background-repeat: no-repeat;
   background-attachment: fixed;
   color: var(--text);
-  font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
+  font-family: "Noto Sans", "Noto Sans CJK SC", "Source Han Sans SC",
+    "PingFang SC", "Microsoft YaHei", sans-serif;
   min-height: 100vh;
 }
 
@@ -70,39 +72,55 @@ body.has-bg-image .topbar,
 body.has-bg-image .board,
 body.has-bg-image .empty-tip { position: relative; z-index: 1; }
 
-/* ---- 顶部：左对齐标题 + 细线 ---- */
+/* ---- 顶部：居中的大标题 + 短横线，像展板标题 ---- */
 .topbar {
   display: flex;
-  align-items: baseline;
+  flex-direction: column;
+  align-items: center;
   gap: 10px;
-  max-width: 1600px;
+  max-width: 1800px;
   margin: 0 auto;
-  padding: 22px 24px 12px;
-  border-bottom: 1px solid var(--card-border);
+  padding: 34px 24px 18px;
+  text-align: center;
 }
 .topbar h1 {
-  font-size: 24px;
+  font-size: clamp(34px, 4.2vw, 62px);
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
+  line-height: 1.15;
+}
+.topbar::after {
+  content: "";
+  width: 72px;
+  height: 4px;
+  background: var(--accent);
 }
 .dot {
-  margin-left: auto;
+  position: fixed;
+  top: 14px;
+  right: 14px;
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: #5aa86b;
-  align-self: center;
+  z-index: 20;
 }
 .dot.connecting { background: #c98f3a; animation: blink 1.2s step-end infinite; }
 @keyframes blink { 50% { opacity: 0.3; } }
+.edit-hint {
+  position: fixed;
+  top: 10px;
+  right: 32px;
+  z-index: 20;
+}
 
 /* ---- 卡片墙 ---- */
 .board {
   display: grid;
   grid-template-columns: repeat(var(--cols), 1fr);
   gap: var(--gap);
-  padding: var(--gap) 24px 32px;
-  max-width: 1600px;
+  padding: var(--gap) 28px 48px;
+  max-width: 1800px;
   margin: 0 auto;
   align-items: start;
 }
@@ -113,8 +131,8 @@ body.has-bg-image .empty-tip { position: relative; z-index: 1; }
 .empty-tip {
   text-align: center;
   color: var(--text-dim);
-  padding: 72px 0;
-  font-size: 16px;
+  padding: 90px 0;
+  font-size: 20px;
 }
 .empty-tip.hidden { display: none; }
 
@@ -125,6 +143,30 @@ body.has-bg-image .empty-tip { position: relative; z-index: 1; }
   border-radius: var(--radius);
   padding: var(--card-pad);
 }
+
+/* 名次角标 + 分数比例条（展板式结果展示） */
+.rank {
+  position: absolute;
+  top: calc(var(--card-pad) * 0.45);
+  right: calc(var(--card-pad) * 0.65);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent);
+  opacity: 0.85;
+  font-variant-numeric: tabular-nums;
+}
+.score-bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 5px;
+  width: 0;
+  background: var(--accent);
+  opacity: 0.9;
+  transition: width 0.45s ease;
+}
+.score-bar-neg { background: #e06c75; }
+.score-bar-zero { display: none; }
 /* 卡片背景图：叠一层与主题匹配的盖层，保证文字可读 */
 .card.has-card-image {
   background-image: linear-gradient(var(--card-img-veil), var(--card-img-veil)), var(--card-img);
@@ -286,7 +328,7 @@ body.edit-mode .edit-hint {
 .team-name {
   flex: 1;
   min-width: 0;
-  font-size: calc(var(--name-size) + 1px);
+  font-size: calc(var(--name-size) + 2px);
   font-weight: 700;
   word-break: break-all;
 }
@@ -297,8 +339,8 @@ body.edit-mode .edit-hint {
 }
 .team-members {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(calc(88px * var(--member-scale)), 1fr));
-  gap: calc(6px * var(--member-scale));
+  grid-template-columns: repeat(auto-fill, minmax(calc(112px * var(--member-scale)), 1fr));
+  gap: calc(8px * var(--member-scale));
 }
 .member {
   display: flex;
