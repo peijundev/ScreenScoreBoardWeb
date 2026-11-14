@@ -264,6 +264,13 @@ async function main() {
     P(s).settings.showRank === false && P(s).settings.scoreBarHeight === 9 &&
     P(s).settings.avatarShape === 'square' && P(s).settings.scrimOpacity === 0.3,
     '高级外观设置同步');
+
+  await adminOp('updateSettings', { patch: { fontFamily: 'custom', fontFamilyCustom: 'Noto Serif CJK SC' } });
+  s = await viewer.waitState((st) => P(st).settings.fontFamily === 'custom');
+  assert(P(s).settings.fontFamilyCustom === 'Noto Serif CJK SC', '自定义系统字体同步');
+  await adminOp('updateSettings', { patch: { fontFamilyCustom: 'bad;font' } }).catch((e) => {
+    assert(/非法字符/.test(e.message), '非法字体名称被拒绝');
+  });
   await adminOp('updateSettings', { patch: { fontScale: 3 } }).catch((e) => {
     assert(/字号缩放/.test(e.message), '非法字号缩放被拒绝');
   });
@@ -363,8 +370,8 @@ async function main() {
     rp.people[pid].memberLayout.w === 20, '重启后卡片布局恢复');
   assert(rp.settings.cardStyle === 'neon' && rp.settings.columns === 5 && rp.settings.avatarSize === 96, '重启后外观设置恢复');
   assert(rp.settings.displayStyle === 'seewo', '重启后显示风格恢复');
-  assert(rp.settings.fontFamily === 'serif' && rp.settings.titleSize === 72 &&
-    rp.settings.cardBorderWidth === 3 && rp.settings.showRank === false,
+  assert(rp.settings.fontFamily === 'custom' && rp.settings.fontFamilyCustom === 'Noto Serif CJK SC' &&
+    rp.settings.titleSize === 72 && rp.settings.cardBorderWidth === 3 && rp.settings.showRank === false,
     '重启后高级外观设置恢复');
   assert(rp.settings.cardBgMode === 'acrylic' && rp.settings.cardOpacity === 0.4 &&
     rp.settings.showTeamAccent === false && rp.settings.teamAccentColor === '#00ff00',

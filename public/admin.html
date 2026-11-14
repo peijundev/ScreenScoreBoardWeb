@@ -293,8 +293,26 @@
               <option value="system">系统黑体</option>
               <option value="serif">宋体 / 衬线</option>
               <option value="kai">楷体</option>
+              <option value="custom">自定义系统字体</option>
             </select>
           </label>
+          <label>字体名称
+            <input id="set-font-custom" type="text" maxlength="60" list="system-font-list"
+              placeholder="例如：LXGW WenKai / Noto Serif CJK SC">
+            <datalist id="system-font-list">
+              <option value="Noto Sans CJK SC"></option>
+              <option value="Noto Serif CJK SC"></option>
+              <option value="Source Han Sans SC"></option>
+              <option value="Source Han Serif SC"></option>
+              <option value="PingFang SC"></option>
+              <option value="Microsoft YaHei"></option>
+              <option value="SimSun"></option>
+              <option value="KaiTi"></option>
+              <option value="WenQuanYi Micro Hei"></option>
+              <option value="LXGW WenKai"></option>
+            </datalist>
+          </label>
+          <button id="load-system-fonts" class="btn small" type="button">读取系统字体</button>
           <label>字号缩放 <span id="font-scale-val">1</span> 倍
             <input id="set-font-scale" type="range" min="0.7" max="1.5" step="0.05">
           </label>

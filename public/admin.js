@@ -540,6 +540,8 @@ const resetLayoutBtn = document.getElementById('reset-layout');
 // ---- 高级外观控件 ----
 const adv = {
   fontFamily: document.getElementById('set-font-family'),
+  fontCustom: document.getElementById('set-font-custom'),
+  loadFonts: document.getElementById('load-system-fonts'),
   fontScale: document.getElementById('set-font-scale'),
   fontScaleVal: document.getElementById('font-scale-val'),
   titleSize: document.getElementById('set-title-size'),
@@ -779,11 +781,42 @@ advRanges.forEach(([input, label, key, fmt]) => {
   });
 });
 
-[[adv.fontFamily, 'fontFamily'], [adv.titleAlign, 'titleAlign'],
-  [adv.cardShadow, 'cardShadow'], [adv.avatarShape, 'avatarShape']]
+[[adv.titleAlign, 'titleAlign'], [adv.cardShadow, 'cardShadow'],
+  [adv.avatarShape, 'avatarShape']]
   .forEach(([input, key]) => {
     input.addEventListener('change', () => pushSetting(key, input.value, true));
   });
+
+// 字体：预设 / 自定义系统字体
+function updateFontCustomState() {
+  const isCustom = adv.fontFamily.value === 'custom';
+  adv.fontCustom.disabled = !isCustom;
+  adv.loadFonts.disabled = !isCustom;
+}
+adv.fontFamily.addEventListener('change', () => {
+  updateFontCustomState();
+  pushSetting('fontFamily', adv.fontFamily.value, true);
+});
+adv.fontCustom.addEventListener('input', () => {
+  pushSetting('fontFamilyCustom', adv.fontCustom.value);
+});
+adv.loadFonts.addEventListener('click', async () => {
+  if (typeof window.queryLocalFonts !== 'function') {
+    toast('当前浏览器不支持读取系统字体，请手动输入字体名称');
+    return;
+  }
+  try {
+    const fonts = await window.queryLocalFonts();
+    const families = Array.from(new Set(fonts.map((f) => f.family).filter(Boolean)))
+      .sort((a, b) => a.localeCompare(b));
+    const dl = document.getElementById('system-font-list');
+    dl.innerHTML = families.map((f) => '<option value="' + escapeHTML(f) + '"></option>').join('');
+    toast('已读取 ' + families.length + ' 个系统字体，可在字体名称中搜索选择');
+  } catch (e) {
+    toast('读取系统字体失败：' + (e && e.message ? e.message : e));
+  }
+});
+updateFontCustomState();
 
 [[adv.titleRule, 'showTitleRule'], [adv.showRank, 'showRank'],
   [adv.showScoreBar, 'showScoreBar'], [adv.showTeamAccent, 'showTeamAccent']]
@@ -982,6 +1015,11 @@ function renderSettings(settings) {
 
   // 高级外观
   adv.fontFamily.value = settings.fontFamily || 'system';
+  if (document.activeElement !== adv.fontCustom &&
+    adv.fontCustom.value !== (settings.fontFamilyCustom || '')) {
+    adv.fontCustom.value = settings.fontFamilyCustom || '';
+  }
+  updateFontCustomState();
   adv.titleAlign.value = settings.titleAlign || 'auto';
   adv.cardShadow.value = settings.cardShadow || 'auto';
   adv.avatarShape.value = settings.avatarShape || 'circle';

@@ -50,7 +50,8 @@ const DEFAULT_SETTINGS = {
   customSound: '',          // '' = 内置合成音；否则 sounds/xxx.mp3
 
   // ---- 高级外观 ----
-  fontFamily: 'system',     // system | serif | kai
+  fontFamily: 'system',     // system | serif | kai | custom
+  fontFamilyCustom: '',     // 自定义系统字体名称（fontFamily=custom 时生效）
   fontScale: 1,             // 姓名/分数/成员字号缩放 0.7–1.5
   titleSize: 0,             // 标题字号 px；0 = 自动
   titleAlign: 'auto',       // auto（跟随风格）| center | left | right
@@ -415,7 +416,18 @@ const SETTINGS_VALIDATORS = {
 
   // ---- 高级外观 ----
   fontFamily: (v) =>
-    (['system', 'serif', 'kai'].includes(v) ? v : (() => { throw new OpError('字体选择非法'); })()),
+    (['system', 'serif', 'kai', 'custom'].includes(v)
+      ? v
+      : (() => { throw new OpError('字体选择非法'); })()),
+  fontFamilyCustom: (v) => {
+    if (v == null || v === '') return '';
+    if (typeof v !== 'string') throw new OpError('字体名称非法');
+    const name = v.trim();
+    if (!name) return '';
+    if (name.length > 60) throw new OpError('字体名称过长（最多 60 字）');
+    if (!/^[\p{L}\p{N} ._-]+$/u.test(name)) throw new OpError('字体名称包含非法字符');
+    return name;
+  },
   fontScale: (v) => {
     const n = Number(v);
     if (!Number.isFinite(n) || n < 0.7 || n > 1.5) throw new OpError('字号缩放须在 0.7–1.5 之间');

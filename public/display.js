@@ -345,9 +345,14 @@ function applyAdvancedAppearance(settings) {
 
   // 古风/水墨默认使用宋体；用户显式选字体时以用户设置为准
   const serifStyles = ['guofeng', 'ink'];
-  const fontKey = settings.fontFamily === 'system' && serifStyles.includes(settings.displayStyle)
-    ? 'serif' : settings.fontFamily;
-  body.style.fontFamily = FONT_STACKS[fontKey] || FONT_STACKS.system;
+  if (settings.fontFamily === 'custom' && settings.fontFamilyCustom) {
+    const name = settings.fontFamilyCustom.replace(/["\\]/g, '');
+    body.style.fontFamily = '"' + name + '", ' + FONT_STACKS.system;
+  } else {
+    const fontKey = settings.fontFamily === 'system' && serifStyles.includes(settings.displayStyle)
+      ? 'serif' : settings.fontFamily;
+    body.style.fontFamily = FONT_STACKS[fontKey] || FONT_STACKS.system;
+  }
 
   setVar(root.style, '--font-scale', String(settings.fontScale));
   setVar(root.style, '--title-size', settings.titleSize ? settings.titleSize + 'px' : '');
