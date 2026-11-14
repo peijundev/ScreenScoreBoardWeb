@@ -103,17 +103,30 @@ const server = http.createServer((req, res) => {
   send(res, 404, 'Not Found');
 });
 
-async function main() {
+// 启动服务；Electron 主进程也复用它（port 传 0 时由系统分配空闲端口）
+async function start(options = {}) {
   await initState();
   attachWSS(server);
-  server.listen(PORT, '0.0.0.0', () => {
-    console.log(`计分板服务已启动（存储: ${storageKind}）:`);
-    console.log(`  显示端  http://localhost:${PORT}/display`);
-    console.log(`  管理端  http://localhost:${PORT}/admin`);
+  const listenPort = options.port != null ? options.port : PORT;
+  const actualPort = await new Promise((resolve, reject) => {
+    const onError = (e) => reject(e);
+    server.once('error', onError);
+    server.listen(listenPort, '0.0.0.0', () => {
+      server.removeListener('error', onError);
+      resolve(server.address().port);
+    });
+  });
+  console.log(`计分板服务已启动（存储: ${storageKind}）:`);
+  console.log(`  显示端  http://localhost:${actualPort}/display`);
+  console.log(`  管理端  http://localhost:${actualPort}/admin`);
+  return { server, port: actualPort };
+}
+
+if (require.main === module) {
+  start().catch((e) => {
+    console.error('[启动失败]', e.message);
+    process.exit(1);
   });
 }
 
-main().catch((e) => {
-  console.error('[启动失败]', e.message);
-  process.exit(1);
-});
+module.exports = { start, server };

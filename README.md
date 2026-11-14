@@ -80,6 +80,45 @@ STORAGE=mysql MYSQL_URL=mysql://user:pass@localhost:3306/scoreboard npm start
 - 管理端任何操作实时同步，分数变化带可配置特效与音效
 - 断线自动重连（右上角圆点：绿=已连接，黄=重连中）
 
+## Electron 管理端
+
+Electron 应用只承载**管理端**；显示端有两种打开方式：
+
+```bash
+npm run electron        # 开发模式启动 Electron
+```
+
+启动后在应用菜单：
+
+- **文件 → 打开显示端窗口**：新建一个显示端窗口（可再开多个，支持 F11 全屏）
+- **文件 → 在系统浏览器中打开显示端**：用默认浏览器打开显示端
+- **文件 → 新建管理端窗口**：同时管理多个项目/屏幕
+
+Electron 会内嵌启动同一个 HTTP/WS 服务（自动选择空闲端口），管理员在管理端里的「打开显示端」链接也会被拦截为新的显示端窗口。
+
+数据目录改到系统用户数据目录，不再使用项目里的 `data/`：
+
+- Linux：`~/.config/ScreenScoreBoard/data`
+- Windows：`%APPDATA%\ScreenScoreBoard\data`
+- macOS：`~/Library/Application Support/ScreenScoreBoard/data`
+
+### 打包三端产物
+
+```bash
+npm run dist:linux     # AppImage + .deb
+npm run dist:win       # NSIS 安装包 + portable
+npm run dist:mac       # dmg + zip（必须在 macOS 上执行）
+```
+
+产物输出到 `dist/`。WebStorm 里也提供了对应运行配置：**Electron 开发 / 打包 Linux / 打包 Windows / 打包 macOS**。
+
+说明：
+
+- Windows 产物在 Linux 上交叉打包需要 wine；macOS 产物必须在 macOS 上构建
+- 未配置代码签名证书，安装包未签名
+- 使用默认 Electron 图标，可自行放入 `build/icon.png` 等自行替换
+- Electron 内默认使用 JSON 存储；若要在 Electron 里使用 SQLite，需要针对 Electron 的 Node ABI 重新编译 `better-sqlite3`（`npx electron-rebuild better-sqlite3`）
+
 ## 验证
 
 ```bash

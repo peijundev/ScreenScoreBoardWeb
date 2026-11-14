@@ -555,6 +555,7 @@ module.exports = {
   init,
   applyOp,
   save,
+  flushSave,
   OpError,
   AVATAR_DIR,
   SOUND_DIR,
