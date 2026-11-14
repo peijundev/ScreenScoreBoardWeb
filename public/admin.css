@@ -152,14 +152,68 @@ body {
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
+.preview-resolution {
+  height: 24px;
+  padding: 2px 6px;
+  font-size: 12px;
+}
 
-/* 更大的预览区域，可滚动 */
+/* 常用排版快速调节 */
+.preview-quickbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 14px;
+  padding: 8px 0;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #2a2e32;
+}
+.preview-quickbar > label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.preview-quickbar > label.check {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  font-size: 13px;
+}
+.preview-quickbar select {
+  height: 26px;
+  padding: 2px 6px;
+}
+.preview-quickbar input[type="range"] {
+  width: 90px;
+  accent-color: var(--accent);
+}
+.preview-quickbar input[type="color"] {
+  width: 44px;
+  height: 26px;
+}
+.preview-quickbar input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+}
+
+/* 更大的预览区域，可滚动；固定分辨率时整体缩放显示 */
 .preview-frame-wrap {
+  position: relative;
+  display: flex;
   height: min(72vh, 900px);
   min-height: 480px;
   overflow: auto;
   border: 1px solid var(--card-border);
   background: #121517;
+}
+.preview-stage {
+  flex: 0 0 auto;
+  position: relative;
+  margin: auto;
 }
 #display-preview {
   display: block;
@@ -171,18 +225,29 @@ body {
   transform-origin: top left;
 }
 
-/* ---- 排版设置弹窗 ---- */
+/* ---- 排版设置窗口：非模态、可拖动、可拉伸 ---- */
 .settings-dialog {
+  position: fixed;
+  left: 60px;
+  top: 70px;
+  margin: 0;
+  z-index: 1000;
   width: min(900px, 94vw);
-  max-height: 88vh;
+  max-width: 96vw;
+  max-height: 92vh;
+  min-width: 480px;
+  min-height: 260px;
   padding: 0;
   background: var(--card);
   color: var(--text);
   border: 1px solid var(--card-border);
   border-radius: 0;
   overflow: hidden;
+  resize: both;
 }
-.settings-dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
+.settings-dialog[open] { display: flex; flex-direction: column; }
+.settings-dialog::backdrop { background: transparent; }
+.settings-dialog.dragging { user-select: none; }
 .dialog-header {
   display: flex;
   align-items: center;
@@ -191,21 +256,41 @@ body {
   background: #2a2e32;
   padding: 8px 12px;
   border-bottom: 1px solid var(--card-border);
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+  flex: 0 0 auto;
 }
 .dialog-header h2 { font-size: 14px; font-weight: 600; }
+.dialog-header .btn { cursor: pointer; }
 .settings-dialog .settings-form {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
   padding: 12px;
-  max-height: calc(88vh - 46px);
   overflow: auto;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .settings-dialog .set-group {
   border: 1px solid #2a2e32;
   background: #202326;
   padding: 10px;
   gap: 8px;
+}
+.settings-dialog .set-group.advanced {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 18px;
+  align-items: start;
+}
+.settings-dialog .set-group.advanced h3 { grid-column: 1 / -1; }
+@media (max-width: 900px) {
+  .settings-dialog .set-group.advanced { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .settings-dialog .set-group.advanced { grid-template-columns: 1fr; }
 }
 @media (max-width: 720px) {
   .settings-dialog .settings-form { grid-template-columns: 1fr; }

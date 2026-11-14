@@ -223,16 +223,54 @@ async function main() {
   });
 
   await adminOp('updateSettings', {
-    patch: { scoreEffect: 'spotlight', spotlightScope: 'person_team', customSound: soundUp.path },
+    patch: {
+      scoreEffect: 'spotlight', spotlightScope: 'person_team',
+      spotlightWidth: 700, spotlightHeight: 420, customSound: soundUp.path,
+    },
   });
   s = await viewer.waitState((st) => P(st).settings.scoreEffect === 'spotlight');
-  assert(P(s).settings.customSound === soundUp.path && P(s).settings.spotlightScope === 'person_team',
-    '居中突显特效/突显范围/自定义音效同步');
+  assert(P(s).settings.customSound === soundUp.path && P(s).settings.spotlightScope === 'person_team' &&
+    P(s).settings.spotlightWidth === 700 && P(s).settings.spotlightHeight === 420,
+    '居中突显特效/范围/宽高/自定义音效同步');
   await adminOp('updateSettings', { patch: { customSound: '../../etc/passwd' } }).catch((e) => {
     assert(/音效文件路径/.test(e.message), '非法音效路径被拒绝');
   });
   await adminOp('updateSettings', { patch: { spotlightScope: 'team_only' } }).catch((e) => {
     assert(/突显范围/.test(e.message), '非法突显范围被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { spotlightWidth: 9 } }).catch((e) => {
+    assert(/突显宽度/.test(e.message), '非法突显宽度被拒绝');
+  });
+
+  await adminOp('updateSettings', {
+    patch: {
+      fontFamily: 'serif', fontScale: 1.2, titleSize: 72, titleAlign: 'left', titleColor: '#ff0000',
+      showTitleRule: false, boardMaxWidth: 2200, cardGap: 30, cardPad: 20, cardBorderWidth: 3,
+      cardBorderColor: '#00ff00', cardShadow: 'strong', teamAccentWidth: 8, avatarBorderWidth: 4,
+      avatarShape: 'square', textColor: '#00ffff', positiveColor: '#00ff00', negativeColor: '#ff00ff',
+      rankColor: '#ffff00', scrimOpacity: 0.3, showRank: false, rankSize: 22,
+      showScoreBar: false, scoreBarHeight: 9,
+    },
+  });
+  s = await viewer.waitState((st) => P(st).settings.titleSize === 72);
+  assert(P(s).settings.fontFamily === 'serif' && P(s).settings.cardShadow === 'strong' &&
+    P(s).settings.showRank === false && P(s).settings.scoreBarHeight === 9 &&
+    P(s).settings.avatarShape === 'square' && P(s).settings.scrimOpacity === 0.3,
+    '高级外观设置同步');
+  await adminOp('updateSettings', { patch: { fontScale: 3 } }).catch((e) => {
+    assert(/字号缩放/.test(e.message), '非法字号缩放被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { titleAlign: 'justify' } }).catch((e) => {
+    assert(/标题对齐/.test(e.message), '非法标题对齐被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { cardShadow: 'hard' } }).catch((e) => {
+    assert(/卡片阴影/.test(e.message), '非法卡片阴影被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { positiveColor: 'red' } }).catch((e) => {
+    assert(/正分颜色/.test(e.message), '非法正分颜色被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { scrimOpacity: 2 } }).catch((e) => {
+    assert(/压暗/.test(e.message), '非法压暗倍率被拒绝');
   });
 
   // 非法参数
@@ -278,8 +316,12 @@ async function main() {
     rp.people[pid].memberLayout.w === 20, '重启后卡片布局恢复');
   assert(rp.settings.cardStyle === 'neon' && rp.settings.columns === 5 && rp.settings.avatarSize === 96, '重启后外观设置恢复');
   assert(rp.settings.displayStyle === 'seewo', '重启后显示风格恢复');
+  assert(rp.settings.fontFamily === 'serif' && rp.settings.titleSize === 72 &&
+    rp.settings.cardBorderWidth === 3 && rp.settings.showRank === false,
+    '重启后高级外观设置恢复');
   assert(rp.settings.scoreEffect === 'spotlight' && rp.settings.customSound === soundUp.path &&
-    rp.settings.spotlightScope === 'person_team', '重启后居中突显/突显范围/自定义音效恢复');
+    rp.settings.spotlightScope === 'person_team' && rp.settings.spotlightWidth === 700 &&
+    rp.settings.spotlightHeight === 420, '重启后居中突显/范围/宽高/自定义音效恢复');
   assert(Object.keys(restored.projects).length === 1, '重启后项目列表恢复');
 
   console.log('存储后端（SQLite）:');

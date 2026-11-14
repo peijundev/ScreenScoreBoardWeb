@@ -34,13 +34,41 @@ const DEFAULT_SETTINGS = {
   glassBlur: 12,            // 毛玻璃模糊强度 px（0–40）
   glassOpacity: 0.55,       // 毛玻璃卡片不透明度（0.15–0.95）
   scoreEffect: 'bounce',    // none | bounce | glow | float | shake | confetti | spotlight
-  spotlightScope: 'person', // person（只突显人物）| person_team（人物 + 团队）
+  spotlightScope: 'person', // team（仅团队）| person_team（人物 + 团队）| person（仅人物）
+  spotlightWidth: 520,      // 居中突显宽度 px（200–1600）
+  spotlightHeight: 0,       // 居中突显高度 px；0 = 自动
   scoreEffectDuration: 700, // 特效时长 ms（200–3000）
   scoreEffectColor: '',     // '' = 自动（加分绿/减分红）；或 #rrggbb
   scoreEffectOnlyPositive: false, // 仅加分触发特效
   soundEnabled: false,      // 记分音效
   soundVolume: 0.5,         // 音效音量 0–1
   customSound: '',          // '' = 内置合成音；否则 sounds/xxx.mp3
+
+  // ---- 高级外观 ----
+  fontFamily: 'system',     // system | serif | kai
+  fontScale: 1,             // 姓名/分数/成员字号缩放 0.7–1.5
+  titleSize: 0,             // 标题字号 px；0 = 自动
+  titleAlign: 'auto',       // auto（跟随风格）| center | left | right
+  titleColor: '',           // '' = 跟随主题
+  showTitleRule: true,      // 标题下方短横线
+  boardMaxWidth: 1800,      // 卡片区最大宽度 px（900–2600）
+  cardGap: 0,               // 卡片间距；0 = 跟随密度
+  cardPad: 0,               // 卡片内边距；0 = 跟随密度
+  cardBorderWidth: 1,       // 卡片边框宽度 px（0–6）
+  cardBorderColor: '',      // '' = 跟随主题
+  cardShadow: 'auto',       // auto | none | soft | medium | strong
+  teamAccentWidth: 4,       // 团队卡左侧色条宽度 px（0–12）
+  avatarBorderWidth: 1,     // 头像边框宽度 px（0–6）
+  avatarShape: 'circle',    // circle | square
+  textColor: '',            // '' = 跟随主题
+  positiveColor: '#6fbf7b', // 正分颜色
+  negativeColor: '#e06c75', // 负分颜色
+  rankColor: '',            // 名次颜色；'' = 强调色
+  scrimOpacity: 1,          // 背景图压暗倍率 0–1
+  showRank: true,           // 显示名次角标
+  rankSize: 15,             // 名次字号 px（10–40）
+  showScoreBar: true,       // 显示分数比例条
+  scoreBarHeight: 5,        // 比例条高度 px（0–16）
 };
 
 const storage = createStorage();
@@ -247,6 +275,20 @@ function needEntity(project, kind, id) {
   throw new OpError('实体类型非法');
 }
 
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+
+function hexOrEmpty(v, message) {
+  if (v === '' || v == null) return '';
+  if (HEX_COLOR.test(v)) return v;
+  throw new OpError(message);
+}
+
+function intRange(v, lo, hi, message) {
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < lo || n > hi) throw new OpError(message);
+  return n;
+}
+
 const SETTINGS_VALIDATORS = {
   title: (v) => needString(v, '标题', 30),
   displayStyle: (v) =>
@@ -316,9 +358,11 @@ const SETTINGS_VALIDATORS = {
       ? v
       : (() => { throw new OpError('加分特效类型非法'); })()),
   spotlightScope: (v) =>
-    (['person', 'person_team'].includes(v)
+    (['team', 'person_team', 'person'].includes(v)
       ? v
       : (() => { throw new OpError('突显范围非法'); })()),
+  spotlightWidth: (v) => intRange(v, 200, 1600, '突显宽度须为 200–1600'),
+  spotlightHeight: (v) => intRange(v, 0, 1200, '突显高度须为 0–1200（0=自动）'),
   scoreEffectDuration: (v) => {
     const n = Number(v);
     if (!Number.isInteger(n) || n < 200 || n > 3000) throw new OpError('特效时长须为 200–3000 的整数');
@@ -341,6 +385,46 @@ const SETTINGS_VALIDATORS = {
       ? v
       : (() => { throw new OpError('音效文件路径非法'); })();
   },
+
+  // ---- 高级外观 ----
+  fontFamily: (v) =>
+    (['system', 'serif', 'kai'].includes(v) ? v : (() => { throw new OpError('字体选择非法'); })()),
+  fontScale: (v) => {
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0.7 || n > 1.5) throw new OpError('字号缩放须在 0.7–1.5 之间');
+    return Math.round(n * 100) / 100;
+  },
+  titleSize: (v) => intRange(v, 0, 120, '标题字号须为 0–120 的整数（0=自动）'),
+  titleAlign: (v) =>
+    (['auto', 'center', 'left', 'right'].includes(v) ? v : (() => { throw new OpError('标题对齐非法'); })()),
+  titleColor: (v) => hexOrEmpty(v, '标题颜色须为 #rrggbb 或留空'),
+  showTitleRule: (v) => Boolean(v),
+  boardMaxWidth: (v) => intRange(v, 900, 2600, '页面最大宽度须为 900–2600'),
+  cardGap: (v) => intRange(v, 0, 60, '卡片间距须为 0–60'),
+  cardPad: (v) => intRange(v, 0, 60, '卡片内边距须为 0–60'),
+  cardBorderWidth: (v) => intRange(v, 0, 6, '卡片边框宽度须为 0–6'),
+  cardBorderColor: (v) => hexOrEmpty(v, '卡片边框颜色须为 #rrggbb 或留空'),
+  cardShadow: (v) =>
+    (['auto', 'none', 'soft', 'medium', 'strong'].includes(v)
+      ? v
+      : (() => { throw new OpError('卡片阴影取值非法'); })()),
+  teamAccentWidth: (v) => intRange(v, 0, 12, '团队色条宽度须为 0–12'),
+  avatarBorderWidth: (v) => intRange(v, 0, 6, '头像边框宽度须为 0–6'),
+  avatarShape: (v) =>
+    (['circle', 'square'].includes(v) ? v : (() => { throw new OpError('头像形状非法'); })()),
+  textColor: (v) => hexOrEmpty(v, '文字颜色须为 #rrggbb 或留空'),
+  positiveColor: (v) => (HEX_COLOR.test(v) ? v : (() => { throw new OpError('正分颜色须为 #rrggbb'); })()),
+  negativeColor: (v) => (HEX_COLOR.test(v) ? v : (() => { throw new OpError('负分颜色须为 #rrggbb'); })()),
+  rankColor: (v) => hexOrEmpty(v, '名次颜色须为 #rrggbb 或留空'),
+  scrimOpacity: (v) => {
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0 || n > 1) throw new OpError('背景压暗倍率须在 0–1 之间');
+    return Math.round(n * 100) / 100;
+  },
+  showRank: (v) => Boolean(v),
+  rankSize: (v) => intRange(v, 10, 40, '名次字号须为 10–40'),
+  showScoreBar: (v) => Boolean(v),
+  scoreBarHeight: (v) => intRange(v, 0, 16, '比例条高度须为 0–16'),
 };
 
 // ---------- op 全集 ----------

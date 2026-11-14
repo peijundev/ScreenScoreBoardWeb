@@ -20,6 +20,25 @@
   --dx: 0px;
   --dy: 0px;
   --rot: 0deg;
+
+  /* 高级外观（由 display.js 注入） */
+  --font-scale: 1;
+  --title-size: initial;
+  --board-max: 1800px;
+  --gap-override: initial;
+  --card-pad-override: initial;
+  --card-border-width: 1px;
+  --team-bar-w: 4px;
+  --avatar-border-w: 1px;
+  --avatar-radius: 50%;
+  --rank-size: 15px;
+  --bar-height: 5px;
+  --scrim-opacity: 1;
+  --score-pos: #6fbf7b;
+  --score-neg: #e06c75;
+  --title-color: initial;
+  --rank-color: initial;
+  --card-shadow: initial;
 }
 body[data-theme="dark"] {
   --bg-fallback: #12161c;
@@ -85,6 +104,7 @@ body.has-bg-image::before {
   position: fixed;
   inset: 0;
   background: var(--scrim);
+  opacity: var(--scrim-opacity, 1);
   pointer-events: none;
   z-index: 0;
 }
@@ -98,13 +118,14 @@ body.has-bg-image .empty-tip { position: relative; z-index: 1; }
   flex-direction: column;
   align-items: center;
   gap: 10px;
-  max-width: 1800px;
+  max-width: var(--board-max, 1800px);
   margin: 0 auto;
   padding: 34px 24px 18px;
   text-align: center;
 }
 .topbar h1 {
-  font-size: clamp(34px, 4.2vw, 62px);
+  font-size: var(--title-size, clamp(34px, 4.2vw, 62px));
+  color: var(--title-color, inherit);
   font-weight: 700;
   letter-spacing: 0.05em;
   line-height: 1.15;
@@ -138,9 +159,9 @@ body.has-bg-image .empty-tip { position: relative; z-index: 1; }
 .board {
   display: grid;
   grid-template-columns: repeat(var(--cols), 1fr);
-  gap: var(--gap);
+  gap: var(--gap-override, var(--gap));
   padding: var(--gap) 28px 48px;
-  max-width: 1800px;
+  max-width: var(--board-max, 1800px);
   margin: 0 auto;
   align-items: start;
 }
@@ -160,8 +181,9 @@ body.has-bg-image .empty-tip { position: relative; z-index: 1; }
   position: relative;
   background: var(--card);
   border: 1px solid var(--card-border);
+  border-width: var(--card-border-width, 1px);
   border-radius: var(--radius);
-  padding: var(--card-pad);
+  padding: var(--card-pad-override, var(--card-pad));
 }
 
 /* 名次角标 + 分数比例条（展板式结果展示） */
@@ -169,9 +191,9 @@ body.has-bg-image .empty-tip { position: relative; z-index: 1; }
   position: absolute;
   top: calc(var(--card-pad) * 0.45);
   right: calc(var(--card-pad) * 0.65);
-  font-size: 15px;
+  font-size: var(--rank-size, 15px);
   font-weight: 700;
-  color: var(--accent);
+  color: var(--rank-color, var(--accent));
   opacity: 0.85;
   font-variant-numeric: tabular-nums;
 }
@@ -179,7 +201,7 @@ body.has-bg-image .empty-tip { position: relative; z-index: 1; }
   position: absolute;
   left: 0;
   bottom: 0;
-  height: 5px;
+  height: var(--bar-height, 5px);
   width: 0;
   background: var(--accent);
   opacity: 0.9;
@@ -253,8 +275,8 @@ body.edit-mode .edit-hint {
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
 }
-.score-pos { color: #6fbf7b; }
-.score-neg { color: #e06c75; }
+.score-pos { color: var(--score-pos, #6fbf7b); }
+.score-neg { color: var(--score-neg, #e06c75); }
 .score-zero { color: var(--text-dim); }
 
 /* ---- 个人卡片：横向，姓名左、分数右对齐 ---- */
@@ -267,20 +289,20 @@ body.edit-mode .edit-hint {
   width: var(--person-avatar, var(--avatar));
   height: var(--person-avatar, var(--avatar));
   flex: 0 0 auto;
-  border-radius: 50%;
+  border-radius: var(--avatar-radius, 50%);
   object-fit: cover;
-  border: 1px solid var(--card-border);
+  border: var(--avatar-border-w, 1px) solid var(--card-border);
 }
 .person-card .person-name {
   flex: 1;
   min-width: 0;
-  font-size: var(--name-size);
+  font-size: calc(var(--name-size) * var(--font-scale, 1));
   font-weight: 600;
   word-break: break-all;
 }
 .person-card .person-score {
   margin-left: auto;
-  font-size: var(--score-size);
+  font-size: calc(var(--score-size) * var(--font-scale, 1));
   font-weight: 700;
   line-height: 1;
 }
@@ -308,7 +330,7 @@ body.edit-mode .edit-hint {
 
 /* ---- 团队卡片：顶部信息条 + 成员网格 ---- */
 .team-card {
-  border-left: 4px solid var(--accent);
+  border-left: var(--team-bar-w, 4px) solid var(--accent);
   display: flex;
   flex-direction: column;
 }
@@ -323,9 +345,9 @@ body.edit-mode .edit-hint {
 .team-head img {
   width: var(--team-avatar, var(--avatar-70));
   height: var(--team-avatar, var(--avatar-70));
-  border-radius: 50%;
+  border-radius: var(--avatar-radius, 50%);
   object-fit: cover;
-  border: 1px solid var(--card-border);
+  border: var(--avatar-border-w, 1px) solid var(--card-border);
 }
 .team-head.av-right .team-name { order: 1; }
 .team-head.av-right .team-total { order: 2; }
@@ -347,12 +369,12 @@ body.edit-mode .edit-hint {
 .team-name {
   flex: 1;
   min-width: 0;
-  font-size: calc(var(--name-size) + 2px);
+  font-size: calc((var(--name-size) + 2px) * var(--font-scale, 1));
   font-weight: 700;
   word-break: break-all;
 }
 .team-total {
-  font-size: calc(var(--score-size) * 0.62);
+  font-size: calc(var(--score-size) * 0.62 * var(--font-scale, 1));
   font-weight: 700;
   color: var(--accent);
 }
@@ -373,7 +395,7 @@ body.edit-mode .edit-hint {
   width: calc(var(--member-avatar-base, var(--member-avatar)) * var(--member-scale));
   height: calc(var(--member-avatar-base, var(--member-avatar)) * var(--member-scale));
   flex: 0 0 auto;
-  border-radius: 50%;
+  border-radius: var(--avatar-radius, 50%);
   object-fit: cover;
 }
 .member.av-right .m-body { order: 1; }
@@ -389,12 +411,12 @@ body.edit-mode .edit-hint {
 .member.av-bottom img { order: 1; }
 .member .m-body { min-width: 0; }
 .member-name {
-  font-size: calc((var(--name-size) - 4px) * var(--member-scale));
+  font-size: calc((var(--name-size) - 4px) * var(--member-scale) * var(--font-scale, 1));
   word-break: break-all;
   line-height: 1.25;
 }
 .member-score {
-  font-size: calc((var(--name-size) - 2px) * var(--member-scale));
+  font-size: calc((var(--name-size) - 2px) * var(--member-scale) * var(--font-scale, 1));
   font-weight: 700;
   line-height: 1.25;
 }
@@ -728,3 +750,21 @@ body[data-display-style="custom"] .topbar::after { display: none; }
 body[data-display-style="custom"] .topbar h1 { font-size: clamp(24px, 2.8vw, 38px); }
 body[data-display-style="custom"] .rank,
 body[data-display-style="custom"] .score-bar { display: none; }
+
+/* ============================================================
+   高级外观覆盖：放在最后，优先级高于风格皮肤
+   ============================================================ */
+body[data-show-rank="0"] .rank { display: none; }
+body[data-show-bar="0"] .score-bar { display: none; }
+body[data-title-rule="off"] .topbar::after { display: none; }
+
+body[data-title-align="center"] .topbar { align-items: center; text-align: center; }
+body[data-title-align="center"] .topbar::after { margin-left: auto; margin-right: auto; }
+body[data-title-align="left"] .topbar { align-items: flex-start; text-align: left; }
+body[data-title-align="left"] .topbar::after { margin-left: 0; margin-right: auto; }
+body[data-title-align="right"] .topbar { align-items: flex-end; text-align: right; }
+body[data-title-align="right"] .topbar::after { margin-left: auto; margin-right: 0; }
+
+body[data-title-color="custom"] .topbar h1 { color: var(--title-color); }
+body[data-rank-color="custom"] .rank { color: var(--rank-color); }
+body[data-card-shadow="custom"] .card { box-shadow: var(--card-shadow); }

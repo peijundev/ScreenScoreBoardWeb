@@ -11,6 +11,9 @@ const projectAddBtn = document.getElementById('project-add');
 const projectRenameBtn = document.getElementById('project-rename');
 const projectDeleteBtn = document.getElementById('project-delete');
 const previewFrame = document.getElementById('display-preview');
+const previewWrap = document.getElementById('preview-wrap');
+const previewStage = document.getElementById('preview-stage');
+const previewResolution = document.getElementById('preview-resolution');
 const settingsDialog = document.getElementById('settings-dialog');
 const settingsOpenBtn = document.getElementById('settings-open');
 const settingsCloseBtn = document.getElementById('settings-close');
@@ -18,6 +21,25 @@ const previewOutBtn = document.getElementById('preview-out');
 const previewInBtn = document.getElementById('preview-in');
 const previewResetBtn = document.getElementById('preview-reset');
 const previewZoomLabel = document.getElementById('preview-zoom-label');
+const quick = {
+  style: document.getElementById('quick-style'),
+  theme: document.getElementById('quick-theme'),
+  columns: document.getElementById('quick-columns'),
+  columnsVal: document.getElementById('quick-columns-val'),
+  density: document.getElementById('quick-density'),
+  sort: document.getElementById('quick-sort'),
+  accent: document.getElementById('quick-accent'),
+  edit: document.getElementById('quick-edit'),
+};
+
+let previewEdit = false;
+let previewZoom = 1;
+let previewResolutionValue = '1920x1080';
+try {
+  previewResolutionValue = localStorage.getItem('previewResolution') || '1920x1080';
+  previewZoom = Number(localStorage.getItem('previewZoom')) || 1;
+} catch (_) {}
+previewResolution.value = previewResolutionValue;
 let toastTimer = null;
 
 function toast(msg) {
@@ -67,7 +89,8 @@ function syncProjectUI(state) {
   ).join('');
   const displayLink = document.querySelector('.open-display');
   displayLink.href = '/display?project=' + encodeURIComponent(currentProjectId);
-  const previewSrc = '/display?edit=1&project=' + encodeURIComponent(currentProjectId);
+  const previewSrc = '/display?project=' + encodeURIComponent(currentProjectId) +
+    (previewEdit ? '&edit=1' : '');
   if (previewFrame.getAttribute('src') !== previewSrc) previewFrame.src = previewSrc;
   // 地址栏同步当前项目，便于刷新/分享
   const url = new URL(location.href);
@@ -116,40 +139,153 @@ projectDeleteBtn.addEventListener('click', async () => {
   } catch (e) { toast(e.message); }
 });
 
-// ============ 排版设置弹窗 ============
+// ============ 排版设置窗口：非模态、可拖动 ============
+function clampNum(v, lo, hi) {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+function placeSettingsDialog() {
+  let left = null;
+  let top = null;
+  try {
+    const saved = JSON.parse(localStorage.getItem('settingsDialogPos') || 'null');
+    if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) {
+      left = saved.left;
+      top = saved.top;
+    }
+  } catch (_) {}
+
+  const rect = settingsDialog.getBoundingClientRect();
+  if (left == null) left = (window.innerWidth - rect.width) / 2;
+  if (top == null) top = Math.max(16, Math.min(80, window.innerHeight * 0.08));
+
+  left = clampNum(left, 4, Math.max(4, window.innerWidth - rect.width - 4));
+  top = clampNum(top, 4, Math.max(4, window.innerHeight - 44));
+  settingsDialog.style.left = left + 'px';
+  settingsDialog.style.top = top + 'px';
+}
+
 settingsOpenBtn.addEventListener('click', () => {
-  if (!settingsDialog.open) settingsDialog.showModal();
+  if (settingsDialog.open) {
+    settingsDialog.close();
+    return;
+  }
+  settingsDialog.show(); // 非模态：不挡预览，可以边看边调
+  placeSettingsDialog();
 });
 settingsCloseBtn.addEventListener('click', () => settingsDialog.close());
-settingsDialog.addEventListener('click', (e) => {
-  if (e.target === settingsDialog) settingsDialog.close();
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && settingsDialog.open) settingsDialog.close();
 });
 
-// ============ 预览缩放 ============
-let previewZoom = 1;
-try { previewZoom = Number(localStorage.getItem('previewZoom')) || 1; } catch (_) {}
+// 拖标题栏移动窗口
+const dialogHeader = settingsDialog.querySelector('.dialog-header');
+let dialogDrag = null;
 
-function applyPreviewZoom() {
+dialogHeader.addEventListener('pointerdown', (e) => {
+  if (e.target.closest('button')) return;
+  e.preventDefault();
+  const rect = settingsDialog.getBoundingClientRect();
+  dialogDrag = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
+  dialogHeader.setPointerCapture(e.pointerId);
+  settingsDialog.classList.add('dragging');
+});
+
+dialogHeader.addEventListener('pointermove', (e) => {
+  if (!dialogDrag) return;
+  const width = settingsDialog.offsetWidth;
+  const left = clampNum(e.clientX - dialogDrag.dx, 4, Math.max(4, window.innerWidth - width - 4));
+  const top = clampNum(e.clientY - dialogDrag.dy, 4, Math.max(4, window.innerHeight - 44));
+  settingsDialog.style.left = left + 'px';
+  settingsDialog.style.top = top + 'px';
+});
+
+function endDialogDrag() {
+  if (!dialogDrag) return;
+  dialogDrag = null;
+  settingsDialog.classList.remove('dragging');
+  try {
+    localStorage.setItem('settingsDialogPos', JSON.stringify({
+      left: parseFloat(settingsDialog.style.left) || 0,
+      top: parseFloat(settingsDialog.style.top) || 0,
+    }));
+  } catch (_) {}
+}
+dialogHeader.addEventListener('pointerup', endDialogDrag);
+dialogHeader.addEventListener('pointercancel', endDialogDrag);
+
+// ============ 预览：固定分辨率复刻 + 缩放 ============
+function applyPreviewLayout() {
   previewZoom = Math.min(1.6, Math.max(0.5, Math.round(previewZoom * 100) / 100));
-  // 优先用 zoom；不支持时退化为 transform + 尺寸补偿
-  if (window.CSS && CSS.supports && CSS.supports('zoom', '1.2')) {
-    previewFrame.style.zoom = String(previewZoom);
-    previewFrame.style.transform = '';
-    previewFrame.style.width = '100%';
-    previewFrame.style.height = '100%';
-  } else {
-    previewFrame.style.zoom = '';
-    previewFrame.style.transform = 'scale(' + previewZoom + ')';
-    previewFrame.style.width = (100 / previewZoom) + '%';
-    previewFrame.style.height = (100 / previewZoom) + '%';
-  }
   previewZoomLabel.textContent = Math.round(previewZoom * 100) + '%';
   try { localStorage.setItem('previewZoom', String(previewZoom)); } catch (_) {}
+
+  if (previewResolutionValue === 'auto') {
+    previewStage.style.width = '100%';
+    previewStage.style.height = '100%';
+    previewFrame.style.width = '100%';
+    previewFrame.style.height = '100%';
+    previewFrame.style.transform = '';
+    previewFrame.style.zoom = String(previewZoom);
+    return;
+  }
+
+  const [w, h] = previewResolutionValue.split('x').map(Number);
+  if (!w || !h) return;
+  const fit = Math.min(previewWrap.clientWidth / w, previewWrap.clientHeight / h) * previewZoom;
+  previewStage.style.width = w * fit + 'px';
+  previewStage.style.height = h * fit + 'px';
+  previewFrame.style.zoom = '';
+  previewFrame.style.width = w + 'px';
+  previewFrame.style.height = h + 'px';
+  previewFrame.style.transform = 'scale(' + fit + ')';
+  previewFrame.style.transformOrigin = 'top left';
 }
-previewOutBtn.addEventListener('click', () => { previewZoom -= 0.1; applyPreviewZoom(); });
-previewInBtn.addEventListener('click', () => { previewZoom += 0.1; applyPreviewZoom(); });
-previewResetBtn.addEventListener('click', () => { previewZoom = 1; applyPreviewZoom(); });
-applyPreviewZoom();
+
+previewOutBtn.addEventListener('click', () => { previewZoom -= 0.1; applyPreviewLayout(); });
+previewInBtn.addEventListener('click', () => { previewZoom += 0.1; applyPreviewLayout(); });
+previewResetBtn.addEventListener('click', () => { previewZoom = 1; applyPreviewLayout(); });
+previewResolution.addEventListener('change', () => {
+  previewResolutionValue = previewResolution.value;
+  try { localStorage.setItem('previewResolution', previewResolutionValue); } catch (_) {}
+  applyPreviewLayout();
+});
+let previewLayoutTimer = null;
+function schedulePreviewLayout() {
+  clearTimeout(previewLayoutTimer);
+  previewLayoutTimer = setTimeout(applyPreviewLayout, 60);
+}
+window.addEventListener('resize', schedulePreviewLayout);
+if (window.ResizeObserver) {
+  new ResizeObserver(schedulePreviewLayout).observe(previewWrap);
+}
+
+// ============ 预览旁：常用排版快速调节 ============
+quick.style.addEventListener('change', () => pushSetting('displayStyle', quick.style.value, true));
+quick.theme.addEventListener('change', () => pushSetting('theme', quick.theme.value, true));
+quick.density.addEventListener('change', () => pushSetting('density', quick.density.value, true));
+quick.columns.addEventListener('input', () => {
+  quick.columnsVal.textContent = quick.columns.value;
+  pushSetting('columns', Number(quick.columns.value));
+});
+quick.accent.addEventListener('input', () => pushSetting('accent', quick.accent.value));
+quick.sort.addEventListener('change', () => {
+  const map = {
+    score_desc: ['score', 'desc'],
+    score_asc: ['score', 'asc'],
+    created_asc: ['created', 'asc'],
+    created_desc: ['created', 'desc'],
+  };
+  const [sortBy, sortOrder] = map[quick.sort.value] || ['score', 'desc'];
+  projectOp('updateSettings', { patch: { sortBy, sortOrder } }).catch((e) => toast(e.message));
+});
+quick.edit.addEventListener('change', () => {
+  previewEdit = quick.edit.checked;
+  if (currentState) syncProjectUI(currentState);
+});
+
+applyPreviewLayout();
 
 // ============ 人员面板 ============
 const personNameInput = document.getElementById('person-name');
@@ -368,6 +504,9 @@ const settingEls = {
   glassOpacity: document.getElementById('set-glass-opacity'),
   scoreEffect: document.getElementById('set-score-effect'),
   spotlightScope: document.getElementById('set-spotlight-scope'),
+  spotlightWidth: document.getElementById('set-spotlight-width'),
+  spotlightHeight: document.getElementById('set-spotlight-height'),
+  previewSpotlight: document.getElementById('preview-spotlight'),
   fxDuration: document.getElementById('set-fx-duration'),
   fxOnlyPositive: document.getElementById('set-fx-only-positive'),
   fxColorEnabled: document.getElementById('set-fx-color-enabled'),
@@ -385,8 +524,54 @@ const avatarSizeVal = document.getElementById('avatar-size-val');
 const glassBlurVal = document.getElementById('glass-blur-val');
 const glassOpacityVal = document.getElementById('glass-opacity-val');
 const fxDurationVal = document.getElementById('fx-duration-val');
+const spotlightWidthVal = document.getElementById('spotlight-width-val');
+const spotlightHeightVal = document.getElementById('spotlight-height-val');
 const soundVolumeVal = document.getElementById('sound-volume-val');
 const resetLayoutBtn = document.getElementById('reset-layout');
+
+// ---- 高级外观控件 ----
+const adv = {
+  fontFamily: document.getElementById('set-font-family'),
+  fontScale: document.getElementById('set-font-scale'),
+  fontScaleVal: document.getElementById('font-scale-val'),
+  titleSize: document.getElementById('set-title-size'),
+  titleSizeVal: document.getElementById('title-size-val'),
+  titleAlign: document.getElementById('set-title-align'),
+  titleRule: document.getElementById('set-title-rule'),
+  titleColorEnabled: document.getElementById('set-title-color-enabled'),
+  titleColor: document.getElementById('set-title-color'),
+  boardMax: document.getElementById('set-board-max'),
+  boardMaxVal: document.getElementById('board-max-val'),
+  cardGap: document.getElementById('set-card-gap'),
+  cardGapVal: document.getElementById('card-gap-val'),
+  cardPad: document.getElementById('set-card-pad'),
+  cardPadVal: document.getElementById('card-pad-val'),
+  cardBorderWidth: document.getElementById('set-card-border-width'),
+  cardBorderWidthVal: document.getElementById('card-border-width-val'),
+  cardBorderColorEnabled: document.getElementById('set-card-border-color-enabled'),
+  cardBorderColor: document.getElementById('set-card-border-color'),
+  cardShadow: document.getElementById('set-card-shadow'),
+  teamBarWidth: document.getElementById('set-team-bar-width'),
+  teamBarVal: document.getElementById('team-bar-val'),
+  avatarBorderWidth: document.getElementById('set-avatar-border-width'),
+  avatarBorderVal: document.getElementById('avatar-border-val'),
+  avatarShape: document.getElementById('set-avatar-shape'),
+  textColorEnabled: document.getElementById('set-text-color-enabled'),
+  textColor: document.getElementById('set-text-color'),
+  positiveColor: document.getElementById('set-positive-color'),
+  negativeColor: document.getElementById('set-negative-color'),
+  rankColorEnabled: document.getElementById('set-rank-color-enabled'),
+  rankColor: document.getElementById('set-rank-color'),
+  scrimOpacity: document.getElementById('set-scrim-opacity'),
+  scrimOpacityVal: document.getElementById('scrim-opacity-val'),
+  showRank: document.getElementById('set-show-rank'),
+  rankSize: document.getElementById('set-rank-size'),
+  rankSizeVal: document.getElementById('rank-size-val'),
+  showScoreBar: document.getElementById('set-show-score-bar'),
+  scoreBarHeight: document.getElementById('set-score-bar-height'),
+  scoreBarHeightVal: document.getElementById('score-bar-height-val'),
+};
+
 
 let settingsTimer = null;
 function pushSetting(key, value, immediate) {
@@ -493,6 +678,20 @@ settingEls.scoreEffect.addEventListener('change', () => {
 settingEls.spotlightScope.addEventListener('change', () => {
   pushSetting('spotlightScope', settingEls.spotlightScope.value, true);
 });
+settingEls.spotlightWidth.addEventListener('input', () => {
+  spotlightWidthVal.textContent = settingEls.spotlightWidth.value;
+  pushSetting('spotlightWidth', Number(settingEls.spotlightWidth.value));
+});
+settingEls.spotlightHeight.addEventListener('input', () => {
+  const v = Number(settingEls.spotlightHeight.value);
+  spotlightHeightVal.textContent = v === 0 ? '自动' : v;
+  pushSetting('spotlightHeight', v);
+});
+settingEls.previewSpotlight.addEventListener('click', () => {
+  try {
+    previewFrame.contentWindow.postMessage({ type: 'preview-spotlight' }, location.origin);
+  } catch (_) {}
+});
 settingEls.fxDuration.addEventListener('input', () => {
   fxDurationVal.textContent = settingEls.fxDuration.value;
   pushSetting('scoreEffectDuration', Number(settingEls.fxDuration.value));
@@ -519,6 +718,63 @@ settingEls.customSoundInput.addEventListener('change', async () => {
 settingEls.clearCustomSound.addEventListener('click', () => {
   projectOp('updateSettings', { patch: { customSound: '' } }).catch((e) => toast(e.message));
 });
+
+// ---- 高级外观：滑块 / 下拉 / 开关 / 颜色 ----
+const fmtAuto = (v) => (Number(v) === 0 ? '自动' : String(v));
+const fmtNum = (v) => String(Number(v));
+const fmtPercent = (v) => String(Math.round(Number(v) * 100));
+
+const advRanges = [
+  [adv.fontScale, adv.fontScaleVal, 'fontScale', fmtNum],
+  [adv.titleSize, adv.titleSizeVal, 'titleSize', fmtAuto],
+  [adv.boardMax, adv.boardMaxVal, 'boardMaxWidth', fmtNum],
+  [adv.cardGap, adv.cardGapVal, 'cardGap', fmtAuto],
+  [adv.cardPad, adv.cardPadVal, 'cardPad', fmtAuto],
+  [adv.cardBorderWidth, adv.cardBorderWidthVal, 'cardBorderWidth', fmtNum],
+  [adv.teamBarWidth, adv.teamBarVal, 'teamAccentWidth', fmtNum],
+  [adv.avatarBorderWidth, adv.avatarBorderVal, 'avatarBorderWidth', fmtNum],
+  [adv.scrimOpacity, adv.scrimOpacityVal, 'scrimOpacity', fmtPercent],
+  [adv.rankSize, adv.rankSizeVal, 'rankSize', fmtNum],
+  [adv.scoreBarHeight, adv.scoreBarHeightVal, 'scoreBarHeight', fmtNum],
+];
+advRanges.forEach(([input, label, key, fmt]) => {
+  input.addEventListener('input', () => {
+    label.textContent = fmt(input.value);
+    pushSetting(key, Number(input.value));
+  });
+});
+
+[[adv.fontFamily, 'fontFamily'], [adv.titleAlign, 'titleAlign'],
+  [adv.cardShadow, 'cardShadow'], [adv.avatarShape, 'avatarShape']]
+  .forEach(([input, key]) => {
+    input.addEventListener('change', () => pushSetting(key, input.value, true));
+  });
+
+[[adv.titleRule, 'showTitleRule'], [adv.showRank, 'showRank'],
+  [adv.showScoreBar, 'showScoreBar']]
+  .forEach(([input, key]) => {
+    input.addEventListener('change', () => pushSetting(key, input.checked, true));
+  });
+
+function bindAdvColorToggle(enabled, color, key) {
+  enabled.addEventListener('change', () => {
+    color.disabled = !enabled.checked;
+    projectOp('updateSettings', { patch: { [key]: enabled.checked ? color.value : '' } })
+      .catch((e) => toast(e.message));
+  });
+  color.addEventListener('input', () => {
+    if (enabled.checked) pushSetting(key, color.value);
+  });
+}
+bindAdvColorToggle(adv.titleColorEnabled, adv.titleColor, 'titleColor');
+bindAdvColorToggle(adv.cardBorderColorEnabled, adv.cardBorderColor, 'cardBorderColor');
+bindAdvColorToggle(adv.textColorEnabled, adv.textColor, 'textColor');
+bindAdvColorToggle(adv.rankColorEnabled, adv.rankColor, 'rankColor');
+
+[[adv.positiveColor, 'positiveColor'], [adv.negativeColor, 'negativeColor']]
+  .forEach(([input, key]) => {
+    input.addEventListener('input', () => pushSetting(key, input.value));
+  });
 settingEls.fxColorEnabled.addEventListener('change', () => {
   const on = settingEls.fxColorEnabled.checked;
   settingEls.fxColor.disabled = !on;
@@ -541,6 +797,21 @@ resetLayoutBtn.addEventListener('click', () => {
   projectOp('resetLayout', {}).catch((e) => toast(e.message));
 });
 
+function syncAdvRange(input, label, val, fmt) {
+  if (Number(input.value) !== Number(val)) input.value = val;
+  label.textContent = fmt(val);
+}
+
+function syncAdvColorToggle(enabled, color, val, fallback) {
+  enabled.checked = Boolean(val);
+  color.disabled = !val;
+  if (val) {
+    if (document.activeElement !== color && color.value !== val) color.value = val;
+  } else if (fallback) {
+    color.value = fallback;
+  }
+}
+
 function renderSettings(settings) {
   // 避免打字时被广播回写打断：仅当值不同时才更新
   if (document.activeElement !== settingEls.title && settingEls.title.value !== settings.title) {
@@ -550,6 +821,22 @@ function renderSettings(settings) {
   if (Number(settingEls.columns.value) !== settings.columns) {
     settingEls.columns.value = settings.columns;
     columnsVal.textContent = settings.columns;
+  }
+
+  // 预览旁快速调节同步
+  quick.style.value = settings.displayStyle || 'lecture';
+  quick.theme.value = settings.theme;
+  quick.density.value = settings.density;
+  if (Number(quick.columns.value) !== settings.columns) {
+    quick.columns.value = settings.columns;
+    quick.columnsVal.textContent = settings.columns;
+  }
+  const sortKey = settings.sortBy + '_' + settings.sortOrder;
+  if (['score_desc', 'score_asc', 'created_asc', 'created_desc'].includes(sortKey)) {
+    quick.sort.value = sortKey;
+  }
+  if (document.activeElement !== quick.accent && quick.accent.value !== settings.accent) {
+    quick.accent.value = settings.accent;
   }
   settingEls.density.value = settings.density;
   settingEls.sortBy.value = settings.sortBy;
@@ -616,6 +903,14 @@ function renderSettings(settings) {
   }
   settingEls.scoreEffect.value = settings.scoreEffect;
   settingEls.spotlightScope.value = settings.spotlightScope || 'person';
+  if (Number(settingEls.spotlightWidth.value) !== settings.spotlightWidth) {
+    settingEls.spotlightWidth.value = settings.spotlightWidth;
+    spotlightWidthVal.textContent = settings.spotlightWidth;
+  }
+  if (Number(settingEls.spotlightHeight.value) !== settings.spotlightHeight) {
+    settingEls.spotlightHeight.value = settings.spotlightHeight;
+    spotlightHeightVal.textContent = settings.spotlightHeight === 0 ? '自动' : settings.spotlightHeight;
+  }
   if (Number(settingEls.fxDuration.value) !== settings.scoreEffectDuration) {
     settingEls.fxDuration.value = settings.scoreEffectDuration;
     fxDurationVal.textContent = settings.scoreEffectDuration;
@@ -637,6 +932,42 @@ function renderSettings(settings) {
     }
   } else {
     settingEls.fxColor.value = settings.accent;
+  }
+
+  // 高级外观
+  adv.fontFamily.value = settings.fontFamily || 'system';
+  adv.titleAlign.value = settings.titleAlign || 'auto';
+  adv.cardShadow.value = settings.cardShadow || 'auto';
+  adv.avatarShape.value = settings.avatarShape || 'circle';
+  adv.titleRule.checked = settings.showTitleRule !== false;
+  adv.showRank.checked = settings.showRank !== false;
+  adv.showScoreBar.checked = settings.showScoreBar !== false;
+
+  syncAdvRange(adv.fontScale, adv.fontScaleVal, settings.fontScale, fmtNum);
+  syncAdvRange(adv.titleSize, adv.titleSizeVal, settings.titleSize, fmtAuto);
+  syncAdvRange(adv.boardMax, adv.boardMaxVal, settings.boardMaxWidth, fmtNum);
+  syncAdvRange(adv.cardGap, adv.cardGapVal, settings.cardGap, fmtAuto);
+  syncAdvRange(adv.cardPad, adv.cardPadVal, settings.cardPad, fmtAuto);
+  syncAdvRange(adv.cardBorderWidth, adv.cardBorderWidthVal, settings.cardBorderWidth, fmtNum);
+  syncAdvRange(adv.teamBarWidth, adv.teamBarVal, settings.teamAccentWidth, fmtNum);
+  syncAdvRange(adv.avatarBorderWidth, adv.avatarBorderVal, settings.avatarBorderWidth, fmtNum);
+  syncAdvRange(adv.scrimOpacity, adv.scrimOpacityVal, settings.scrimOpacity, fmtPercent);
+  syncAdvRange(adv.rankSize, adv.rankSizeVal, settings.rankSize, fmtNum);
+  syncAdvRange(adv.scoreBarHeight, adv.scoreBarHeightVal, settings.scoreBarHeight, fmtNum);
+
+  syncAdvColorToggle(adv.titleColorEnabled, adv.titleColor, settings.titleColor,
+    settings.theme === 'light' ? '#191d23' : '#e9e5dc');
+  syncAdvColorToggle(adv.cardBorderColorEnabled, adv.cardBorderColor, settings.cardBorderColor,
+    settings.theme === 'light' ? '#d3d8de' : '#2b323b');
+  syncAdvColorToggle(adv.textColorEnabled, adv.textColor, settings.textColor,
+    settings.theme === 'light' ? '#191d23' : '#e9e5dc');
+  syncAdvColorToggle(adv.rankColorEnabled, adv.rankColor, settings.rankColor, settings.accent);
+
+  if (document.activeElement !== adv.positiveColor && adv.positiveColor.value !== settings.positiveColor) {
+    adv.positiveColor.value = settings.positiveColor;
+  }
+  if (document.activeElement !== adv.negativeColor && adv.negativeColor.value !== settings.negativeColor) {
+    adv.negativeColor.value = settings.negativeColor;
   }
 }
 

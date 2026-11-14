@@ -136,7 +136,6 @@ function spawnSpotlight(els, settings) {
   stack.style.setProperty('--spot-duration', total + 'ms');
 
   for (const el of els) {
-    const rect = el.getBoundingClientRect();
     const clone = el.cloneNode(true);
     clone.querySelectorAll('.resize-handle, .fx-delta, .confetti-layer').forEach((n) => n.remove());
     ['position', 'left', 'top', 'right', 'bottom', 'width', 'height', 'transform', 'animation', 'zoom']
@@ -146,11 +145,15 @@ function spawnSpotlight(els, settings) {
     clone.removeAttribute('data-kind');
     clone.removeAttribute('data-id');
 
-    const isCard = el.classList.contains('card');
-    const baseW = isCard ? rect.width * 1.15 : rect.width * 1.6;
+    const width = Math.min(Math.max(Number(settings.spotlightWidth) || 520, 200), 1600);
+    const height = Number(settings.spotlightHeight) || 0;
     const box = document.createElement('div');
     box.className = 'spotlight-item';
-    box.style.width = Math.min(Math.max(baseW, isCard ? 300 : 240), isCard ? 620 : 420) + 'px';
+    box.style.width = width + 'px';
+    if (height > 0) {
+      box.style.height = Math.min(height, 1200) + 'px';
+      clone.style.height = '100%';
+    }
     box.appendChild(clone);
     stack.appendChild(box);
   }
@@ -159,6 +162,35 @@ function spawnSpotlight(els, settings) {
   document.body.appendChild(overlay);
   setTimeout(() => overlay.remove(), total + 250);
 }
+
+// 管理端点「预览突显效果」时，用当前范围/宽高在预览里演示一次
+function previewSpotlight() {
+  const settings = currentSettings;
+  if (!settings) return;
+  const scope = settings.spotlightScope || 'person';
+  const teamCard = board.querySelector('.card[data-kind="team"]');
+  const memberEl = board.querySelector('.member[data-person]');
+  const personCard = board.querySelector('.card[data-kind="person"]');
+  let els = [];
+
+  if (scope === 'team') {
+    els = teamCard ? [teamCard] : (personCard ? [personCard] : (memberEl ? [memberEl] : []));
+  } else if (scope === 'person_team') {
+    if (memberEl && teamCard) els = [memberEl, teamCard];
+    else if (personCard) els = [personCard];
+    else if (teamCard) els = [teamCard];
+  } else {
+    if (memberEl) els = [memberEl];
+    else if (personCard) els = [personCard];
+    else if (teamCard) els = [teamCard];
+  }
+  if (els.length) spawnSpotlight(els, settings);
+}
+
+window.addEventListener('message', (e) => {
+  if (e.origin !== location.origin) return;
+  if (e.data && e.data.type === 'preview-spotlight') previewSpotlight();
+});
 
 // 卡片通用属性：数据标识 + 自由布局坐标 + 卡面图
 function cardAttrs(kind, entity, layout) {
@@ -284,10 +316,73 @@ function teamCardHTML(team, members, settings, deltas, layout, editable, meta) {
   );
 }
 
+const FONT_STACKS = {
+  system: '"Noto Sans", "Noto Sans CJK SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif',
+  serif: '"Noto Serif CJK SC", "Source Han Serif SC", "Songti SC", "SimSun", serif',
+  kai: '"Kaiti SC", "KaiTi", "STKaiti", "Noto Serif CJK SC", serif',
+};
+
+const SHADOWS = {
+  none: 'none',
+  soft: '0 4px 14px rgba(0, 0, 0, 0.16)',
+  medium: '0 10px 28px rgba(0, 0, 0, 0.22)',
+  strong: '0 18px 48px rgba(0, 0, 0, 0.3)',
+};
+
+function setVar(style, name, value) {
+  if (value === '' || value == null) style.removeProperty(name);
+  else style.setProperty(name, value);
+}
+
+// 高级外观：把可调项映射成 CSS 变量 / data 属性
+function applyAdvancedAppearance(settings) {
+  const root = document.documentElement;
+  const body = document.body;
+
+  body.style.fontFamily = FONT_STACKS[settings.fontFamily] || FONT_STACKS.system;
+
+  setVar(root.style, '--font-scale', String(settings.fontScale));
+  setVar(root.style, '--title-size', settings.titleSize ? settings.titleSize + 'px' : '');
+  setVar(root.style, '--board-max', settings.boardMaxWidth + 'px');
+  setVar(root.style, '--gap-override', settings.cardGap ? settings.cardGap + 'px' : '');
+  setVar(root.style, '--card-pad-override', settings.cardPad ? settings.cardPad + 'px' : '');
+  setVar(root.style, '--card-border-width', settings.cardBorderWidth + 'px');
+  setVar(root.style, '--team-bar-w', settings.teamAccentWidth + 'px');
+  setVar(root.style, '--avatar-border-w', settings.avatarBorderWidth + 'px');
+  setVar(root.style, '--avatar-radius', settings.avatarShape === 'square' ? '0px' : '50%');
+  setVar(root.style, '--rank-size', settings.rankSize + 'px');
+  setVar(root.style, '--bar-height', settings.scoreBarHeight + 'px');
+  setVar(root.style, '--scrim-opacity', String(settings.scrimOpacity));
+  setVar(root.style, '--score-pos', settings.positiveColor);
+  setVar(root.style, '--score-neg', settings.negativeColor);
+  setVar(root.style, '--title-color', settings.titleColor || '');
+  setVar(root.style, '--rank-color', settings.rankColor || '');
+  body.dataset.titleColor = settings.titleColor ? 'custom' : 'auto';
+  body.dataset.rankColor = settings.rankColor ? 'custom' : 'auto';
+
+  // 这些变量定义在 body 主题规则里，必须写在 body 上才能覆盖
+  setVar(body.style, '--text', settings.textColor || '');
+  setVar(body.style, '--card-border', settings.cardBorderColor || '');
+
+  if (settings.cardShadow === 'auto') {
+    body.dataset.cardShadow = 'auto';
+    setVar(root.style, '--card-shadow', '');
+  } else {
+    body.dataset.cardShadow = 'custom';
+    setVar(root.style, '--card-shadow', SHADOWS[settings.cardShadow] || 'none');
+  }
+
+  body.dataset.titleAlign = settings.titleAlign;
+  body.dataset.titleRule = settings.showTitleRule ? 'on' : 'off';
+  body.dataset.showRank = settings.showRank ? '1' : '0';
+  body.dataset.showBar = settings.showScoreBar ? '1' : '0';
+}
+
 function applyAppearance(settings) {
   document.body.dataset.theme = settings.theme;
   document.body.dataset.density = settings.density;
   document.body.dataset.displayStyle = settings.displayStyle || 'lecture';
+  applyAdvancedAppearance(settings);
   document.documentElement.style.setProperty('--cols', settings.columns);
   document.documentElement.style.setProperty('--accent', settings.accent);
   document.documentElement.style.setProperty('--radius', settings.cardRadius + 'px');
@@ -484,14 +579,19 @@ function render(project) {
       const memberEl = board.querySelector('.member[data-person="' + p.id + '"]');
       const personEl = memberEl ||
         board.querySelector('.card[data-kind="person"][data-id="' + p.id + '"]');
-      if (personEl) {
-        const els = [personEl];
-        if (scope === 'person_team' && p.teamId) {
-          const teamEl = board.querySelector('.card[data-kind="team"][data-id="' + p.teamId + '"]');
-          if (teamEl) els.push(teamEl);
-        }
-        spawnSpotlight(els, settings);
+      const teamEl = p.teamId
+        ? board.querySelector('.card[data-kind="team"][data-id="' + p.teamId + '"]')
+        : null;
+
+      const els = [];
+      if (scope === 'team') {
+        if (teamEl) els.push(teamEl);
+        else if (personEl) els.push(personEl); // 没有团队时退回人物
+      } else {
+        if (personEl) els.push(personEl);
+        if (scope === 'person_team' && teamEl) els.push(teamEl);
       }
+      if (els.length) spawnSpotlight(els, settings);
     }
   }
 

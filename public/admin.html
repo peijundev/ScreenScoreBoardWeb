@@ -26,15 +26,66 @@
       <div class="panel-head">
         <h2>显示端预览</h2>
         <div class="preview-tools">
+          <select id="preview-resolution" class="preview-resolution" title="预览画布分辨率">
+            <option value="auto">自适应</option>
+            <option value="1920x1080">1920 × 1080</option>
+            <option value="2560x1440">2560 × 1440</option>
+            <option value="3840x2160">3840 × 2160</option>
+          </select>
           <button id="preview-out" class="btn small" type="button" title="缩小预览">−</button>
           <span id="preview-zoom-label">100%</span>
           <button id="preview-in" class="btn small" type="button" title="放大预览">+</button>
           <button id="preview-reset" class="btn small" type="button">重置</button>
         </div>
       </div>
-      <p class="preview-hint">开启「自由布局」后，可在预览中拖动卡片移动位置、拖右下角调整大小；团队内成员小卡片同样可以单独拖动和缩放。右上角可缩放预览。</p>
-      <div class="preview-frame-wrap">
-        <iframe id="display-preview" src="/display?edit=1" title="显示端预览"></iframe>
+
+      <!-- 常用排版快速调节 -->
+      <div class="preview-quickbar">
+        <label>风格
+          <select id="quick-style">
+            <option value="lecture">大屏讲演</option>
+            <option value="ppt">PPT 演示</option>
+            <option value="seewo">希沃白板</option>
+            <option value="kde">KDE 桌面</option>
+            <option value="custom">自由配置</option>
+          </select>
+        </label>
+        <label>主题
+          <select id="quick-theme">
+            <option value="dark">深色</option>
+            <option value="light">浅色</option>
+          </select>
+        </label>
+        <label>列数 <span id="quick-columns-val">4</span>
+          <input id="quick-columns" type="range" min="1" max="8" step="1">
+        </label>
+        <label>密度
+          <select id="quick-density">
+            <option value="comfortable">舒适</option>
+            <option value="compact">紧凑</option>
+          </select>
+        </label>
+        <label>排序
+          <select id="quick-sort">
+            <option value="score_desc">分数从高到低</option>
+            <option value="score_asc">分数从低到高</option>
+            <option value="created_asc">添加顺序（旧→新）</option>
+            <option value="created_desc">添加顺序（新→旧）</option>
+          </select>
+        </label>
+        <label>强调色
+          <input id="quick-accent" type="color">
+        </label>
+        <label class="check">
+          <input id="quick-edit" type="checkbox"> 编辑布局
+        </label>
+      </div>
+
+      <p class="preview-hint">默认与显示端 1:1 复刻（不含编辑控件）；勾选「编辑布局」后可拖动卡片、拉右下角调整大小。预览窗口可拖动设置面板，边看边调。</p>
+      <div class="preview-frame-wrap" id="preview-wrap">
+        <div class="preview-stage" id="preview-stage">
+          <iframe id="display-preview" src="/display" title="显示端预览"></iframe>
+        </div>
       </div>
     </section>
 
@@ -199,6 +250,112 @@
           </label>
         </div>
 
+        <div class="set-group advanced">
+          <h3>高级外观</h3>
+          <label>字体
+            <select id="set-font-family">
+              <option value="system">系统黑体</option>
+              <option value="serif">宋体 / 衬线</option>
+              <option value="kai">楷体</option>
+            </select>
+          </label>
+          <label>字号缩放 <span id="font-scale-val">1</span> 倍
+            <input id="set-font-scale" type="range" min="0.7" max="1.5" step="0.05">
+          </label>
+          <label>标题字号 <span id="title-size-val">自动</span>
+            <input id="set-title-size" type="range" min="0" max="120" step="2">
+          </label>
+          <label>标题对齐
+            <select id="set-title-align">
+              <option value="auto">跟随风格</option>
+              <option value="center">居中</option>
+              <option value="left">居左</option>
+              <option value="right">居右</option>
+            </select>
+          </label>
+          <label class="check">
+            <input id="set-title-rule" type="checkbox"> 显示标题横线
+          </label>
+          <label class="check">
+            <input id="set-title-color-enabled" type="checkbox"> 自定义标题颜色
+          </label>
+          <label>标题颜色
+            <input id="set-title-color" type="color" disabled>
+          </label>
+          <label>页面最大宽度 <span id="board-max-val">1800</span> px
+            <input id="set-board-max" type="range" min="900" max="2600" step="20">
+          </label>
+          <label>卡片间距 <span id="card-gap-val">自动</span>
+            <input id="set-card-gap" type="range" min="0" max="60" step="1">
+          </label>
+          <label>卡片内边距 <span id="card-pad-val">自动</span>
+            <input id="set-card-pad" type="range" min="0" max="60" step="1">
+          </label>
+          <label>卡片边框宽度 <span id="card-border-width-val">1</span> px
+            <input id="set-card-border-width" type="range" min="0" max="6" step="1">
+          </label>
+          <label class="check">
+            <input id="set-card-border-color-enabled" type="checkbox"> 自定义边框颜色
+          </label>
+          <label>边框颜色
+            <input id="set-card-border-color" type="color" disabled>
+          </label>
+          <label>卡片阴影
+            <select id="set-card-shadow">
+              <option value="auto">跟随样式</option>
+              <option value="none">无</option>
+              <option value="soft">轻</option>
+              <option value="medium">中</option>
+              <option value="strong">强</option>
+            </select>
+          </label>
+          <label>团队色条宽度 <span id="team-bar-val">4</span> px
+            <input id="set-team-bar-width" type="range" min="0" max="12" step="1">
+          </label>
+          <label>头像边框宽度 <span id="avatar-border-val">1</span> px
+            <input id="set-avatar-border-width" type="range" min="0" max="6" step="1">
+          </label>
+          <label>头像形状
+            <select id="set-avatar-shape">
+              <option value="circle">圆形</option>
+              <option value="square">方形</option>
+            </select>
+          </label>
+          <label class="check">
+            <input id="set-text-color-enabled" type="checkbox"> 自定义文字颜色
+          </label>
+          <label>文字颜色
+            <input id="set-text-color" type="color" disabled>
+          </label>
+          <label>正分颜色
+            <input id="set-positive-color" type="color">
+          </label>
+          <label>负分颜色
+            <input id="set-negative-color" type="color">
+          </label>
+          <label class="check">
+            <input id="set-rank-color-enabled" type="checkbox"> 自定义名次颜色
+          </label>
+          <label>名次颜色
+            <input id="set-rank-color" type="color" disabled>
+          </label>
+          <label>背景压暗 <span id="scrim-opacity-val">100</span>%
+            <input id="set-scrim-opacity" type="range" min="0" max="1" step="0.05">
+          </label>
+          <label class="check">
+            <input id="set-show-rank" type="checkbox"> 显示名次角标
+          </label>
+          <label>名次字号 <span id="rank-size-val">15</span> px
+            <input id="set-rank-size" type="range" min="10" max="40" step="1">
+          </label>
+          <label class="check">
+            <input id="set-show-score-bar" type="checkbox"> 显示分数比例条
+          </label>
+          <label>比例条高度 <span id="score-bar-height-val">5</span> px
+            <input id="set-score-bar-height" type="range" min="0" max="16" step="1">
+          </label>
+        </div>
+
         <div class="set-group">
           <h3>特效</h3>
           <label>毛玻璃模糊 <span id="glass-blur-val">12</span> px
@@ -220,10 +377,18 @@
           </label>
           <label>突显范围（居中放大时）
             <select id="set-spotlight-scope">
-              <option value="person">只突显人物</option>
+              <option value="team">仅团队</option>
               <option value="person_team">人物 + 团队</option>
+              <option value="person">仅人物</option>
             </select>
           </label>
+          <label>突显宽度 <span id="spotlight-width-val">520</span> px
+            <input id="set-spotlight-width" type="range" min="200" max="1600" step="20">
+          </label>
+          <label>突显高度 <span id="spotlight-height-val">自动</span>
+            <input id="set-spotlight-height" type="range" min="0" max="1200" step="20">
+          </label>
+          <button id="preview-spotlight" class="btn small" type="button">预览突显效果</button>
           <label>特效时长 <span id="fx-duration-val">700</span> ms
             <input id="set-fx-duration" type="range" min="200" max="3000" step="50">
           </label>
