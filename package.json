@@ -1,0 +1,20 @@
+{
+  "name": "scoreboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "计分板：显示端 + 管理端，多项目，WebSocket 实时同步，可切换存储后端",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "verify": "node scripts/verify.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.11.1",
+    "mysql2": "^3.24.6",
+    "pg": "^8.23.1",
+    "ws": "^8.18.0"
+  }
+}

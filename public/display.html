@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>计分板</title>
+  <link rel="stylesheet" href="/display.css">
+</head>
+<body data-theme="dark" data-density="comfortable">
+  <header class="topbar">
+    <h1 id="board-title">计分板</h1>
+    <span class="edit-hint">拖动卡片移动位置，右下角调整大小</span>
+    <span id="conn-dot" class="dot connecting" title="连接状态"></span>
+  </header>
+  <main id="board" class="board"></main>
+  <div id="empty-tip" class="empty-tip">暂无数据，请在管理端添加人员</div>
+  <script src="/shared.js"></script>
+  <script src="/display.js"></script>
+</body>
+</html>

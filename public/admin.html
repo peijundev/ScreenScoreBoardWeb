@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>管理控制台 · 计分板</title>
+  <link rel="stylesheet" href="/admin.css">
+</head>
+<body data-theme="dark">
+  <header class="topbar">
+    <h1>管理控制台</h1>
+    <select id="project-select" class="project-select" title="切换项目"></select>
+    <button id="project-add" class="btn small" type="button">新建项目</button>
+    <button id="project-rename" class="btn small" type="button">重命名</button>
+    <button id="project-delete" class="btn small danger" type="button">删除项目</button>
+    <span id="conn-dot" class="dot connecting" title="连接状态"></span>
+    <a class="open-display" href="/display" target="_blank">打开显示端</a>
+  </header>
+  <div id="toast" class="toast hidden"></div>
+
+  <main class="panels">
+    <!-- 显示端预览 -->
+    <section class="panel preview-panel">
+      <h2>显示端预览</h2>
+      <p class="preview-hint">开启「自由布局」后，可在预览中拖动卡片移动位置、拖右下角调整大小；团队内成员小卡片同样可以单独拖动和缩放。</p>
+      <iframe id="display-preview" src="/display?edit=1" title="显示端预览"></iframe>
+    </section>
+
+    <!-- 人员面板 -->
+    <section class="panel">
+      <h2>人员</h2>
+      <form id="add-person-form" class="add-form">
+        <img id="person-avatar-preview" class="avatar-preview" alt="头像预览">
+        <input id="person-name" type="text" maxlength="20" placeholder="姓名" required>
+        <label class="file-btn">
+          选择头像
+          <input id="person-avatar" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+        </label>
+        <button type="submit" class="btn primary">添加</button>
+      </form>
+      <div id="people-list" class="people-list"></div>
+    </section>
+
+    <!-- 团队面板 -->
+    <section class="panel">
+      <h2>团队</h2>
+      <form id="add-team-form" class="add-form">
+        <img id="team-avatar-preview" class="avatar-preview" alt="头像预览">
+        <input id="team-name" type="text" maxlength="20" placeholder="团队名" required>
+        <label class="file-btn">
+          选择头像
+          <input id="team-avatar" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+        </label>
+        <button type="submit" class="btn primary">创建</button>
+      </form>
+      <div id="teams-list" class="teams-list"></div>
+    </section>
+
+    <!-- 排版设置面板 -->
+    <section class="panel">
+      <h2>排版设置</h2>
+      <div class="settings-form">
+        <div class="set-group">
+          <h3>内容</h3>
+          <label>标题文字
+            <input id="set-title" type="text" maxlength="30">
+          </label>
+          <label class="check">
+            <input id="set-show-member-score" type="checkbox"> 显示成员分数
+          </label>
+          <label class="check">
+            <input id="set-show-team-total" type="checkbox"> 显示团队总分
+          </label>
+        </div>
+
+        <div class="set-group">
+          <h3>版式</h3>
+          <label>每行列数 <span id="columns-val">4</span>
+            <input id="set-columns" type="range" min="1" max="8" step="1">
+          </label>
+          <label>卡片密度
+            <select id="set-density">
+              <option value="comfortable">舒适</option>
+              <option value="compact">紧凑</option>
+            </select>
+          </label>
+          <label>排序方式
+            <select id="set-sortby">
+              <option value="score">按分数</option>
+              <option value="created">按添加顺序</option>
+            </select>
+          </label>
+          <label>排序方向
+            <select id="set-sortorder">
+              <option value="desc">从高到低 / 从先到后</option>
+              <option value="asc">从低到高 / 从后到先</option>
+            </select>
+          </label>
+          <label>主题
+            <select id="set-theme">
+              <option value="dark">深色</option>
+              <option value="light">浅色</option>
+            </select>
+          </label>
+          <label class="check">
+            <input id="set-layout-mode" type="checkbox"> 自由布局（在预览中拖动卡片）
+          </label>
+          <button id="reset-layout" class="btn small" type="button">重置卡片位置</button>
+        </div>
+
+        <div class="set-group">
+          <h3>背景</h3>
+          <div class="seg">
+            <label class="seg-item"><input type="radio" name="bg-type" value="color" checked> 纯色</label>
+            <label class="seg-item"><input type="radio" name="bg-type" value="image"> 图片</label>
+          </div>
+          <label class="check">
+            <input id="set-bg-color-enabled" type="checkbox"> 自定义背景色
+          </label>
+          <label>背景色
+            <input id="set-bg-color" type="color" disabled>
+          </label>
+          <div class="bg-image-row" id="bg-image-row">
+            <label class="file-btn">
+              选择背景图
+              <input id="set-bg-image" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+            </label>
+            <button id="set-bg-image-clear" class="btn small" type="button">移除图片</button>
+          </div>
+          <img id="bg-image-preview" class="bg-image-preview hidden" alt="背景预览">
+        </div>
+
+        <div class="set-group">
+          <h3>卡片</h3>
+          <label>卡片样式
+            <select id="set-card-style">
+              <option value="solid">普通</option>
+              <option value="glass">毛玻璃</option>
+              <option value="neumorph">新拟态</option>
+              <option value="neon">霓虹描边</option>
+              <option value="gradient">渐变</option>
+              <option value="paper">纸片</option>
+            </select>
+          </label>
+          <label>强调色
+            <input id="set-accent" type="color">
+          </label>
+          <label class="check">
+            <input id="set-card-bg-enabled" type="checkbox"> 自定义卡片底色
+          </label>
+          <label id="card-bg-label">卡片底色
+            <input id="set-card-bg" type="color" disabled>
+          </label>
+          <label>卡片圆角 <span id="radius-val">10</span> px
+            <input id="set-card-radius" type="range" min="0" max="32" step="1">
+          </label>
+          <label>成员卡片大小 <span id="member-scale-val">1.0</span> 倍
+            <input id="set-member-scale" type="range" min="0.6" max="2" step="0.05">
+          </label>
+          <label>头像位置
+            <select id="set-avatar-position">
+              <option value="left">头像在姓名左侧</option>
+              <option value="right">头像在姓名右侧</option>
+              <option value="top">头像在姓名上方</option>
+              <option value="bottom">头像在姓名下方</option>
+            </select>
+          </label>
+          <label class="check">
+            <input id="set-avatar-auto" type="checkbox"> 头像随卡片自适应
+          </label>
+          <label>头像大小 <span id="avatar-size-val">64</span> px
+            <input id="set-avatar-size" type="range" min="24" max="160" step="1" disabled>
+          </label>
+        </div>
+
+        <div class="set-group">
+          <h3>特效</h3>
+          <label>毛玻璃模糊 <span id="glass-blur-val">12</span> px
+            <input id="set-glass-blur" type="range" min="0" max="40" step="1">
+          </label>
+          <label>毛玻璃透明度 <span id="glass-opacity-val">55</span>%
+            <input id="set-glass-opacity" type="range" min="0.15" max="0.95" step="0.05">
+          </label>
+          <label>记分特效
+            <select id="set-score-effect">
+              <option value="bounce">弹跳放大</option>
+              <option value="glow">发光</option>
+              <option value="float">飘浮数字</option>
+              <option value="shake">抖动</option>
+              <option value="confetti">彩带</option>
+              <option value="none">关闭</option>
+            </select>
+          </label>
+          <label>特效时长 <span id="fx-duration-val">700</span> ms
+            <input id="set-fx-duration" type="range" min="200" max="3000" step="50">
+          </label>
+          <label class="check">
+            <input id="set-fx-only-positive" type="checkbox"> 仅加分时触发特效/声音
+          </label>
+          <label class="check">
+            <input id="set-fx-color-enabled" type="checkbox"> 自定义特效颜色
+          </label>
+          <label>特效颜色
+            <input id="set-fx-color" type="color" disabled>
+          </label>
+          <label class="check">
+            <input id="set-sound" type="checkbox"> 记分音效（在显示端点一下页面即可解锁声音）
+          </label>
+          <label>音效音量 <span id="sound-volume-val">50</span>%
+            <input id="set-sound-volume" type="range" min="0" max="1" step="0.05">
+          </label>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/shared.js"></script>
+  <script src="/admin.js"></script>
+</body>
+</html>
