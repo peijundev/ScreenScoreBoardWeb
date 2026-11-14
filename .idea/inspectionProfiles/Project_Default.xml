@@ -1,0 +1,18 @@
+<component name="InspectionProjectProfileManager">
+  <profile version="1.0">
+    <option name="myName" value="Project Default" />
+
+    <!-- 显示端卡片 HTML 由 JS 动态生成，静态分析看不到动态类名，此检查误报过多 -->
+    <inspection_tool class="CssUnusedSymbol" enabled="false" level="WARNING" enabled_by_default="false" />
+
+    <!-- “border 可以替换为简写”属于风格建议，本项目有意分边书写 -->
+    <inspection_tool class="CssReplaceWithShorthandSafely" enabled="false" level="WEAK WARNING" enabled_by_default="false" />
+
+    <!-- 中文拼写/校对词典噪声大，关闭本项目的拼写与语法校对 -->
+    <inspection_tool class="SpellCheckingInspection" enabled="false" level="TEXT" enabled_by_default="false" />
+    <inspection_tool class="GrazieInspection" enabled="false" level="WEAK WARNING" enabled_by_default="false" />
+
+    <!-- 卡片构建的相似片段属于同一套渲染逻辑，不做重复代码提示 -->
+    <inspection_tool class="DuplicatedCode" enabled="false" level="WEAK WARNING" enabled_by_default="false" />
+  </profile>
+</component>
