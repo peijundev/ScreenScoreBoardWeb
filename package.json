@@ -1,6 +1,6 @@
 {
   "name": "scoreboard",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "description": "计分板：显示端 + 管理端，多项目，WebSocket 实时同步，可切换存储后端",
   "author": {

@@ -627,6 +627,21 @@ function updateClock() {
   clockEl.className = 'overlay-clock clock-pos-' + settings.clockPosition;
 }
 
+function applyCountdownPanelBg(el, settings) {
+  const bgMode = settings.countdownBgMode || 'theme';
+  const themeCard = settings.theme === 'light' ? '#ffffff' : '#1a1f26';
+  el.dataset.bgMode = bgMode;
+  el.style.setProperty('--cd-blur', (Number(settings.countdownBlur) || 0) + 'px');
+  if (bgMode === 'theme') {
+    el.style.removeProperty('--cd-panel-bg');
+    return;
+  }
+  const baseBg = settings.countdownBg || themeCard;
+  const opacity = (bgMode === 'translucent' || bgMode === 'acrylic')
+    ? settings.countdownOpacity : 1;
+  el.style.setProperty('--cd-panel-bg', hexToRgba(baseBg, opacity));
+}
+
 function updateCountdown() {
   const settings = currentSettings;
   const c = currentRuntime && currentRuntime.countdowns
@@ -652,6 +667,7 @@ function updateCountdown() {
     const both = settings.featureClock;
     countdownEl.className = 'overlay-countdown clock-pos-' + settings.clockPosition +
       (ended ? ' ended' : '') + (both ? ' shifted' : '');
+    applyCountdownPanelBg(countdownEl, settings);
     countdownBigEl.classList.add('hidden');
     document.body.classList.remove('countdown-fullscreen');
     return;
@@ -680,9 +696,7 @@ function updateCountdown() {
     : Math.min(180, Math.max(30, Math.round(Math.min(cdWidth, cdHeight) * 0.22)));
   countdownBigEl.style.setProperty('--cd-time-size', timeSize + 'px');
   countdownBigEl.style.setProperty('--cd-radius', settings.countdownRadius + 'px');
-  const baseBg = settings.countdownBg || settings.cardBg ||
-    (settings.theme === 'light' ? '#ffffff' : '#1a1f26');
-  countdownBigEl.style.setProperty('--cd-panel-bg', hexToRgba(baseBg, settings.countdownOpacity));
+  applyCountdownPanelBg(countdownBigEl, settings);
   if (settings.countdownTextColor) {
     countdownBigEl.style.setProperty('--cd-text', settings.countdownTextColor);
   } else {

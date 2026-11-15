@@ -615,11 +615,19 @@
               <label class="check">
                 <input id="set-cd-backdrop" type="checkbox"> 显示背景遮罩
               </label>
-              <label class="check">
-                <input id="set-cd-bg-enabled" type="checkbox"> 自定义窗口底色
+              <label>窗口背景
+                <select id="set-cd-bg-mode">
+                  <option value="theme">跟随主题</option>
+                  <option value="custom">自定义颜色</option>
+                  <option value="translucent">半透明</option>
+                  <option value="acrylic">亚克力（半透明 + 虚化）</option>
+                </select>
               </label>
               <label>窗口底色
-                <input id="set-cd-bg" type="color" disabled>
+                <input id="set-cd-bg" type="color">
+              </label>
+              <label>亚克力模糊 <span id="cd-blur-val">12</span> px
+                <input id="set-cd-blur" type="range" min="0" max="40" step="1">
               </label>
               <label class="check">
                 <input id="set-cd-text-enabled" type="checkbox"> 自定义文字颜色

@@ -677,8 +677,10 @@ const classEls = {
   cdOpacityVal: document.getElementById('cd-opacity-val'),
   cdProgress: document.getElementById('set-cd-progress'),
   cdBackdrop: document.getElementById('set-cd-backdrop'),
-  cdBgEnabled: document.getElementById('set-cd-bg-enabled'),
+  cdBgMode: document.getElementById('set-cd-bg-mode'),
   cdBg: document.getElementById('set-cd-bg'),
+  cdBlur: document.getElementById('set-cd-blur'),
+  cdBlurVal: document.getElementById('cd-blur-val'),
   cdTextEnabled: document.getElementById('set-cd-text-enabled'),
   cdText: document.getElementById('set-cd-text'),
   cdStart: document.getElementById('cd-start'),
@@ -1259,7 +1261,37 @@ classEls.cdProgress.addEventListener('change', () =>
   pushSetting('countdownShowProgress', classEls.cdProgress.checked, true));
 classEls.cdBackdrop.addEventListener('change', () =>
   pushSetting('countdownShowBackdrop', classEls.cdBackdrop.checked, true));
-bindAdvColorToggle(classEls.cdBgEnabled, classEls.cdBg, 'countdownBg');
+function updateCountdownBgControls() {
+  const mode = classEls.cdBgMode.value;
+  classEls.cdBg.disabled = mode === 'theme';
+  classEls.cdOpacity.disabled = !(mode === 'translucent' || mode === 'acrylic');
+  classEls.cdBlur.disabled = mode !== 'acrylic';
+}
+classEls.cdBgMode.addEventListener('change', () => {
+  const mode = classEls.cdBgMode.value;
+  const patch = { countdownBgMode: mode };
+  // 半透明/亚克力：若当前是不透明，自动给一个能看出效果的默认值
+  if ((mode === 'translucent' || mode === 'acrylic') && Number(classEls.cdOpacity.value) >= 0.95) {
+    patch.countdownOpacity = 0.55;
+    classEls.cdOpacity.value = '0.55';
+    classEls.cdOpacityVal.textContent = '55';
+  }
+  if (mode === 'acrylic' && Number(classEls.cdBlur.value) === 0) {
+    patch.countdownBlur = 12;
+    classEls.cdBlur.value = '12';
+    classEls.cdBlurVal.textContent = '12';
+  }
+  updateCountdownBgControls();
+  projectOp('updateSettings', { patch }).catch((e) => toast(e.message));
+});
+classEls.cdBg.addEventListener('input', () => {
+  if (classEls.cdBgMode.value !== 'theme') pushSetting('countdownBg', classEls.cdBg.value);
+});
+classEls.cdBlur.addEventListener('input', () => {
+  classEls.cdBlurVal.textContent = classEls.cdBlur.value;
+  pushSetting('countdownBlur', Number(classEls.cdBlur.value));
+});
+updateCountdownBgControls();
 bindAdvColorToggle(classEls.cdTextEnabled, classEls.cdText, 'countdownTextColor');
 classEls.cdStart.addEventListener('click', () => {
   const mins = Number(classEls.countdownMin.value) || 5;
@@ -1636,8 +1668,17 @@ function renderSettings(settings) {
   classEls.cdOpacityVal.textContent = Math.round(settings.countdownOpacity * 100);
   classEls.cdProgress.checked = settings.countdownShowProgress !== false;
   classEls.cdBackdrop.checked = settings.countdownShowBackdrop !== false;
-  syncAdvColorToggle(classEls.cdBgEnabled, classEls.cdBg, settings.countdownBg,
-    settings.theme === 'light' ? '#ffffff' : '#1a1f26');
+  classEls.cdBgMode.value = settings.countdownBgMode || 'theme';
+  if (document.activeElement !== classEls.cdBg) {
+    const themeCard = settings.theme === 'light' ? '#ffffff' : '#1a1f26';
+    const color = settings.countdownBg || themeCard;
+    if (classEls.cdBg.value !== color) classEls.cdBg.value = color;
+  }
+  if (Number(classEls.cdBlur.value) !== settings.countdownBlur) {
+    classEls.cdBlur.value = settings.countdownBlur;
+  }
+  classEls.cdBlurVal.textContent = settings.countdownBlur;
+  updateCountdownBgControls();
   syncAdvColorToggle(classEls.cdTextEnabled, classEls.cdText, settings.countdownTextColor,
     settings.theme === 'light' ? '#191d23' : '#e9e5dc');
   classEls.lbScope.value = settings.leaderboardScope;

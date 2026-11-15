@@ -117,7 +117,9 @@ const DEFAULT_SETTINGS = {
   countdownShowProgress: true,
   countdownShowBackdrop: true,
   countdownBg: '',            // '' = 跟随主题
+  countdownBgMode: 'theme',   // theme | custom | translucent | acrylic
   countdownOpacity: 1,        // 0.2–1
+  countdownBlur: 12,          // 亚克力模糊 px（0–40）
   countdownTextColor: '',     // '' = 跟随主题
   displayView: 'cards',       // cards | leaderboard
   leaderboardScope: 'auto',   // auto | people | teams
@@ -159,6 +161,10 @@ function normalizeProject(raw) {
   // 旧版本：有自定义卡片底色 → 迁移为「自定义纯色」模式
   if (p.settings && p.settings.cardBgMode == null) {
     settings.cardBgMode = p.settings.cardBg ? 'custom' : 'auto';
+  }
+  // 旧版本：有自定义倒计时窗口底色 → 迁移为「自定义颜色」模式
+  if (p.settings && p.settings.countdownBgMode == null) {
+    settings.countdownBgMode = p.settings.countdownBg ? 'custom' : 'theme';
   }
   delete settings.glassEnabled;
 
@@ -581,6 +587,11 @@ const SETTINGS_VALIDATORS = {
   countdownShowProgress: (v) => boolStrict(v, '倒计时进度环开关'),
   countdownShowBackdrop: (v) => boolStrict(v, '倒计时遮罩开关'),
   countdownBg: (v) => hexOrEmpty(v, '倒计时窗口底色须为 #rrggbb 或留空'),
+  countdownBgMode: (v) =>
+    (['theme', 'custom', 'translucent', 'acrylic'].includes(v)
+      ? v
+      : (() => { throw new OpError('倒计时窗口背景模式非法'); })()),
+  countdownBlur: (v) => intRange(v, 0, 40, '倒计时亚克力模糊须为 0–40'),
   countdownOpacity: (v) => {
     const n = Number(v);
     if (!Number.isFinite(n) || n < 0.2 || n > 1) throw new OpError('倒计时窗口不透明度须在 0.2–1 之间');

@@ -207,6 +207,11 @@ body.has-bg-image .empty-tip { position: relative; z-index: 1; }
 .overlay-countdown {
   color: var(--accent);
   font-size: clamp(22px, 2.4vw, 36px);
+  background: var(--cd-panel-bg, color-mix(in srgb, var(--card) 68%, transparent));
+}
+.overlay-countdown[data-bg-mode="acrylic"] {
+  -webkit-backdrop-filter: blur(var(--cd-blur, 12px));
+  backdrop-filter: blur(var(--cd-blur, 12px));
 }
 .overlay-countdown.shifted { transform: translateY(58px); }
 .overlay-countdown.shifted.clock-pos-bottom-left,
@@ -293,6 +298,10 @@ body.has-bg-image .empty-tip { position: relative; z-index: 1; }
 .countdown-big[data-shape="rounded"] .countdown-ring::before,
 .countdown-big[data-shape="rounded-rect"] .countdown-ring::before {
   border-radius: max(0px, calc(var(--cd-radius, 28px) - 14px));
+}
+.countdown-big[data-bg-mode="acrylic"] .countdown-ring::before {
+  -webkit-backdrop-filter: blur(var(--cd-blur, 12px));
+  backdrop-filter: blur(var(--cd-blur, 12px));
 }
 .countdown-big.no-progress .countdown-ring {
   background: color-mix(in srgb, var(--accent) 16%, transparent);

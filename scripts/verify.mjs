@@ -421,8 +421,8 @@ async function main() {
       countdownShape: 'rounded-rect', countdownRadius: 40, countdownSize: 600,
       countdownHeight: 300, countdownFontSize: 96,
       countdownPosition: 'bottom-right', countdownShowProgress: false,
-      countdownShowBackdrop: false, countdownBg: '#112233', countdownOpacity: 0.5,
-      countdownTextColor: '#abcdef',
+      countdownShowBackdrop: false, countdownBg: '#112233', countdownBgMode: 'acrylic',
+      countdownBlur: 18, countdownOpacity: 0.5, countdownTextColor: '#abcdef',
     },
   });
   s = await viewer.waitState((st) => P(st).settings.countdownShape === 'rounded-rect');
@@ -430,8 +430,9 @@ async function main() {
     P(s).settings.countdownHeight === 300 && P(s).settings.countdownFontSize === 96 &&
     P(s).settings.countdownPosition === 'bottom-right' &&
     P(s).settings.countdownShowProgress === false && P(s).settings.countdownShowBackdrop === false &&
-    P(s).settings.countdownBg === '#112233' && P(s).settings.countdownOpacity === 0.5 &&
-    P(s).settings.countdownTextColor === '#abcdef', '倒计时圆角矩形/宽高/字号/位置/样式同步');
+    P(s).settings.countdownBg === '#112233' && P(s).settings.countdownBgMode === 'acrylic' &&
+    P(s).settings.countdownBlur === 18 && P(s).settings.countdownOpacity === 0.5 &&
+    P(s).settings.countdownTextColor === '#abcdef', '倒计时圆角矩形/宽高/字号/背景模式同步');
   await adminOp('updateSettings', { patch: { countdownShape: 'rect' } });
   s = await viewer.waitState((st) => P(st).settings.countdownShape === 'rect');
   assert(true, '矩形倒计时窗口可用');
@@ -448,6 +449,12 @@ async function main() {
   });
   await adminOp('updateSettings', { patch: { countdownFontSize: 999 } }).catch((e) => {
     assert(/数字字号/.test(e.message), '非法倒计时数字字号被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { countdownBgMode: 'blur' } }).catch((e) => {
+    assert(/背景模式/.test(e.message), '非法倒计时背景模式被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { countdownBlur: 99 } }).catch((e) => {
+    assert(/亚克力模糊/.test(e.message), '非法倒计时亚克力模糊被拒绝');
   });
   let markR = viewer.runtimes.length;
   await adminOp('countdownStart', { durationSec: 1 });
@@ -626,7 +633,8 @@ async function main() {
   assert(rp.settings.countdownDisplayMode === 'fullscreen' && rp.settings.countdownShape === 'rounded-rect' &&
     rp.settings.countdownSize === 600 && rp.settings.countdownHeight === 300 &&
     rp.settings.countdownFontSize === 96 && rp.settings.countdownPosition === 'bottom-right' &&
-    rp.settings.countdownBg === '#112233', '重启后倒计时显示模式/圆角矩形/字号恢复');
+    rp.settings.countdownBg === '#112233' && rp.settings.countdownBgMode === 'acrylic' &&
+    rp.settings.countdownBlur === 18, '重启后倒计时显示模式/圆角矩形/字号/背景恢复');
   assert(Object.keys(restored.projects).length === 1, '重启后项目列表恢复');
   assert(rp.settings.featureRankTies === true && rp.settings.rankTieMode === 'competition' &&
     rp.settings.featureLeaderboard === true && rp.settings.displayView === 'leaderboard' &&
