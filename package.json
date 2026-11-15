@@ -1,17 +1,34 @@
 {
-  "name": "scoreboard",
+  "name": "@peijundev/screenscoreboard",
   "version": "1.2.1",
-  "private": true,
-  "description": "计分板：显示端 + 管理端，多项目，WebSocket 实时同步，可切换存储后端",
+  "description": "实时计分板：显示端 + 管理端，多项目，WebSocket 实时同步，可切换存储后端（JSON/SQLite/PostgreSQL/MySQL）",
+  "license": "MIT",
   "author": {
-    "name": "ScreenScoreBoard",
+    "name": "peijundev",
     "email": "screen-scoreboard@example.com"
   },
-  "main": "electron/main.js",
+  "keywords": [
+    "scoreboard",
+    "计分板",
+    "投票",
+    "大屏",
+    "realtime",
+    "websocket"
+  ],
+  "main": "server/index.js",
+  "bin": {
+    "screenscoreboard": "./bin/screenscoreboard.js"
+  },
+  "files": [
+    "server/",
+    "public/",
+    "bin/",
+    "README.md"
+  ],
   "scripts": {
     "start": "node server/index.js",
     "verify": "node scripts/verify.mjs",
-    "electron": "electron .",
+    "electron": "electron electron/main.js",
     "dist": "electron-builder --publish never",
     "dist:linux": "electron-builder --linux --publish never",
     "dist:win": "electron-builder --win --publish never",
@@ -21,10 +38,12 @@
     "node": ">=20"
   },
   "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "optionalDependencies": {
     "better-sqlite3": "^12.11.1",
     "mysql2": "^3.24.6",
-    "pg": "^8.23.1",
-    "ws": "^8.18.0"
+    "pg": "^8.23.1"
   },
   "allowScripts": {
     "better-sqlite3@12.11.1": true,
@@ -38,6 +57,9 @@
   "build": {
     "appId": "com.screenscoreboard.app",
     "productName": "ScreenScoreBoard",
+    "extraMetadata": {
+      "main": "electron/main.js"
+    },
     "asar": true,
     "asarUnpack": [
       "node_modules/better-sqlite3/**/*"
