@@ -481,6 +481,12 @@
           <label>突显高度 <span id="spotlight-height-val">自动</span>
             <input id="set-spotlight-height" type="range" min="0" max="1200" step="20">
           </label>
+          <label class="check">
+            <input id="set-spotlight-return" type="checkbox"> 从原位置飞入居中，再飞回原位
+          </label>
+          <label>飞入飞回时长 <span id="spotlight-return-duration-val">1600</span> ms
+            <input id="set-spotlight-return-duration" type="range" min="600" max="6000" step="100">
+          </label>
           <button id="preview-spotlight" class="btn small" type="button">预览突显效果</button>
           <label>特效时长 <span id="fx-duration-val">700</span> ms
             <input id="set-fx-duration" type="range" min="200" max="3000" step="50">
@@ -558,6 +564,70 @@
             <label>倒计时时长（分钟）
               <input id="set-countdown-min" type="number" min="1" max="60" step="1">
             </label>
+            <label>倒计时显示模式
+              <select id="set-countdown-mode">
+                <option value="corner">角落小窗</option>
+                <option value="center">居中大窗口</option>
+                <option value="fullscreen">全屏模式</option>
+              </select>
+            </label>
+            <div class="countdown-style">
+              <label>窗口形状
+                <select id="set-cd-shape">
+                  <option value="circle">圆形</option>
+                  <option value="square">方形</option>
+                  <option value="rounded">圆角方形</option>
+                  <option value="rounded-rect">圆角矩形</option>
+                  <option value="rect">矩形</option>
+                </select>
+              </label>
+              <label>窗口位置
+                <select id="set-cd-position">
+                  <option value="center">居中</option>
+                  <option value="top-left">左上</option>
+                  <option value="top">上</option>
+                  <option value="top-right">右上</option>
+                  <option value="left">左</option>
+                  <option value="right">右</option>
+                  <option value="bottom-left">左下</option>
+                  <option value="bottom">下</option>
+                  <option value="bottom-right">右下</option>
+                </select>
+              </label>
+              <label>窗口宽度 <span id="cd-size-val">520</span> px
+                <input id="set-cd-size" type="range" min="200" max="900" step="10">
+              </label>
+              <label>窗口高度 <span id="cd-height-val">自动</span>
+                <input id="set-cd-height" type="range" min="0" max="900" step="10">
+              </label>
+              <label>窗口圆角 <span id="cd-radius-val">28</span> px
+                <input id="set-cd-radius" type="range" min="0" max="120" step="2">
+              </label>
+              <label>数字字号 <span id="cd-fontsize-val">自动</span>
+                <input id="set-cd-fontsize" type="range" min="0" max="300" step="2">
+              </label>
+              <label>窗口不透明度 <span id="cd-opacity-val">100</span>%
+                <input id="set-cd-opacity" type="range" min="0.2" max="1" step="0.05">
+              </label>
+              <label class="check">
+                <input id="set-cd-progress" type="checkbox"> 显示进度环
+              </label>
+              <label class="check">
+                <input id="set-cd-backdrop" type="checkbox"> 显示背景遮罩
+              </label>
+              <label class="check">
+                <input id="set-cd-bg-enabled" type="checkbox"> 自定义窗口底色
+              </label>
+              <label>窗口底色
+                <input id="set-cd-bg" type="color" disabled>
+              </label>
+              <label class="check">
+                <input id="set-cd-text-enabled" type="checkbox"> 自定义文字颜色
+              </label>
+              <label>文字颜色
+                <input id="set-cd-text" type="color" disabled>
+              </label>
+            </div>
             <div class="countdown-btns">
               <button id="cd-start" class="btn small primary" type="button">开始</button>
               <button id="cd-pause" class="btn small" type="button">暂停</button>

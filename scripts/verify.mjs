@@ -250,13 +250,18 @@ async function main() {
   await adminOp('updateSettings', {
     patch: {
       scoreEffect: 'spotlight', spotlightScope: 'person_team',
-      spotlightWidth: 700, spotlightHeight: 420, customSound: soundUp.path,
+      spotlightWidth: 700, spotlightHeight: 420, spotlightReturnToOrigin: true,
+      spotlightReturnDuration: 2200, customSound: soundUp.path,
     },
   });
   s = await viewer.waitState((st) => P(st).settings.scoreEffect === 'spotlight');
   assert(P(s).settings.customSound === soundUp.path && P(s).settings.spotlightScope === 'person_team' &&
-    P(s).settings.spotlightWidth === 700 && P(s).settings.spotlightHeight === 420,
-    '居中突显特效/范围/宽高/自定义音效同步');
+    P(s).settings.spotlightWidth === 700 && P(s).settings.spotlightHeight === 420 &&
+    P(s).settings.spotlightReturnToOrigin === true && P(s).settings.spotlightReturnDuration === 2200,
+    '居中突显特效/范围/宽高/飞入飞回时长/自定义音效同步');
+  await adminOp('updateSettings', { patch: { spotlightReturnDuration: 100 } }).catch((e) => {
+    assert(/飞入飞回时长/.test(e.message), '非法飞入飞回时长被拒绝');
+  });
   await adminOp('updateSettings', { patch: { customSound: '../../etc/passwd' } }).catch((e) => {
     assert(/音效文件路径/.test(e.message), '非法音效路径被拒绝');
   });
@@ -405,6 +410,45 @@ async function main() {
 
   console.log('倒计时与排行榜:');
   await adminOp('updateSettings', { patch: { featureCountdown: true } });
+  await adminOp('updateSettings', { patch: { countdownDisplayMode: 'fullscreen' } });
+  s = await viewer.waitState((st) => P(st).settings.countdownDisplayMode === 'fullscreen');
+  assert(true, '倒计时显示模式同步');
+  await adminOp('updateSettings', { patch: { countdownDisplayMode: 'weird' } }).catch((e) => {
+    assert(/倒计时显示模式/.test(e.message), '非法倒计时显示模式被拒绝');
+  });
+  await adminOp('updateSettings', {
+    patch: {
+      countdownShape: 'rounded-rect', countdownRadius: 40, countdownSize: 600,
+      countdownHeight: 300, countdownFontSize: 96,
+      countdownPosition: 'bottom-right', countdownShowProgress: false,
+      countdownShowBackdrop: false, countdownBg: '#112233', countdownOpacity: 0.5,
+      countdownTextColor: '#abcdef',
+    },
+  });
+  s = await viewer.waitState((st) => P(st).settings.countdownShape === 'rounded-rect');
+  assert(P(s).settings.countdownRadius === 40 && P(s).settings.countdownSize === 600 &&
+    P(s).settings.countdownHeight === 300 && P(s).settings.countdownFontSize === 96 &&
+    P(s).settings.countdownPosition === 'bottom-right' &&
+    P(s).settings.countdownShowProgress === false && P(s).settings.countdownShowBackdrop === false &&
+    P(s).settings.countdownBg === '#112233' && P(s).settings.countdownOpacity === 0.5 &&
+    P(s).settings.countdownTextColor === '#abcdef', '倒计时圆角矩形/宽高/字号/位置/样式同步');
+  await adminOp('updateSettings', { patch: { countdownShape: 'rect' } });
+  s = await viewer.waitState((st) => P(st).settings.countdownShape === 'rect');
+  assert(true, '矩形倒计时窗口可用');
+  await adminOp('updateSettings', { patch: { countdownShape: 'rounded-rect' } });
+  await viewer.waitState((st) => P(st).settings.countdownShape === 'rounded-rect');
+  await adminOp('updateSettings', { patch: { countdownShape: 'hexagon' } }).catch((e) => {
+    assert(/窗口形状/.test(e.message), '非法倒计时窗口形状被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { countdownSize: 9999 } }).catch((e) => {
+    assert(/窗口尺寸/.test(e.message), '非法倒计时窗口尺寸被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { countdownHeight: 2000 } }).catch((e) => {
+    assert(/窗口高度/.test(e.message), '非法倒计时窗口高度被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { countdownFontSize: 999 } }).catch((e) => {
+    assert(/数字字号/.test(e.message), '非法倒计时数字字号被拒绝');
+  });
   let markR = viewer.runtimes.length;
   await adminOp('countdownStart', { durationSec: 1 });
   await viewer.waitRuntime((r) => r.countdowns[projectId] && r.countdowns[projectId].state === 'running', markR);
@@ -576,7 +620,13 @@ async function main() {
     '重启后标题自由位置恢复');
   assert(rp.settings.scoreEffect === 'spotlight' && rp.settings.customSound === soundUp.path &&
     rp.settings.spotlightScope === 'person_team' && rp.settings.spotlightWidth === 700 &&
-    rp.settings.spotlightHeight === 420, '重启后居中突显/范围/宽高/自定义音效恢复');
+    rp.settings.spotlightHeight === 420 && rp.settings.spotlightReturnToOrigin === true &&
+    rp.settings.spotlightReturnDuration === 2200,
+    '重启后居中突显/范围/宽高/飞入飞回时长/自定义音效恢复');
+  assert(rp.settings.countdownDisplayMode === 'fullscreen' && rp.settings.countdownShape === 'rounded-rect' &&
+    rp.settings.countdownSize === 600 && rp.settings.countdownHeight === 300 &&
+    rp.settings.countdownFontSize === 96 && rp.settings.countdownPosition === 'bottom-right' &&
+    rp.settings.countdownBg === '#112233', '重启后倒计时显示模式/圆角矩形/字号恢复');
   assert(Object.keys(restored.projects).length === 1, '重启后项目列表恢复');
   assert(rp.settings.featureRankTies === true && rp.settings.rankTieMode === 'competition' &&
     rp.settings.featureLeaderboard === true && rp.settings.displayView === 'leaderboard' &&

@@ -220,6 +220,120 @@ body.has-bg-image .empty-tip { position: relative; z-index: 1; }
   50% { opacity: 0.55; }
 }
 
+/* ---- 居中大窗 / 全屏倒计时 ---- */
+.countdown-big {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(16px, 3vmin);
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.28);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+.countdown-big[data-position="top-left"] { align-items: flex-start; justify-content: flex-start; }
+.countdown-big[data-position="top"] { align-items: flex-start; justify-content: center; }
+.countdown-big[data-position="top-right"] { align-items: flex-start; justify-content: flex-end; }
+.countdown-big[data-position="left"] { align-items: center; justify-content: flex-start; }
+.countdown-big[data-position="right"] { align-items: center; justify-content: flex-end; }
+.countdown-big[data-position="bottom-left"] { align-items: flex-end; justify-content: flex-start; }
+.countdown-big[data-position="bottom"] { align-items: flex-end; justify-content: center; }
+.countdown-big[data-position="bottom-right"] { align-items: flex-end; justify-content: flex-end; }
+.countdown-big.center-mode.no-backdrop {
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.countdown-big.fullscreen-mode {
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: var(--bg-fallback);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.countdown-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(10px, 2vmin, 22px);
+}
+.countdown-ring {
+  position: relative;
+  width: var(--cd-size, 520px);
+  height: var(--cd-height, var(--cd-size, 520px));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--accent) calc(var(--cd-progress, 1) * 1turn),
+    color-mix(in srgb, var(--accent) 16%, transparent) 0
+  );
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
+}
+.countdown-ring::before {
+  content: "";
+  position: absolute;
+  inset: 14px;
+  border-radius: 50%;
+  background: var(--cd-panel-bg, var(--card));
+}
+.countdown-big[data-shape="square"] .countdown-ring,
+.countdown-big[data-shape="square"] .countdown-ring::before,
+.countdown-big[data-shape="rect"] .countdown-ring,
+.countdown-big[data-shape="rect"] .countdown-ring::before { border-radius: 0; }
+.countdown-big[data-shape="rounded"] .countdown-ring,
+.countdown-big[data-shape="rounded-rect"] .countdown-ring {
+  border-radius: var(--cd-radius, 28px);
+}
+.countdown-big[data-shape="rounded"] .countdown-ring::before,
+.countdown-big[data-shape="rounded-rect"] .countdown-ring::before {
+  border-radius: max(0px, calc(var(--cd-radius, 28px) - 14px));
+}
+.countdown-big.no-progress .countdown-ring {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.countdown-big.no-progress.ended .countdown-ring { background: #ff5c6c; }
+.countdown-time {
+  position: relative;
+  z-index: 1;
+  font-family: "DIN Alternate", "Bahnschrift", "Roboto Condensed", ui-monospace,
+    "SF Mono", "Cascadia Mono", Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--cd-time-size, clamp(46px, 9vmin, 110px));
+  font-weight: 800;
+  color: var(--cd-text, var(--text));
+  letter-spacing: -0.01em;
+}
+.countdown-caption {
+  color: var(--text-dim);
+  font-size: clamp(14px, 2vmin, 22px);
+  letter-spacing: 0.25em;
+}
+.countdown-big.fullscreen-mode .countdown-ring {
+  width: max(var(--cd-size, 520px), min(70vmin, 760px));
+  height: max(var(--cd-height, 520px), min(70vmin, 760px));
+}
+.countdown-big.fullscreen-mode .countdown-time {
+  font-size: var(--cd-time-size, clamp(80px, 17vmin, 240px));
+}
+.countdown-big.ended .countdown-ring {
+  background: conic-gradient(#ff5c6c 0 1turn);
+  animation: countdown-pulse 0.9s ease infinite;
+}
+.countdown-big.ended .countdown-time,
+.countdown-big.ended .countdown-caption { color: #ff5c6c; }
+
+body.countdown-fullscreen .topbar,
+body.countdown-fullscreen .board,
+body.countdown-fullscreen #leaderboard,
+body.countdown-fullscreen .empty-tip,
+body.countdown-fullscreen .overlay-clock { display: none !important; }
+
 /* ---- 大字排行榜 ---- */
 .leaderboard {
   max-width: 1400px;
@@ -726,9 +840,33 @@ body[data-score-effect="shake"] .fx { animation: fx-shake var(--fx-duration, 700
   100% { opacity: 0; }
 }
 
+/* 从原位置飞入居中，再飞回原位 */
+.spotlight-return-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+}
+.spotlight-return-scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--spot-scrim);
+}
+.spotlight-return-box {
+  position: fixed;
+  z-index: 1;
+  overflow: hidden;
+}
+.spotlight-return-box > * {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  overflow: hidden;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .fx, .dot.connecting { animation: none !important; }
-  .fx-delta, .confetti-layer, .spotlight-overlay { display: none; }
+  .fx, .dot.connecting, .countdown-big.ended .countdown-ring { animation: none !important; }
+  .fx-delta, .confetti-layer, .spotlight-overlay, .spotlight-return-overlay { display: none; }
 }
 
 /* ============================================================

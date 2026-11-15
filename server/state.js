@@ -43,6 +43,8 @@ const DEFAULT_SETTINGS = {
   spotlightScope: 'person', // team（仅团队）| person_team（人物 + 团队）| person（仅人物）
   spotlightWidth: 520,      // 居中突显宽度 px（200–1600）
   spotlightHeight: 0,       // 居中突显高度 px；0 = 自动
+  spotlightReturnToOrigin: false, // 从原位置飞入居中，再飞回原位
+  spotlightReturnDuration: 1600,  // 飞入飞回时长 ms（600–6000）
   scoreEffectDuration: 700, // 特效时长 ms（200–3000）
   scoreEffectColor: '',     // '' = 自动（加分绿/减分红）；或 #rrggbb
   scoreEffectOnlyPositive: false, // 仅加分触发特效
@@ -105,6 +107,18 @@ const DEFAULT_SETTINGS = {
   clockShowSeconds: true,
   clockShowDate: false,
   countdownDurationSec: 300,  // 1–3600
+  countdownDisplayMode: 'corner', // corner | center | fullscreen
+  countdownShape: 'circle',   // circle | square | rounded | rounded-rect | rect
+  countdownRadius: 28,        // 圆角 px（0–120）
+  countdownSize: 520,         // 窗口宽度 px（200–900）
+  countdownHeight: 0,         // 窗口高度 px（0=与宽度相同，最大 900）
+  countdownFontSize: 0,       // 数字字号 px；0=自动
+  countdownPosition: 'center', // center | top-left | top | top-right | left | right | bottom-left | bottom | bottom-right
+  countdownShowProgress: true,
+  countdownShowBackdrop: true,
+  countdownBg: '',            // '' = 跟随主题
+  countdownOpacity: 1,        // 0.2–1
+  countdownTextColor: '',     // '' = 跟随主题
   displayView: 'cards',       // cards | leaderboard
   leaderboardScope: 'auto',   // auto | people | teams
   leaderboardLimit: 0,        // 0 = 全部
@@ -430,6 +444,8 @@ const SETTINGS_VALIDATORS = {
       : (() => { throw new OpError('突显范围非法'); })()),
   spotlightWidth: (v) => intRange(v, 200, 1600, '突显宽度须为 200–1600'),
   spotlightHeight: (v) => intRange(v, 0, 1200, '突显高度须为 0–1200（0=自动）'),
+  spotlightReturnToOrigin: (v) => boolStrict(v, '从哪来回哪去开关'),
+  spotlightReturnDuration: (v) => intRange(v, 600, 6000, '飞入飞回时长须为 600–6000 ms'),
   scoreEffectDuration: (v) => {
     const n = Number(v);
     if (!Number.isInteger(n) || n < 200 || n > 3000) throw new OpError('特效时长须为 200–3000 的整数');
@@ -545,6 +561,32 @@ const SETTINGS_VALIDATORS = {
   clockShowSeconds: (v) => boolStrict(v, '时钟秒数开关'),
   clockShowDate: (v) => boolStrict(v, '时钟日期开关'),
   countdownDurationSec: (v) => intRange(v, 1, 3600, '倒计时时长须为 1–3600 秒'),
+  countdownDisplayMode: (v) =>
+    (['corner', 'center', 'fullscreen'].includes(v)
+      ? v
+      : (() => { throw new OpError('倒计时显示模式非法'); })()),
+  countdownShape: (v) =>
+    (['circle', 'square', 'rounded', 'rounded-rect', 'rect'].includes(v)
+      ? v
+      : (() => { throw new OpError('倒计时窗口形状非法'); })()),
+  countdownRadius: (v) => intRange(v, 0, 120, '倒计时圆角须为 0–120'),
+  countdownSize: (v) => intRange(v, 200, 900, '倒计时窗口尺寸须为 200–900'),
+  countdownHeight: (v) => intRange(v, 0, 900, '倒计时窗口高度须为 0–900（0=与宽度相同）'),
+  countdownFontSize: (v) => intRange(v, 0, 300, '倒计时数字字号须为 0–300（0=自动）'),
+  countdownPosition: (v) =>
+    (['center', 'top-left', 'top', 'top-right', 'left', 'right',
+      'bottom-left', 'bottom', 'bottom-right'].includes(v)
+      ? v
+      : (() => { throw new OpError('倒计时窗口位置非法'); })()),
+  countdownShowProgress: (v) => boolStrict(v, '倒计时进度环开关'),
+  countdownShowBackdrop: (v) => boolStrict(v, '倒计时遮罩开关'),
+  countdownBg: (v) => hexOrEmpty(v, '倒计时窗口底色须为 #rrggbb 或留空'),
+  countdownOpacity: (v) => {
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0.2 || n > 1) throw new OpError('倒计时窗口不透明度须在 0.2–1 之间');
+    return Math.round(n * 100) / 100;
+  },
+  countdownTextColor: (v) => hexOrEmpty(v, '倒计时文字颜色须为 #rrggbb 或留空'),
   displayView: (v) =>
     (['cards', 'leaderboard'].includes(v) ? v : (() => { throw new OpError('显示视图非法'); })()),
   leaderboardScope: (v) =>

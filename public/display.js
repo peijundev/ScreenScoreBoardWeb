@@ -25,6 +25,9 @@ const titleEl = document.getElementById('board-title');
 const connDot = document.getElementById('conn-dot');
 const clockEl = document.getElementById('clock');
 const countdownEl = document.getElementById('countdown');
+const countdownBigEl = document.getElementById('countdown-big');
+const countdownBigTimeEl = document.getElementById('countdown-big-time');
+const countdownBigCaptionEl = document.getElementById('countdown-big-caption');
 const leaderboardEl = document.getElementById('leaderboard');
 const viewParam = new URLSearchParams(location.search).get('view');
 
@@ -134,7 +137,89 @@ function spawnConfetti(el, colors, duration) {
 
 // ---------- 居中放大突显：克隆卡片到屏幕中央放大再缩回 ----------
 // els 可以是单张卡片，也可以是「人物 + 团队」两张，一起放大展示
+function prefersReducedMotion() {
+  return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+// 从原位置飞入居中、停留、再飞回原位
+function spawnSpotlightReturn(els, settings) {
+  const total = Math.min(Math.max(Number(settings.spotlightReturnDuration) || 1600, 600), 6000);
+  const overlay = document.createElement('div');
+  overlay.className = 'spotlight-return-overlay';
+  overlay.style.setProperty('--spot-duration', total + 'ms');
+  const scrim = document.createElement('div');
+  scrim.className = 'spotlight-return-scrim';
+  overlay.appendChild(scrim);
+
+  const items = [];
+  for (const el of els) {
+    const rect = el.getBoundingClientRect();
+    if (!rect.width || !rect.height) continue;
+    const clone = el.cloneNode(true);
+    clone.querySelectorAll('.resize-handle, .fx-delta, .confetti-layer').forEach((n) => n.remove());
+    ['position', 'left', 'top', 'right', 'bottom', 'width', 'height', 'transform', 'animation', 'zoom']
+      .forEach((p) => clone.style.removeProperty(p));
+    clone.classList.remove('dragging');
+    clone.removeAttribute('data-person');
+    clone.removeAttribute('data-kind');
+    clone.removeAttribute('data-id');
+
+    const width = Math.min(Math.max(Number(settings.spotlightWidth) || 520, 200), 1600);
+    let height = Number(settings.spotlightHeight) || 0;
+    if (!height) height = rect.height * (width / rect.width);
+    height = Math.min(Math.max(height, 120), window.innerHeight * 0.8);
+
+    const box = document.createElement('div');
+    box.className = 'spotlight-return-box';
+    box.style.left = rect.left + 'px';
+    box.style.top = rect.top + 'px';
+    box.style.width = rect.width + 'px';
+    box.style.height = rect.height + 'px';
+    box.appendChild(clone);
+    overlay.appendChild(box);
+    items.push({ el, box, rect, width, height });
+  }
+  if (!items.length) return;
+
+  const gap = 20;
+  const totalW = items.reduce((s, it) => s + it.width, 0) + gap * (items.length - 1);
+  let x = (window.innerWidth - totalW) / 2;
+  for (const it of items) {
+    it.target = { left: x, top: (window.innerHeight - it.height) / 2, width: it.width, height: it.height };
+    x += it.width + gap;
+  }
+
+  document.body.appendChild(overlay);
+  items.forEach((it) => { it.el.style.visibility = 'hidden'; });
+
+  scrim.animate(
+    [{ opacity: 0 }, { opacity: 1, offset: 0.25 }, { opacity: 1, offset: 0.7 }, { opacity: 0 }],
+    { duration: total, easing: 'ease' }
+  );
+
+  for (const it of items) {
+    const { rect, target, box } = it;
+    box.animate([
+      { left: rect.left + 'px', top: rect.top + 'px', width: rect.width + 'px', height: rect.height + 'px', offset: 0 },
+      { left: target.left + 'px', top: target.top + 'px', width: target.width + 'px', height: target.height + 'px', offset: 0.34 },
+      { left: target.left + 'px', top: target.top + 'px', width: target.width + 'px', height: target.height + 'px', offset: 0.72 },
+      { left: rect.left + 'px', top: rect.top + 'px', width: rect.width + 'px', height: rect.height + 'px', offset: 1 },
+    ], { duration: total, easing: 'cubic-bezier(0.25, 0.8, 0.25, 1)' });
+  }
+
+  setTimeout(() => {
+    overlay.remove();
+    items.forEach((it) => {
+      if (it.el.isConnected) it.el.style.visibility = '';
+    });
+  }, total + 150);
+}
+
 function spawnSpotlight(els, settings) {
+  if (settings.spotlightReturnToOrigin && !prefersReducedMotion()) {
+    spawnSpotlightReturn(els, settings);
+    return;
+  }
   const total = Math.max(1200, settings.scoreEffectDuration + 600);
 
   const overlay = document.createElement('div');
@@ -548,6 +633,8 @@ function updateCountdown() {
     ? currentRuntime.countdowns[currentProjectId] : null;
   if (!settings || !settings.featureCountdown || !c) {
     countdownEl.classList.add('hidden');
+    countdownBigEl.classList.add('hidden');
+    document.body.classList.remove('countdown-fullscreen');
     return;
   }
   let remaining;
@@ -558,10 +645,55 @@ function updateCountdown() {
     remaining = (c.remainingMs || 0) / 1000;
   }
   const ended = c.state === 'ended' || remaining <= 0;
-  countdownEl.textContent = ended ? '时间到' : formatDuration(remaining);
-  const both = settings.featureClock;
-  countdownEl.className = 'overlay-countdown clock-pos-' + settings.clockPosition +
-    (ended ? ' ended' : '') + (both ? ' shifted' : '');
+  const mode = settings.countdownDisplayMode || 'corner';
+
+  if (mode === 'corner') {
+    countdownEl.textContent = ended ? '时间到' : formatDuration(remaining);
+    const both = settings.featureClock;
+    countdownEl.className = 'overlay-countdown clock-pos-' + settings.clockPosition +
+      (ended ? ' ended' : '') + (both ? ' shifted' : '');
+    countdownBigEl.classList.add('hidden');
+    document.body.classList.remove('countdown-fullscreen');
+    return;
+  }
+
+  // 居中大窗口 / 全屏
+  countdownEl.classList.add('hidden');
+  countdownBigEl.classList.remove('hidden');
+  countdownBigEl.className = 'countdown-big ' +
+    (mode === 'fullscreen' ? 'fullscreen-mode' : 'center-mode') +
+    (ended ? ' ended' : '') +
+    (settings.countdownShowProgress === false ? ' no-progress' : '') +
+    (settings.countdownShowBackdrop === false ? ' no-backdrop' : '');
+  countdownBigEl.dataset.shape = settings.countdownShape || 'circle';
+  countdownBigEl.dataset.position = settings.countdownPosition || 'center';
+  const shape = settings.countdownShape || 'circle';
+  const cdWidth = Number(settings.countdownSize) || 520;
+  const canResize = shape === 'rounded' || shape === 'rounded-rect' || shape === 'rect';
+  const cdHeight = canResize && Number(settings.countdownHeight) > 0
+    ? Number(settings.countdownHeight) : cdWidth;
+  countdownBigEl.style.setProperty('--cd-size', cdWidth + 'px');
+  countdownBigEl.style.setProperty('--cd-height', cdHeight + 'px');
+  const manualSize = Number(settings.countdownFontSize) || 0;
+  const timeSize = manualSize > 0
+    ? manualSize
+    : Math.min(180, Math.max(30, Math.round(Math.min(cdWidth, cdHeight) * 0.22)));
+  countdownBigEl.style.setProperty('--cd-time-size', timeSize + 'px');
+  countdownBigEl.style.setProperty('--cd-radius', settings.countdownRadius + 'px');
+  const baseBg = settings.countdownBg || settings.cardBg ||
+    (settings.theme === 'light' ? '#ffffff' : '#1a1f26');
+  countdownBigEl.style.setProperty('--cd-panel-bg', hexToRgba(baseBg, settings.countdownOpacity));
+  if (settings.countdownTextColor) {
+    countdownBigEl.style.setProperty('--cd-text', settings.countdownTextColor);
+  } else {
+    countdownBigEl.style.removeProperty('--cd-text');
+  }
+  countdownBigTimeEl.textContent = formatDuration(remaining);
+  countdownBigCaptionEl.textContent = ended ? '时间到' : '倒计时';
+  const duration = (c.durationMs || 1) / 1000;
+  const progress = Math.max(0, Math.min(1, remaining / duration));
+  countdownBigEl.style.setProperty('--cd-progress', String(progress));
+  document.body.classList.toggle('countdown-fullscreen', mode === 'fullscreen');
 }
 
 function applyRuntimeUI() {

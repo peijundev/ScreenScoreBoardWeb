@@ -615,6 +615,8 @@ const settingEls = {
   spotlightScope: document.getElementById('set-spotlight-scope'),
   spotlightWidth: document.getElementById('set-spotlight-width'),
   spotlightHeight: document.getElementById('set-spotlight-height'),
+  spotlightReturn: document.getElementById('set-spotlight-return'),
+  spotlightReturnDuration: document.getElementById('set-spotlight-return-duration'),
   previewSpotlight: document.getElementById('preview-spotlight'),
   fxDuration: document.getElementById('set-fx-duration'),
   fxOnlyPositive: document.getElementById('set-fx-only-positive'),
@@ -637,6 +639,7 @@ const glassOpacityVal = document.getElementById('glass-opacity-val');
 const fxDurationVal = document.getElementById('fx-duration-val');
 const spotlightWidthVal = document.getElementById('spotlight-width-val');
 const spotlightHeightVal = document.getElementById('spotlight-height-val');
+const spotlightReturnDurationVal = document.getElementById('spotlight-return-duration-val');
 const soundVolumeVal = document.getElementById('sound-volume-val');
 const resetLayoutBtn = document.getElementById('reset-layout');
 
@@ -659,6 +662,25 @@ const classEls = {
   clockSeconds: document.getElementById('set-clock-seconds'),
   clockDate: document.getElementById('set-clock-date'),
   countdownMin: document.getElementById('set-countdown-min'),
+  countdownMode: document.getElementById('set-countdown-mode'),
+  cdShape: document.getElementById('set-cd-shape'),
+  cdPosition: document.getElementById('set-cd-position'),
+  cdSize: document.getElementById('set-cd-size'),
+  cdSizeVal: document.getElementById('cd-size-val'),
+  cdHeight: document.getElementById('set-cd-height'),
+  cdHeightVal: document.getElementById('cd-height-val'),
+  cdRadius: document.getElementById('set-cd-radius'),
+  cdRadiusVal: document.getElementById('cd-radius-val'),
+  cdFontSize: document.getElementById('set-cd-fontsize'),
+  cdFontSizeVal: document.getElementById('cd-fontsize-val'),
+  cdOpacity: document.getElementById('set-cd-opacity'),
+  cdOpacityVal: document.getElementById('cd-opacity-val'),
+  cdProgress: document.getElementById('set-cd-progress'),
+  cdBackdrop: document.getElementById('set-cd-backdrop'),
+  cdBgEnabled: document.getElementById('set-cd-bg-enabled'),
+  cdBg: document.getElementById('set-cd-bg'),
+  cdTextEnabled: document.getElementById('set-cd-text-enabled'),
+  cdText: document.getElementById('set-cd-text'),
   cdStart: document.getElementById('cd-start'),
   cdPause: document.getElementById('cd-pause'),
   cdResume: document.getElementById('cd-resume'),
@@ -887,6 +909,12 @@ settingEls.spotlightHeight.addEventListener('input', () => {
   const v = Number(settingEls.spotlightHeight.value);
   spotlightHeightVal.textContent = v === 0 ? '自动' : v;
   pushSetting('spotlightHeight', v);
+});
+settingEls.spotlightReturn.addEventListener('change', () =>
+  pushSetting('spotlightReturnToOrigin', settingEls.spotlightReturn.checked, true));
+settingEls.spotlightReturnDuration.addEventListener('input', () => {
+  spotlightReturnDurationVal.textContent = settingEls.spotlightReturnDuration.value;
+  pushSetting('spotlightReturnDuration', Number(settingEls.spotlightReturnDuration.value));
 });
 settingEls.previewSpotlight.addEventListener('click', () => {
   try {
@@ -1199,6 +1227,40 @@ classEls.countdownMin.addEventListener('input', () => {
     pushSetting('countdownDurationSec', Math.round(mins * 60));
   }
 });
+classEls.countdownMode.addEventListener('change', () =>
+  pushSetting('countdownDisplayMode', classEls.countdownMode.value, true));
+classEls.cdShape.addEventListener('change', () =>
+  pushSetting('countdownShape', classEls.cdShape.value, true));
+classEls.cdPosition.addEventListener('change', () =>
+  pushSetting('countdownPosition', classEls.cdPosition.value, true));
+classEls.cdSize.addEventListener('input', () => {
+  classEls.cdSizeVal.textContent = classEls.cdSize.value;
+  pushSetting('countdownSize', Number(classEls.cdSize.value));
+});
+classEls.cdHeight.addEventListener('input', () => {
+  const v = Number(classEls.cdHeight.value);
+  classEls.cdHeightVal.textContent = v === 0 ? '自动' : v + ' px';
+  pushSetting('countdownHeight', v);
+});
+classEls.cdRadius.addEventListener('input', () => {
+  classEls.cdRadiusVal.textContent = classEls.cdRadius.value;
+  pushSetting('countdownRadius', Number(classEls.cdRadius.value));
+});
+classEls.cdFontSize.addEventListener('input', () => {
+  const v = Number(classEls.cdFontSize.value);
+  classEls.cdFontSizeVal.textContent = v === 0 ? '自动' : v + ' px';
+  pushSetting('countdownFontSize', v);
+});
+classEls.cdOpacity.addEventListener('input', () => {
+  classEls.cdOpacityVal.textContent = Math.round(Number(classEls.cdOpacity.value) * 100);
+  pushSetting('countdownOpacity', Number(classEls.cdOpacity.value));
+});
+classEls.cdProgress.addEventListener('change', () =>
+  pushSetting('countdownShowProgress', classEls.cdProgress.checked, true));
+classEls.cdBackdrop.addEventListener('change', () =>
+  pushSetting('countdownShowBackdrop', classEls.cdBackdrop.checked, true));
+bindAdvColorToggle(classEls.cdBgEnabled, classEls.cdBg, 'countdownBg');
+bindAdvColorToggle(classEls.cdTextEnabled, classEls.cdText, 'countdownTextColor');
 classEls.cdStart.addEventListener('click', () => {
   const mins = Number(classEls.countdownMin.value) || 5;
   projectOp('countdownStart', { durationSec: Math.round(mins * 60) })
@@ -1468,6 +1530,11 @@ function renderSettings(settings) {
     settingEls.spotlightHeight.value = settings.spotlightHeight;
     spotlightHeightVal.textContent = settings.spotlightHeight === 0 ? '自动' : settings.spotlightHeight;
   }
+  settingEls.spotlightReturn.checked = Boolean(settings.spotlightReturnToOrigin);
+  if (Number(settingEls.spotlightReturnDuration.value) !== settings.spotlightReturnDuration) {
+    settingEls.spotlightReturnDuration.value = settings.spotlightReturnDuration;
+    spotlightReturnDurationVal.textContent = settings.spotlightReturnDuration;
+  }
   if (Number(settingEls.fxDuration.value) !== settings.scoreEffectDuration) {
     settingEls.fxDuration.value = settings.scoreEffectDuration;
     fxDurationVal.textContent = settings.scoreEffectDuration;
@@ -1543,6 +1610,36 @@ function renderSettings(settings) {
   if (document.activeElement !== classEls.countdownMin) {
     classEls.countdownMin.value = String(Math.max(1, Math.round(settings.countdownDurationSec / 60)));
   }
+  classEls.countdownMode.value = settings.countdownDisplayMode || 'corner';
+  classEls.cdShape.value = settings.countdownShape || 'circle';
+  classEls.cdPosition.value = settings.countdownPosition || 'center';
+  if (Number(classEls.cdSize.value) !== settings.countdownSize) {
+    classEls.cdSize.value = settings.countdownSize;
+  }
+  classEls.cdSizeVal.textContent = settings.countdownSize;
+  if (Number(classEls.cdHeight.value) !== settings.countdownHeight) {
+    classEls.cdHeight.value = settings.countdownHeight;
+  }
+  classEls.cdHeightVal.textContent = settings.countdownHeight === 0 ? '自动' : settings.countdownHeight + ' px';
+  if (Number(classEls.cdRadius.value) !== settings.countdownRadius) {
+    classEls.cdRadius.value = settings.countdownRadius;
+  }
+  classEls.cdRadiusVal.textContent = settings.countdownRadius;
+  if (Number(classEls.cdFontSize.value) !== settings.countdownFontSize) {
+    classEls.cdFontSize.value = settings.countdownFontSize;
+  }
+  classEls.cdFontSizeVal.textContent = settings.countdownFontSize === 0
+    ? '自动' : settings.countdownFontSize + ' px';
+  if (Number(classEls.cdOpacity.value) !== settings.countdownOpacity) {
+    classEls.cdOpacity.value = settings.countdownOpacity;
+  }
+  classEls.cdOpacityVal.textContent = Math.round(settings.countdownOpacity * 100);
+  classEls.cdProgress.checked = settings.countdownShowProgress !== false;
+  classEls.cdBackdrop.checked = settings.countdownShowBackdrop !== false;
+  syncAdvColorToggle(classEls.cdBgEnabled, classEls.cdBg, settings.countdownBg,
+    settings.theme === 'light' ? '#ffffff' : '#1a1f26');
+  syncAdvColorToggle(classEls.cdTextEnabled, classEls.cdText, settings.countdownTextColor,
+    settings.theme === 'light' ? '#191d23' : '#e9e5dc');
   classEls.lbScope.value = settings.leaderboardScope;
   if (document.activeElement !== classEls.lbLimit) classEls.lbLimit.value = String(settings.leaderboardLimit);
   classEls.lbScale.value = settings.leaderboardScale;

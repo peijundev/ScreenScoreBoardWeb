@@ -351,6 +351,15 @@ body {
 .quick-scores { display: inline-flex; gap: 2px; flex-wrap: wrap; }
 .quick-scores .btn { padding: 1px 6px; font-size: 11px; }
 .countdown-btns { display: flex; gap: 4px; flex-wrap: wrap; }
+.countdown-style {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 14px;
+  width: 100%;
+}
+@media (max-width: 560px) {
+  .countdown-style { grid-template-columns: 1fr; }
+}
 .data-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
 
 /* 批量添加对话框 */
