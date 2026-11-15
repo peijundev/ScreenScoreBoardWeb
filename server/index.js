@@ -5,8 +5,23 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { serveStatic, send, PUBLIC_DIR } = require('./static');
-const { state, init: initState, AVATAR_DIR, SOUND_DIR, storageKind } = require('./state');
-const { attachWSS } = require('./wss');
+const {
+  state,
+  init: initState,
+  AVATAR_DIR,
+  SOUND_DIR,
+  storageKind,
+  exportProjectData,
+  sanitizeImportedProject,
+  walkAssetRefs,
+  save: saveState,
+  flushSave,
+  OpError,
+} = require('./state');
+const { attachWSS, broadcastState } = require('./wss');
+const runtime = require('./runtime');
+const { runBackup, listBackups, startBackupScheduler } = require('./backup');
+const { scanOrphans, cleanupOrphans, startCleanupScheduler } = require('./cleanup');
 
 const PORT = Number(process.env.PORT) || 3000;
 const MAX_IMAGE = 2 * 1024 * 1024; // 2 MB
@@ -62,6 +77,194 @@ function handleUpload(req, res, opts) {
   req.on('error', () => {});
 }
 
+// ---------- 数据导出 / 导入 / CSV / 备份 / 清理 ----------
+function sendJSON(res, code, data) {
+  send(res, code, JSON.stringify(data), { 'Content-Type': 'application/json; charset=utf-8' });
+}
+
+function readBody(req, limit) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    req.on('data', (c) => {
+      size += c.length;
+      if (size > limit) {
+        reject(Object.assign(new Error('请求体超过上限'), { status: 413 }));
+        req.destroy();
+        return;
+      }
+      chunks.push(c);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
+function assetPath(key) {
+  if (typeof key !== 'string' || !/^(avatars|sounds)\/[\w.-]+$/.test(key)) return null;
+  const name = key.split('/')[1];
+  if (name !== path.basename(name)) return null;
+  return path.join(key.startsWith('avatars/') ? AVATAR_DIR : SOUND_DIR, name);
+}
+
+function collectAssets(project) {
+  const refs = new Set();
+  for (const p of Object.values(project.people)) {
+    if (p.avatar) refs.add(p.avatar);
+    if (p.cardImage) refs.add(p.cardImage);
+  }
+  for (const t of Object.values(project.teams)) {
+    if (t.avatar) refs.add(t.avatar);
+    if (t.cardImage) refs.add(t.cardImage);
+  }
+  if (project.settings.bgImage) refs.add(project.settings.bgImage);
+  if (project.settings.customSound) refs.add(project.settings.customSound);
+
+  const assets = {};
+  const warnings = [];
+  let total = 0;
+  for (const ref of refs) {
+    const full = assetPath(ref);
+    if (!full) { warnings.push(ref + ' 路径非法，已跳过'); continue; }
+    try {
+      const st = fs.statSync(full);
+      if (!st.isFile()) { warnings.push(ref + ' 不是文件，已跳过'); continue; }
+      if (st.size > 5 * 1024 * 1024) { warnings.push(ref + ' 超过 5MB，已跳过'); continue; }
+      if (total + st.size > 50 * 1024 * 1024) { warnings.push('资产总量超过 50MB，' + ref + ' 及后续已跳过'); break; }
+      assets[ref] = fs.readFileSync(full).toString('base64');
+      total += st.size;
+    } catch (_) {
+      warnings.push(ref + ' 不存在，已跳过');
+    }
+  }
+  return { assets, warnings };
+}
+
+function importAssets(assets) {
+  const map = new Map();
+  let total = 0;
+  if (assets == null) return map;
+  if (typeof assets !== 'object') throw new OpError('资产字段格式非法');
+  for (const [key, b64] of Object.entries(assets)) {
+    const full = assetPath(key);
+    if (!full) throw new OpError('资产路径非法：' + key);
+    if (typeof b64 !== 'string') throw new OpError('资产内容非法：' + key);
+    const buf = Buffer.from(b64, 'base64');
+    if (buf.length > 5 * 1024 * 1024) throw new OpError('单个资产超过 5MB：' + key);
+    if (total + buf.length > 50 * 1024 * 1024) throw new OpError('资产总量超过 50MB');
+    const isImage = key.startsWith('avatars/');
+    const ext = isImage ? sniffImage(buf) : sniffAudio(buf);
+    if (!ext) throw new OpError('资产格式非法：' + key);
+    const name = crypto.randomBytes(8).toString('hex') + '.' + ext;
+    fs.writeFileSync(path.join(isImage ? AVATAR_DIR : SOUND_DIR, name), buf);
+    map.set(key, (isImage ? 'avatars/' : 'sounds/') + name);
+    total += buf.length;
+  }
+  return map;
+}
+
+function assetExists(key) {
+  const full = assetPath(key);
+  if (!full) return false;
+  try { return fs.statSync(full).isFile(); } catch (_) { return false; }
+}
+
+function assignRanks(values, mode) {
+  let dense = 0;
+  let prev = null;
+  let competition = 0;
+  return values.map((score, i) => {
+    const isNew = i === 0 || score !== prev;
+    if (isNew) { dense += 1; competition = i + 1; prev = score; }
+    if (mode === 'dense') return dense;
+    if (mode === 'competition') return competition;
+    return i + 1;
+  });
+}
+
+function csvEscape(value) {
+  let s = String(value == null ? '' : value);
+  if (/^[=+\-@]/.test(s)) s = "'" + s;
+  if (/[",\r\n]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
+function scoresCsv(project, scope) {
+  const entries = [];
+  const teamName = (id) => (project.teams[id] ? project.teams[id].name : '');
+  if (scope !== 'teams') {
+    for (const p of Object.values(project.people)) {
+      entries.push({ type: '人员', name: p.name, team: teamName(p.teamId), score: p.score, createdAt: p.createdAt });
+    }
+  }
+  if (scope !== 'people') {
+    for (const t of Object.values(project.teams)) {
+      const total = Object.values(project.people)
+        .filter((p) => p.teamId === t.id)
+        .reduce((s, p) => s + p.score, 0);
+      entries.push({ type: '团队', name: t.name, team: '', score: total, createdAt: t.createdAt });
+    }
+  }
+  entries.sort((a, b) => (b.score - a.score) || (a.createdAt - b.createdAt));
+  const mode = project.settings.featureRankTies ? project.settings.rankTieMode : 'none';
+  const ranks = assignRanks(entries.map((e) => e.score), mode);
+  const lines = ['名次,类型,名称,所属团队,分数'];
+  entries.forEach((e, i) => {
+    lines.push([ranks[i], e.type, e.name, e.team, e.score].map(csvEscape).join(','));
+  });
+  return '﻿' + lines.join('\r\n') + '\r\n';
+}
+
+async function handleImport(req, res) {
+  try {
+    const body = await readBody(req, 64 * 1024 * 1024);
+    let parsed;
+    try {
+      parsed = JSON.parse(body.toString('utf8'));
+    } catch (_) {
+      throw new OpError('导入文件不是合法 JSON');
+    }
+    if (parsed && parsed.format && parsed.version && parsed.version !== 1) {
+      throw new OpError('不支持的导入版本');
+    }
+    const project = sanitizeImportedProject(parsed);
+    const map = importAssets(parsed && parsed.assets ? parsed.assets : null);
+    walkAssetRefs(project, (ref) => {
+      if (!ref) return null;
+      if (map.has(ref)) return map.get(ref);
+      return assetExists(ref) ? ref : null;
+    });
+    state.projects[project.id] = project;
+    saveState();
+    await flushSave();
+    broadcastState();
+    sendJSON(res, 200, {
+      projectId: project.id,
+      name: project.name,
+      people: Object.keys(project.people).length,
+      teams: Object.keys(project.teams).length,
+      assets: map.size,
+    });
+  } catch (e) {
+    const status = e.status || (e instanceof OpError || e instanceof SyntaxError ? 400 : 500);
+    if (status >= 500) console.error('[import] 导入失败:', e);
+    sendJSON(res, status, { error: e.message });
+  }
+}
+
+async function handleCleanup(req, res) {
+  try {
+    const body = await readBody(req, 1024 * 1024);
+    let opts = {};
+    if (body.length) {
+      try { opts = JSON.parse(body.toString('utf8')) || {}; } catch (_) { opts = {}; }
+    }
+    sendJSON(res, 200, cleanupOrphans({ dryRun: Boolean(opts.dryRun) }));
+  } catch (e) {
+    sendJSON(res, e.status || 500, { error: e.message });
+  }
+}
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
   const p = url.pathname;
@@ -74,7 +277,76 @@ const server = http.createServer((req, res) => {
     if (serveStatic(res, PUBLIC_DIR, p + '.html')) return;
   }
   if (req.method === 'GET' && p === '/api/state') {
-    return send(res, 200, JSON.stringify(state), { 'Content-Type': 'application/json' });
+    return send(res, 200, JSON.stringify({ ...state, runtime: runtime.getRuntimeSnapshot() }), {
+      'Content-Type': 'application/json',
+    });
+  }
+  if (req.method === 'GET' && p === '/api/export') {
+    const projectId = url.searchParams.get('project');
+    try {
+      if (!projectId) throw new OpError('缺少 project 参数');
+      const project = exportProjectData(projectId);
+      let assets = null;
+      let warnings = [];
+      if (url.searchParams.get('assets') === '1') {
+        const collected = collectAssets(project);
+        assets = collected.assets;
+        warnings = collected.warnings;
+      }
+      const payload = {
+        format: 'screenscoreboard.project',
+        version: 1,
+        exportedAt: Date.now(),
+        project,
+        warnings,
+      };
+      if (assets) payload.assets = assets;
+      res.writeHead(200, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Content-Disposition': 'attachment; filename="project-' + projectId + '.json"',
+      });
+      return res.end(JSON.stringify(payload));
+    } catch (e) {
+      return sendJSON(res, 404, { error: e.message });
+    }
+  }
+  if (req.method === 'GET' && p === '/api/scores.csv') {
+    const projectId = url.searchParams.get('project');
+    try {
+      if (!projectId) throw new OpError('缺少 project 参数');
+      const project = exportProjectData(projectId);
+      const scope = ['all', 'people', 'teams'].includes(url.searchParams.get('scope'))
+        ? url.searchParams.get('scope') : 'all';
+      const csv = scoresCsv(project, scope);
+      res.writeHead(200, {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': 'attachment; filename="scores-' + projectId + '.csv"',
+      });
+      return res.end(csv);
+    } catch (e) {
+      return sendJSON(res, 404, { error: e.message });
+    }
+  }
+  if (req.method === 'POST' && p === '/api/import') {
+    void handleImport(req, res);
+    return;
+  }
+  if (req.method === 'GET' && p === '/api/backups') {
+    return sendJSON(res, 200, listBackups());
+  }
+  if (req.method === 'POST' && p === '/api/backups/run') {
+    try {
+      return sendJSON(res, 200, runBackup());
+    } catch (e) {
+      return sendJSON(res, 500, { error: e.message });
+    }
+  }
+  if (req.method === 'GET' && p === '/api/orphans') {
+    return sendJSON(res, 200, scanOrphans());
+  }
+  if (req.method === 'POST' && p === '/api/orphans/cleanup') {
+    void handleCleanup(req, res);
+    return;
   }
   if (req.method === 'POST' && p === '/api/avatar') {
     return handleUpload(req, res, {
@@ -107,6 +379,8 @@ const server = http.createServer((req, res) => {
 async function start(options = {}) {
   await initState();
   attachWSS(server);
+  startBackupScheduler();
+  startCleanupScheduler();
   const listenPort = options.port != null ? options.port : PORT;
   const actualPort = await new Promise((resolve, reject) => {
     const onError = (e) => reject(e);

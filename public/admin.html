@@ -14,6 +14,8 @@
     <button id="project-rename" class="btn small" type="button">重命名</button>
     <button id="project-delete" class="btn small danger" type="button">删除项目</button>
     <button id="settings-open" class="btn small" type="button">排版设置</button>
+    <button id="undo-score" class="btn small" type="button" data-feature="featureUndo"
+      title="撤销上一步记分" disabled>撤销记分</button>
     <span id="conn-dot" class="dot connecting" title="连接状态"></span>
     <!--suppress HtmlUnknownTarget -->
     <a class="open-display" href="/display" target="_blank">打开显示端</a>
@@ -97,6 +99,15 @@
     <!-- 人员面板 -->
     <section class="panel">
       <h2>人员</h2>
+      <div class="panel-subbar" data-feature="featureSearch">
+        <input id="people-search" type="text" placeholder="搜索姓名 / 团队" aria-label="搜索人员">
+      </div>
+      <div class="panel-subbar">
+        <button id="batch-add-open" class="btn small" type="button" data-feature="featureBatchAdd">批量添加</button>
+        <button id="reset-scores" class="btn small danger" type="button"
+          data-feature="featureResetScores">重置本局分数</button>
+        <span id="people-count" class="hint"></span>
+      </div>
       <form id="add-person-form" class="add-form">
         <img id="person-avatar-preview" class="avatar-preview" alt="头像预览">
         <input id="person-name" type="text" maxlength="20" placeholder="姓名" aria-label="姓名" required>
@@ -112,6 +123,9 @@
     <!-- 团队面板 -->
     <section class="panel">
       <h2>团队</h2>
+      <div class="panel-subbar" data-feature="featureSearch">
+        <input id="teams-search" type="text" placeholder="搜索团队" aria-label="搜索团队">
+      </div>
       <form id="add-team-form" class="add-form">
         <img id="team-avatar-preview" class="avatar-preview" alt="头像预览">
         <input id="team-name" type="text" maxlength="20" placeholder="团队名" aria-label="团队名" required>
@@ -126,8 +140,26 @@
 
   </main>
 
+  <!-- 批量添加人员 -->
+  <dialog id="batch-add-dialog" class="batch-dialog">
+    <header class="dialog-header">
+      <h2>批量添加人员</h2>
+      <button id="batch-add-close" class="btn small" type="button">关闭</button>
+    </header>
+    <div class="batch-body">
+      <textarea id="batch-names" rows="6"
+        placeholder="每行一个姓名，也支持逗号、顿号、分号、制表符分隔"></textarea>
+      <label>加入团队
+        <select id="batch-team"></select>
+      </label>
+      <p id="batch-preview" class="hint"></p>
+      <button id="batch-add-submit" class="btn primary" type="button">添加</button>
+    </div>
+  </dialog>
+
   <!-- 排版设置弹窗 -->
   <dialog id="settings-dialog" class="settings-dialog">
+    <div id="settings-resize" class="dialog-resize-handle" title="拖动调整设置窗口大小"></div>
     <header class="dialog-header">
       <h2>排版设置</h2>
       <button id="settings-close" class="btn small" type="button">关闭</button>
@@ -476,6 +508,113 @@
             <span id="custom-sound-name" class="hint">未设置（内置合成音）</span>
             <button id="clear-custom-sound" class="btn small" type="button">清除</button>
           </div>
+        </div>
+
+        <div class="set-group advanced">
+          <h3>功能开关</h3>
+          <div class="feature-grid">
+            <div class="feature-cat">课堂效率</div>
+            <label class="check"><input id="f-avatar-edit" type="checkbox"> 头像修改</label>
+            <label class="check"><input id="f-settings-resize" type="checkbox"> 设置窗口缩放</label>
+            <label class="check"><input id="f-batch-add" type="checkbox"> 批量添加人员</label>
+            <label class="check"><input id="f-search" type="checkbox"> 人员 / 团队搜索</label>
+            <label class="check"><input id="f-quick-score" type="checkbox"> 快捷记分按钮</label>
+            <label class="check"><input id="f-team-score" type="checkbox"> 团队整体记分</label>
+            <label class="check"><input id="f-undo" type="checkbox"> 撤销上一步记分</label>
+            <label class="check"><input id="f-reset-scores" type="checkbox"> 重置本局分数</label>
+            <div class="feature-cat">大屏演示</div>
+            <label class="check"><input id="f-clock" type="checkbox"> 时钟</label>
+            <label class="check"><input id="f-countdown" type="checkbox"> 倒计时</label>
+            <label class="check"><input id="f-leaderboard" type="checkbox"> 排行榜视图</label>
+            <label class="check"><input id="f-rank-ties" type="checkbox"> 并列名次</label>
+            <div class="feature-cat">数据</div>
+            <label class="check"><input id="f-export-import" type="checkbox"> 导出 / 导入项目</label>
+            <label class="check"><input id="f-csv-export" type="checkbox"> 分数 CSV 导出</label>
+            <label class="check"><input id="f-data-maintenance" type="checkbox"> 备份 / 清理工具</label>
+          </div>
+        </div>
+
+        <div class="set-group">
+          <h3>时钟与倒计时</h3>
+          <div class="feature-block" data-feature="featureClock">
+            <label>时钟位置
+              <select id="set-clock-position">
+                <option value="top-left">左上</option>
+                <option value="top-right">右上</option>
+                <option value="bottom-left">左下</option>
+                <option value="bottom-right">右下</option>
+              </select>
+            </label>
+            <label>时钟格式
+              <select id="set-clock-format">
+                <option value="24">24 小时</option>
+                <option value="12">12 小时</option>
+              </select>
+            </label>
+            <label class="check"><input id="set-clock-seconds" type="checkbox"> 显示秒</label>
+            <label class="check"><input id="set-clock-date" type="checkbox"> 显示日期</label>
+          </div>
+          <div class="feature-block" data-feature="featureCountdown">
+            <label>倒计时时长（分钟）
+              <input id="set-countdown-min" type="number" min="1" max="60" step="1">
+            </label>
+            <div class="countdown-btns">
+              <button id="cd-start" class="btn small primary" type="button">开始</button>
+              <button id="cd-pause" class="btn small" type="button">暂停</button>
+              <button id="cd-resume" class="btn small" type="button">继续</button>
+              <button id="cd-reset" class="btn small" type="button">重置</button>
+            </div>
+            <span id="countdown-status" class="hint">未开始</span>
+          </div>
+        </div>
+
+        <div class="set-group">
+          <h3>排行榜</h3>
+          <div class="feature-block" data-feature="featureLeaderboard">
+            <label>排行榜范围
+              <select id="set-lb-scope">
+                <option value="auto">自动（团队 + 独立人员）</option>
+                <option value="people">仅人员</option>
+                <option value="teams">仅团队</option>
+              </select>
+            </label>
+            <label>显示条数（0=全部）
+              <input id="set-lb-limit" type="number" min="0" max="200" step="1">
+            </label>
+            <label>排行榜缩放 <span id="lb-scale-val">1</span> 倍
+              <input id="set-lb-scale" type="range" min="0.8" max="1.6" step="0.05">
+            </label>
+            <button id="toggle-leaderboard" class="btn small" type="button">切换到排行榜</button>
+          </div>
+          <div class="feature-block" data-feature="featureRankTies">
+            <label>并列名次模式
+              <select id="set-rank-tie-mode">
+                <option value="competition">竞赛式（1,1,3）</option>
+                <option value="dense">密集式（1,1,2）</option>
+                <option value="none">顺序编号（1,2,3）</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div class="set-group">
+          <h3>数据</h3>
+          <div class="data-buttons">
+            <button id="export-project" class="btn small" type="button"
+              data-feature="featureExportImport">导出项目</button>
+            <label class="file-btn" data-feature="featureExportImport">导入项目
+              <input id="import-project" type="file" accept="application/json,.json" hidden>
+            </label>
+            <button id="export-csv" class="btn small" type="button"
+              data-feature="featureCsvExport">导出分数 CSV</button>
+            <button id="backup-now" class="btn small" type="button"
+              data-feature="featureDataMaintenance">立即备份</button>
+            <button id="scan-orphans" class="btn small" type="button"
+              data-feature="featureDataMaintenance">扫描废弃文件</button>
+            <button id="cleanup-orphans" class="btn small danger" type="button"
+              data-feature="featureDataMaintenance">清理废弃文件</button>
+          </div>
+          <p id="data-status" class="hint"></p>
         </div>
       </div>
   </dialog>

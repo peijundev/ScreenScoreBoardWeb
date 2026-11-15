@@ -8,6 +8,8 @@ let interacting = false;
 let drag = null;
 let currentSettings = null;
 let currentState = null;
+let currentRuntime = null;
+let runtimeReceivedAt = 0;
 let currentProjectId = new URLSearchParams(location.search).get('project') || null;
 
 const isEdit = new URLSearchParams(location.search).get('edit') === '1';
@@ -21,6 +23,10 @@ const board = document.getElementById('board');
 const emptyTip = document.getElementById('empty-tip');
 const titleEl = document.getElementById('board-title');
 const connDot = document.getElementById('conn-dot');
+const clockEl = document.getElementById('clock');
+const countdownEl = document.getElementById('countdown');
+const leaderboardEl = document.getElementById('leaderboard');
+const viewParam = new URLSearchParams(location.search).get('view');
 
 const MIN_W = 8;
 const MIN_H = 6;
@@ -486,6 +492,168 @@ window.addEventListener('resize', () => {
   avatarResizeTimer = setTimeout(applyAutoAvatarSizes, 120);
 });
 
+// ---------- 名次 / 时钟 / 倒计时 / 排行榜 ----------
+function assignRanks(values, mode) {
+  let dense = 0;
+  let prev = null;
+  let competition = 0;
+  return values.map((score, i) => {
+    const isNew = i === 0 || score !== prev;
+    if (isNew) {
+      dense += 1;
+      competition = i + 1;
+      prev = score;
+    }
+    if (mode === 'dense') return dense;
+    if (mode === 'competition') return competition;
+    return i + 1;
+  });
+}
+
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+
+function formatDuration(sec) {
+  const total = Math.max(0, Math.ceil(sec));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return h > 0 ? h + ':' + pad2(m) + ':' + pad2(s) : pad2(m) + ':' + pad2(s);
+}
+
+function updateClock() {
+  const settings = currentSettings;
+  if (!settings || !settings.featureClock) {
+    clockEl.classList.add('hidden');
+    return;
+  }
+  const now = new Date();
+  let hours = now.getHours();
+  const suffix = settings.clockFormat === '12' ? (hours >= 12 ? ' PM' : ' AM') : '';
+  if (settings.clockFormat === '12') hours = hours % 12 || 12;
+  let text = pad2(hours) + ':' + pad2(now.getMinutes());
+  if (settings.clockShowSeconds) text += ':' + pad2(now.getSeconds());
+  text += suffix;
+  if (settings.clockShowDate) {
+    text = now.getFullYear() + '-' + pad2(now.getMonth() + 1) + '-' + pad2(now.getDate()) + '  ' + text;
+  }
+  clockEl.textContent = text;
+  clockEl.className = 'overlay-clock clock-pos-' + settings.clockPosition;
+}
+
+function updateCountdown() {
+  const settings = currentSettings;
+  const c = currentRuntime && currentRuntime.countdowns
+    ? currentRuntime.countdowns[currentProjectId] : null;
+  if (!settings || !settings.featureCountdown || !c) {
+    countdownEl.classList.add('hidden');
+    return;
+  }
+  let remaining;
+  if (c.state === 'running') {
+    const offset = currentRuntime.serverNow ? currentRuntime.serverNow - runtimeReceivedAt : 0;
+    remaining = Math.max(0, c.endsAt - (Date.now() + offset)) / 1000;
+  } else {
+    remaining = (c.remainingMs || 0) / 1000;
+  }
+  const ended = c.state === 'ended' || remaining <= 0;
+  countdownEl.textContent = ended ? '时间到' : formatDuration(remaining);
+  const both = settings.featureClock;
+  countdownEl.className = 'overlay-countdown clock-pos-' + settings.clockPosition +
+    (ended ? ' ended' : '') + (both ? ' shifted' : '');
+}
+
+function applyRuntimeUI() {
+  updateClock();
+  updateCountdown();
+}
+
+setInterval(() => {
+  updateClock();
+  updateCountdown();
+}, 500);
+
+function leaderboardEntries(project, settings) {
+  const people = Object.values(project.people);
+  const teams = Object.values(project.teams);
+  const scope = settings.leaderboardScope || 'auto';
+  const entries = [];
+
+  const teamScore = (team) => people
+    .filter((p) => p.teamId === team.id)
+    .reduce((s, p) => s + p.score, 0);
+
+  if (scope === 'people') {
+    for (const p of people) {
+      entries.push({
+        kind: 'person',
+        id: p.id,
+        name: p.name,
+        avatar: p.avatar,
+        score: p.score,
+        teamName: p.teamId && project.teams[p.teamId] ? project.teams[p.teamId].name : '',
+        createdAt: p.createdAt,
+      });
+    }
+  } else if (scope === 'teams') {
+    for (const t of teams) {
+      entries.push({
+        kind: 'team', id: t.id, name: t.name, avatar: t.avatar,
+        score: teamScore(t), teamName: '', createdAt: t.createdAt,
+      });
+    }
+  } else {
+    for (const p of people) {
+      if (p.teamId && project.teams[p.teamId]) continue;
+      entries.push({
+        kind: 'person', id: p.id, name: p.name, avatar: p.avatar,
+        score: p.score, teamName: '', createdAt: p.createdAt,
+      });
+    }
+    for (const t of teams) {
+      entries.push({
+        kind: 'team', id: t.id, name: t.name, avatar: t.avatar,
+        score: teamScore(t), teamName: '', createdAt: t.createdAt,
+      });
+    }
+  }
+
+  entries.sort((a, b) => (b.score - a.score) || (a.createdAt - b.createdAt));
+  const limit = Number(settings.leaderboardLimit) || 0;
+  const limited = limit > 0 ? entries.slice(0, limit) : entries;
+  const tieMode = settings.featureRankTies ? settings.rankTieMode : 'none';
+  const ranks = assignRanks(limited.map((e) => e.score), tieMode);
+  limited.forEach((e, i) => { e.rank = ranks[i]; });
+  return limited;
+}
+
+function renderLeaderboard(project, settings) {
+  const entries = leaderboardEntries(project, settings);
+  const maxAbs = Math.max(1, ...entries.map((e) => Math.abs(e.score)));
+  leaderboardEl.style.setProperty('--lb-scale', settings.leaderboardScale);
+  leaderboardEl.innerHTML = entries.map((e) => {
+    const pct = Math.min(100, Math.round((Math.abs(e.score) / maxAbs) * 100));
+    const rowClass = 'lb-row' + (e.score < 0 ? ' lb-neg' : '') +
+      (e.rank === 1 ? ' lb-top-1' : e.rank === 2 ? ' lb-top-2' : e.rank === 3 ? ' lb-top-3' : '');
+    return (
+      '<div class="' + rowClass + '">' +
+        '<span class="lb-rank">' + e.rank + '</span>' +
+        '<img src="' + avatarURL(e, 64) + '" alt="">' +
+        '<div class="lb-main">' +
+          '<div class="lb-name">' + escapeHTML(e.name) + '</div>' +
+          (e.teamName ? '<div class="lb-team">' + escapeHTML(e.teamName) + '</div>' : '') +
+        '</div>' +
+        '<span class="score lb-score ' + scoreClass(e.score) + '">' + e.score + '</span>' +
+        '<span class="lb-bar" style="width:' + pct + '%"></span>' +
+      '</div>'
+    );
+  }).join('') || '<div class="lb-empty">暂无数据</div>';
+  leaderboardEl.classList.remove('hidden');
+  board.classList.add('hidden');
+  emptyTip.classList.add('hidden');
+}
+
 // 未保存过位置的卡片：按 16:9 画布做货架式初始摆放（各端计算结果一致）
 function shelfLayouts(items) {
   const out = [];
@@ -549,10 +717,14 @@ function render(project) {
     : it.members.reduce((sum, m) => sum + m.score, 0);
   const maxAbs = Math.max(1, ...items.map((it) => Math.abs(itemScore(it))));
   const ranked = settings.sortBy === 'score' && settings.sortOrder === 'desc';
+  const tieMode = settings.featureRankTies ? settings.rankTieMode : 'none';
+  const ranks = ranked
+    ? assignRanks(items.map(itemScore), tieMode)
+    : items.map(() => null);
   const metaFor = (it, i) => {
     const value = itemScore(it);
     return {
-      rank: ranked ? i + 1 : null,
+      rank: ranked ? ranks[i] : null,
       value,
       barPct: Math.min(100, Math.round((Math.abs(value) / maxAbs) * 100)),
     };
@@ -629,7 +801,16 @@ function render(project) {
     }
   }
 
-  emptyTip.classList.toggle('hidden', items.length > 0);
+  const showLeaderboard = viewParam === 'leaderboard' ||
+    (viewParam !== 'board' && settings.featureLeaderboard && settings.displayView === 'leaderboard');
+  if (showLeaderboard) {
+    renderLeaderboard(project, settings);
+  } else {
+    leaderboardEl.classList.add('hidden');
+    board.classList.remove('hidden');
+    emptyTip.classList.toggle('hidden', items.length > 0);
+  }
+  applyRuntimeUI();
 }
 
 // ---------- 自由布局：拖动与缩放（仅 ?edit=1） ----------
@@ -937,10 +1118,13 @@ document.addEventListener('visibilitychange', () => {
 });
 
 const conn = connectWS(
-  (state) => {
+  (state, runtime) => {
     currentState = state;
+    currentRuntime = runtime;
+    runtimeReceivedAt = Date.now();
     if (interacting) { pendingState = state; return; }
     renderState();
+    applyRuntimeUI();
   },
   (status) => {
     connDot.classList.toggle('connecting', status !== 'connected');

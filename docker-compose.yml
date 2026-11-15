@@ -1,0 +1,31 @@
+services:
+  scoreboard:
+    build: .
+    container_name: screen-scoreboard
+    ports:
+      - "3000:3000"
+    environment:
+      # 存储后端：json（默认）/ sqlite / postgres / mysql
+      STORAGE: json
+      TZ: Asia/Shanghai
+      BACKUP_INTERVAL_MINUTES: "30"
+      BACKUP_KEEP: "20"
+      # 使用 SQLite 时：
+      # SQLITE_FILE: /data/scoreboard.db
+      # 使用 PostgreSQL 时：
+      # STORAGE: postgres
+      # DATABASE_URL: postgres://scoreboard:password@db:5432/scoreboard
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+
+  # PostgreSQL 示例（需要时取消注释并把上面的 STORAGE 改为 postgres）
+  # db:
+  #   image: postgres:17
+  #   environment:
+  #     POSTGRES_DB: scoreboard
+  #     POSTGRES_USER: scoreboard
+  #     POSTGRES_PASSWORD: password
+  #   volumes:
+  #     - ./pgdata:/var/lib/postgresql/data
+  #   restart: unless-stopped

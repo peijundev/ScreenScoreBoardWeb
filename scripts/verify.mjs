@@ -1,7 +1,10 @@
 // 端到端验证：HTTP / 上传 / WS 同步 / 多项目 / 持久化 / SQLite 存储 / 旧数据迁移
 // 运行: npm run verify
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync,
+  readdirSync, utimesSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import WebSocket from 'ws';
@@ -55,7 +58,7 @@ async function stopServer(proc) {
 function wsClient(name) {
   const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
   const client = {
-    ws, name, states: [], acks: new Map(), seq: 0,
+    ws, name, states: [], runtimes: [], acks: new Map(), seq: 0,
     ready: new Promise((res, rej) => { ws.on('open', res); ws.on('error', rej); }),
     waitState(pred, since = 0, timeout = 3000) {
       return new Promise((resolve, reject) => {
@@ -66,7 +69,17 @@ function wsClient(name) {
         client._waiters.push({ pred, resolve: (s) => { clearTimeout(t); resolve(s); } });
       });
     },
+    waitRuntime(pred, since = 0, timeout = 3000) {
+      return new Promise((resolve, reject) => {
+        for (let i = since; i < client.runtimes.length; i++) {
+          if (client.runtimes[i] && pred(client.runtimes[i])) return resolve(client.runtimes[i]);
+        }
+        const t = setTimeout(() => reject(new Error(`${name}: 等待运行态超时`)), timeout);
+        client._runtimeWaiters.push({ pred, resolve: (r) => { clearTimeout(t); resolve(r); } });
+      });
+    },
     _waiters: [],
+    _runtimeWaiters: [],
     sendOp(op, payload) {
       return new Promise((resolve, reject) => {
         const reqId = `v${++client.seq}`;
@@ -79,8 +92,13 @@ function wsClient(name) {
     const msg = JSON.parse(raw.toString());
     if (msg.type === 'state') {
       client.states.push(msg.data);
+      client.runtimes.push(msg.runtime || null);
       client._waiters = client._waiters.filter((w) => {
         if (w.pred(msg.data)) { w.resolve(msg.data); return false; }
+        return true;
+      });
+      client._runtimeWaiters = client._runtimeWaiters.filter((w) => {
+        if (msg.runtime && w.pred(msg.runtime)) { w.resolve(msg.runtime); return false; }
         return true;
       });
     } else if (msg.type === 'ack') {
@@ -327,6 +345,182 @@ async function main() {
     assert(/标题位置/.test(e.message), '非法标题位置被拒绝');
   });
 
+  console.log('课堂工具与运行时:');
+  await adminOp('setAvatar', { kind: 'person', id: pid, avatar: null });
+  s = await viewer.waitState((st) => P(st).people[pid] && P(st).people[pid].avatar === null);
+  assert(true, '头像可清除');
+  await adminOp('setAvatar', { kind: 'person', id: pid, avatar: up.path });
+  s = await viewer.waitState((st) => P(st).people[pid] && P(st).people[pid].avatar === up.path);
+  assert(true, '头像可修改');
+  await adminOp('setAvatar', { kind: 'person', id: pid, avatar: '../../etc/passwd' }).catch((e) => {
+    assert(/头像路径/.test(e.message), '非法头像路径被拒绝');
+  });
+
+  const batchAck = await adminOp('addPeopleBatch', { names: ['甲', '乙', '甲', ' 丙 ', '张三'] });
+  assert(batchAck.result.added === 3 && batchAck.result.skipped.length === 2, '批量添加去重/跳过重名');
+  const batchIds = batchAck.result.personIds;
+  await adminOp('addPeopleBatch', { names: Array.from({ length: 201 }, (_, i) => '人' + i) }).catch((e) => {
+    assert(/最多/.test(e.message), '批量添加上限被拒绝');
+  });
+  await adminOp('addPeopleBatch', { names: ['一'.repeat(21)] }).catch((e) => {
+    assert(/过长/.test(e.message), '批量超长姓名被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { featureBatchAdd: false } });
+  await adminOp('addPeopleBatch', { names: ['丁'] }).catch((e) => {
+    assert(/未开启/.test(e.message), '批量添加关闭时拒绝');
+  });
+  await adminOp('updateSettings', { patch: { featureBatchAdd: true } });
+
+  const curBefore = await getState();
+  const scoreBefore = curBefore.projects[projectId].people[pid].score;
+  await adminOp('addTeamScore', { teamId: tid, delta: 5 });
+  s = await viewer.waitState((st) => P(st).people[pid] && P(st).people[pid].score === scoreBefore + 5);
+  assert(true, '团队整体记分');
+  const emptyTeamAck = await adminOp('addTeam', { name: '空队' });
+  await adminOp('addTeamScore', { teamId: emptyTeamAck.result.teamId, delta: 1 }).catch((e) => {
+    assert(/暂无成员/.test(e.message), '空团队记分报错');
+  });
+  await adminOp('removeTeam', { teamId: emptyTeamAck.result.teamId });
+  await adminOp('undoScore', {});
+  s = await viewer.waitState((st) => P(st).people[pid] && P(st).people[pid].score === scoreBefore);
+  assert(true, '撤销团队记分');
+  await adminOp('addScore', { personId: pid, delta: 5 });
+  await viewer.waitState((st) => P(st).people[pid] && P(st).people[pid].score === scoreBefore + 5);
+  await adminOp('undoScore', {});
+  await viewer.waitState((st) => P(st).people[pid] && P(st).people[pid].score === scoreBefore);
+  assert(true, '撤销单次记分');
+  await adminOp('setScore', { personId: pid, score: 9 });
+  await adminOp('resetScores', {});
+  s = await viewer.waitState((st) => Object.values(P(st).people).every((p) => p.score === 0));
+  assert(true, '重置本局分数');
+  await adminOp('undoScore', {});
+  s = await viewer.waitState((st) => P(st).people[pid] && P(st).people[pid].score === 9);
+  assert(true, '重置可撤销');
+  await adminOp('setScore', { personId: pid, score: 7 });
+  await adminOp('updateSettings', { patch: { featureUndo: false } });
+  await adminOp('undoScore', {}).catch((e) => {
+    assert(/未开启/.test(e.message), '撤销功能关闭时拒绝');
+  });
+  await adminOp('updateSettings', { patch: { featureUndo: true } });
+
+  console.log('倒计时与排行榜:');
+  await adminOp('updateSettings', { patch: { featureCountdown: true } });
+  let markR = viewer.runtimes.length;
+  await adminOp('countdownStart', { durationSec: 1 });
+  await viewer.waitRuntime((r) => r.countdowns[projectId] && r.countdowns[projectId].state === 'running', markR);
+  assert(true, '倒计时启动运行态同步');
+  const httpRunning = await getState();
+  assert(httpRunning.runtime.countdowns[projectId].state === 'running', 'HTTP 状态包含倒计时运行态');
+  await viewer.waitRuntime((r) => r.countdowns[projectId] && r.countdowns[projectId].state === 'ended', markR, 5000);
+  assert(true, '倒计时结束广播');
+  markR = viewer.runtimes.length;
+  await adminOp('countdownStart', { durationSec: 30 });
+  await viewer.waitRuntime((r) => r.countdowns[projectId] && r.countdowns[projectId].state === 'running', markR);
+  await adminOp('countdownPause', {});
+  await viewer.waitRuntime((r) => r.countdowns[projectId] && r.countdowns[projectId].state === 'paused', markR);
+  assert(true, '倒计时暂停');
+  await adminOp('countdownResume', {});
+  await viewer.waitRuntime((r) => r.countdowns[projectId] && r.countdowns[projectId].state === 'running', markR);
+  assert(true, '倒计时继续');
+  await adminOp('countdownReset', {});
+  await viewer.waitRuntime((r) => !r.countdowns[projectId], markR);
+  assert(true, '倒计时重置');
+  markR = viewer.runtimes.length;
+  await adminOp('countdownStart', { durationSec: 30 });
+  await viewer.waitRuntime((r) => r.countdowns[projectId] && r.countdowns[projectId].state === 'running', markR);
+  await adminOp('updateSettings', { patch: { featureCountdown: false } });
+  await viewer.waitRuntime((r) => !r.countdowns[projectId], markR);
+  assert(true, '关闭倒计时开关会清理运行态');
+  await adminOp('countdownStart', { durationSec: 1 }).catch((e) => {
+    assert(/未开启/.test(e.message), '倒计时关闭时拒绝');
+  });
+
+  await adminOp('updateSettings', {
+    patch: { featureRankTies: true, featureLeaderboard: true, rankTieMode: 'competition' },
+  });
+  await adminOp('setScore', { personId: pid, score: 10 });
+  await adminOp('setScore', { personId: batchIds[0], score: 10 });
+  await adminOp('setScore', { personId: batchIds[1], score: 8 });
+
+  const csvFetch = async () => {
+    const res = await fetch(BASE + '/api/scores.csv?project=' + projectId + '&scope=people');
+    const buf = Buffer.from(await res.arrayBuffer());
+    return { res, buf, text: buf.toString('utf8') };
+  };
+  let csv = await csvFetch();
+  assert(csv.res.headers.get('content-type').includes('text/csv') &&
+    csv.buf[0] === 0xEF && csv.buf[1] === 0xBB && csv.buf[2] === 0xBF,
+    'CSV 类型与 BOM');
+  let rows = csv.text.replace(/^﻿/, '').trim().split(/\r?\n/).slice(1).map((l) => l.split(','));
+  assert(rows[0][0] === '1' && rows[1][0] === '1' && rows[2][0] === '3', '竞赛式并列名次');
+  await adminOp('updateSettings', { patch: { rankTieMode: 'dense' } });
+  csv = await csvFetch();
+  rows = csv.text.replace(/^﻿/, '').trim().split(/\r?\n/).slice(1).map((l) => l.split(','));
+  assert(rows[0][0] === '1' && rows[1][0] === '1' && rows[2][0] === '2', '密集式并列名次');
+  await adminOp('updateSettings', { patch: { rankTieMode: 'none' } });
+  csv = await csvFetch();
+  rows = csv.text.replace(/^﻿/, '').trim().split(/\r?\n/).slice(1).map((l) => l.split(','));
+  assert(rows[0][0] === '1' && rows[1][0] === '2' && rows[2][0] === '3', '顺序编号名次');
+  await adminOp('updateSettings', { patch: { featureLeaderboard: false, displayView: 'leaderboard' } }).catch((e) => {
+    assert(/排行榜/.test(e.message), '排行榜关闭时拒绝切换视图');
+  });
+
+  const commaAck = await adminOp('addPerson', { name: 'A,B"Q' });
+  csv = await csvFetch();
+  assert(csv.text.includes('"A,B""Q"'), 'CSV 特殊字符转义');
+  await adminOp('removePerson', { personId: commaAck.result.personId });
+
+  console.log('导出 / 导入 / 备份 / 清理:');
+  const exportRes = await fetch(BASE + '/api/export?project=' + projectId + '&assets=1');
+  const exportData = await exportRes.json();
+  assert(exportRes.ok && exportData.format === 'screenscoreboard.project' && exportData.assets[up.path],
+    '项目导出包含资产');
+  const importRes = await fetch(BASE + '/api/import', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(exportData),
+  });
+  const importData = await importRes.json();
+  assert(importRes.ok && importData.projectId, '项目可导入');
+  const afterImport = await getState();
+  const imported = afterImport.projects[importData.projectId];
+  assert(imported && imported.people[pid] && imported.people[pid].score === 10, '导入后人员与分数一致');
+  const importedAvatar = imported.people[pid].avatar;
+  assert(importedAvatar && importedAvatar !== up.path, '导入资产被重写路径');
+  const avatarRes = await fetch(BASE + '/' + importedAvatar);
+  assert(avatarRes.ok && Buffer.from(await avatarRes.arrayBuffer()).equals(PNG), '导入头像字节一致');
+
+  const badImport = JSON.parse(JSON.stringify(exportData));
+  badImport.project.settings.columns = 99;
+  const badImportRes = await fetch(BASE + '/api/import', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(badImport),
+  });
+  assert(badImportRes.status === 400, '非法设置导入被拒绝');
+  await admin.sendOp('deleteProject', { projectId: importData.projectId });
+  await viewer.waitState((st) => !st.projects[importData.projectId]);
+  assert(Object.keys((await getState()).projects).length === 1, '导入项目可删除');
+
+  const backupRes = await fetch(BASE + '/api/backups/run', { method: 'POST' });
+  const backupData = await backupRes.json();
+  assert(backupRes.ok && existsSync(path.join(backupData.dir, backupData.file)), '手动备份生成文件');
+
+  const orphanName = 'orphan-test.png';
+  const orphanPath = path.join(DATA_DIR, 'avatars', orphanName);
+  writeFileSync(orphanPath, PNG);
+  const oldTime = new Date(Date.now() - 48 * 3600 * 1000);
+  utimesSync(orphanPath, oldTime, oldTime);
+  const orphanScan = await (await fetch(BASE + '/api/orphans')).json();
+  assert(orphanScan.avatars.count >= 1, '扫描到孤儿头像');
+  const cleanupRes = await fetch(BASE + '/api/orphans/cleanup', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+  });
+  const cleanupData = await cleanupRes.json();
+  assert(cleanupRes.ok && !existsSync(orphanPath), '清理孤儿头像');
+  assert(existsSync(path.join(DATA_DIR, up.path)), '引用的头像未被清理');
+
+  await adminOp('setScore', { personId: pid, score: 7 });
+  await adminOp('updateSettings', {
+    patch: { featureRankTies: true, rankTieMode: 'competition', featureLeaderboard: true, displayView: 'leaderboard' },
+  });
+
   // 非法参数
   await adminOp('updateSettings', { patch: { columns: 99 } }).catch((e) => assert(/列数/.test(e.message), '排版参数越界被拒绝'));
   await adminOp('updateSettings', { patch: { cardStyle: 'hologram' } }).catch((e) => assert(/卡片样式/.test(e.message), '非法卡片样式被拒绝'));
@@ -384,6 +578,11 @@ async function main() {
     rp.settings.spotlightScope === 'person_team' && rp.settings.spotlightWidth === 700 &&
     rp.settings.spotlightHeight === 420, '重启后居中突显/范围/宽高/自定义音效恢复');
   assert(Object.keys(restored.projects).length === 1, '重启后项目列表恢复');
+  assert(rp.settings.featureRankTies === true && rp.settings.rankTieMode === 'competition' &&
+    rp.settings.featureLeaderboard === true && rp.settings.displayView === 'leaderboard' &&
+    rp.settings.featureCountdown === false, '重启后新功能开关恢复');
+  assert(!restored.runtime.undoCounts[projectId] && !restored.runtime.countdowns[projectId],
+    '重启后撤销栈与倒计时运行态清空');
 
   console.log('存储后端（SQLite）:');
   await stopServer(server);

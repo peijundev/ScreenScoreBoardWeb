@@ -49,7 +49,7 @@ function connectWS(onState, onStatus) {
     ws.onmessage = (ev) => {
       let msg;
       try { msg = JSON.parse(ev.data); } catch (_) { return; }
-      if (msg.type === 'state') { onState(msg.data); return; }
+      if (msg.type === 'state') { onState(msg.data, msg.runtime || null); return; }
       if (msg.type === 'ack' && msg.reqId != null && pending.has(msg.reqId)) {
         const p = pending.get(msg.reqId);
         pending.delete(msg.reqId);

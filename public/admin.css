@@ -243,9 +243,52 @@ body {
   border: 1px solid var(--card-border);
   border-radius: 0;
   overflow: hidden;
-  resize: both;
+  resize: none;
+  container-type: inline-size;
 }
 .settings-dialog[open] { display: flex; flex-direction: column; }
+.dialog-resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 22px;
+  height: 22px;
+  cursor: nwse-resize;
+  z-index: 3;
+  background:
+    linear-gradient(135deg, transparent 0 55%, var(--text-dim) 55% 60%, transparent 60% 70%,
+      var(--text-dim) 70% 75%, transparent 75%);
+  opacity: 0.75;
+}
+.settings-dialog.no-resize .dialog-resize-handle { display: none; }
+.feature-grid {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 16px;
+  width: 100%;
+}
+.feature-cat {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+.feature-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+@container (max-width: 760px) {
+  .settings-dialog .settings-form { grid-template-columns: 1fr; }
+  .settings-dialog .set-group.advanced { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .settings-dialog .feature-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container (max-width: 560px) {
+  .settings-dialog .set-group.advanced { grid-template-columns: 1fr; }
+  .settings-dialog .feature-grid { grid-template-columns: 1fr; }
+}
 .settings-dialog::backdrop { background: transparent; }
 .settings-dialog.dragging { user-select: none; }
 .dialog-header {
@@ -296,6 +339,56 @@ body {
   .settings-dialog .settings-form { grid-template-columns: 1fr; }
 }
 .file-mini { padding: 2px 8px; font-size: 12px; }
+.hint { font-size: 12px; color: var(--text-dim); }
+.panel-subbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 0;
+}
+.panel-subbar input[type="text"] { flex: 1; min-width: 130px; }
+.quick-scores { display: inline-flex; gap: 2px; flex-wrap: wrap; }
+.quick-scores .btn { padding: 1px 6px; font-size: 11px; }
+.countdown-btns { display: flex; gap: 4px; flex-wrap: wrap; }
+.data-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* 批量添加对话框 */
+.batch-dialog {
+  position: fixed;
+  left: 50%;
+  top: 18vh;
+  transform: translateX(-50%);
+  width: min(520px, 94vw);
+  margin: 0;
+  padding: 0;
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--card-border);
+  z-index: 1000;
+}
+.batch-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+.batch-body textarea {
+  background: var(--input-bg);
+  color: var(--text);
+  border: 1px solid var(--card-border);
+  padding: 8px;
+  font: inherit;
+  resize: vertical;
+  min-height: 110px;
+}
+.batch-body label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
 
 /* ---- 表单控件 ---- */
 input[type="text"],

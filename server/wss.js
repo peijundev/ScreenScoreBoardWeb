@@ -2,24 +2,33 @@
 // WebSocket：连接管理、op 分发、全量广播、心跳
 const { WebSocketServer } = require('ws');
 const { state, applyOp, save, OpError } = require('./state');
+const runtime = require('./runtime');
 
 const MAX_MSG = 64 * 1024;
+let broadcastImpl = null;
 
 function attachWSS(server) {
   const wss = new WebSocketServer({ server, path: '/ws', maxPayload: MAX_MSG });
 
+  function stateMessage() {
+    return JSON.stringify({ type: 'state', data: state, runtime: runtime.getRuntimeSnapshot() });
+  }
+
   function broadcast() {
-    const msg = JSON.stringify({ type: 'state', data: state });
+    const msg = stateMessage();
     for (const client of wss.clients) {
       if (client.readyState === client.OPEN) client.send(msg);
     }
   }
 
+  broadcastImpl = broadcast;
+  runtime.setBroadcaster(broadcast);
+
   wss.on('connection', (ws) => {
     ws.isAlive = true;
     ws.on('pong', () => { ws.isAlive = true; });
-    // 连接即发全量状态
-    ws.send(JSON.stringify({ type: 'state', data: state }));
+    // 连接即发全量状态 + 运行态
+    ws.send(stateMessage());
 
     ws.on('message', (raw) => {
       let msg;
@@ -55,4 +64,8 @@ function attachWSS(server) {
   return wss;
 }
 
-module.exports = { attachWSS };
+function broadcastState() {
+  if (broadcastImpl) broadcastImpl();
+}
+
+module.exports = { attachWSS, broadcastState };

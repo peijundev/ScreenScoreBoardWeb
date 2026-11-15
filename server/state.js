@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { createStorage } = require('./storage');
+const runtime = require('./runtime');
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
 const AVATAR_DIR = path.join(DATA_DIR, 'avatars');
@@ -80,6 +81,35 @@ const DEFAULT_SETTINGS = {
   rankSize: 15,             // 名次字号 px（10–40）
   showScoreBar: true,       // 显示分数比例条
   scoreBarHeight: 5,        // 比例条高度 px（0–16）
+
+  // ---- 功能开关 ----
+  featureAvatarEdit: true,
+  featureSettingsResize: true,
+  featureBatchAdd: true,
+  featureSearch: true,
+  featureQuickScore: true,
+  featureTeamScore: true,
+  featureUndo: true,
+  featureResetScores: true,
+  featureClock: false,
+  featureCountdown: false,
+  featureLeaderboard: false,
+  featureRankTies: false,
+  featureExportImport: true,
+  featureCsvExport: true,
+  featureDataMaintenance: true,
+
+  // ---- 大屏演示 ----
+  clockPosition: 'top-right', // top-left | top-right | bottom-left | bottom-right
+  clockFormat: '24',          // '24' | '12'
+  clockShowSeconds: true,
+  clockShowDate: false,
+  countdownDurationSec: 300,  // 1–3600
+  displayView: 'cards',       // cards | leaderboard
+  leaderboardScope: 'auto',   // auto | people | teams
+  leaderboardLimit: 0,        // 0 = 全部
+  leaderboardScale: 1,        // 0.8–1.6
+  rankTieMode: 'competition', // competition | dense | none
 };
 
 const storage = createStorage();
@@ -290,6 +320,10 @@ function needEntity(project, kind, id) {
   throw new OpError('实体类型非法');
 }
 
+function requireFeature(project, key) {
+  if (!project.settings[key]) throw new OpError('该功能未开启');
+}
+
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 
 function hexOrEmpty(v, message) {
@@ -302,6 +336,11 @@ function intRange(v, lo, hi, message) {
   const n = Number(v);
   if (!Number.isInteger(n) || n < lo || n > hi) throw new OpError(message);
   return n;
+}
+
+function boolStrict(v, label) {
+  if (typeof v !== 'boolean') throw new OpError(label + '须为布尔值');
+  return v;
 }
 
 const SETTINGS_VALIDATORS = {
@@ -478,6 +517,48 @@ const SETTINGS_VALIDATORS = {
   rankSize: (v) => intRange(v, 10, 40, '名次字号须为 10–40'),
   showScoreBar: (v) => Boolean(v),
   scoreBarHeight: (v) => intRange(v, 0, 16, '比例条高度须为 0–16'),
+
+  // ---- 功能开关 ----
+  featureAvatarEdit: (v) => boolStrict(v, '头像修改开关'),
+  featureSettingsResize: (v) => boolStrict(v, '设置窗口缩放开关'),
+  featureBatchAdd: (v) => boolStrict(v, '批量添加开关'),
+  featureSearch: (v) => boolStrict(v, '搜索开关'),
+  featureQuickScore: (v) => boolStrict(v, '快捷记分开关'),
+  featureTeamScore: (v) => boolStrict(v, '团队记分开关'),
+  featureUndo: (v) => boolStrict(v, '撤销开关'),
+  featureResetScores: (v) => boolStrict(v, '重置分数开关'),
+  featureClock: (v) => boolStrict(v, '时钟开关'),
+  featureCountdown: (v) => boolStrict(v, '倒计时开关'),
+  featureLeaderboard: (v) => boolStrict(v, '排行榜开关'),
+  featureRankTies: (v) => boolStrict(v, '并列名次开关'),
+  featureExportImport: (v) => boolStrict(v, '导出导入开关'),
+  featureCsvExport: (v) => boolStrict(v, 'CSV 导出开关'),
+  featureDataMaintenance: (v) => boolStrict(v, '数据维护开关'),
+
+  // ---- 大屏演示 ----
+  clockPosition: (v) =>
+    (['top-left', 'top-right', 'bottom-left', 'bottom-right'].includes(v)
+      ? v
+      : (() => { throw new OpError('时钟位置非法'); })()),
+  clockFormat: (v) =>
+    (['24', '12'].includes(v) ? v : (() => { throw new OpError('时钟制式非法'); })()),
+  clockShowSeconds: (v) => boolStrict(v, '时钟秒数开关'),
+  clockShowDate: (v) => boolStrict(v, '时钟日期开关'),
+  countdownDurationSec: (v) => intRange(v, 1, 3600, '倒计时时长须为 1–3600 秒'),
+  displayView: (v) =>
+    (['cards', 'leaderboard'].includes(v) ? v : (() => { throw new OpError('显示视图非法'); })()),
+  leaderboardScope: (v) =>
+    (['auto', 'people', 'teams'].includes(v) ? v : (() => { throw new OpError('排行榜范围非法'); })()),
+  leaderboardLimit: (v) => intRange(v, 0, 200, '排行榜条数须为 0–200'),
+  leaderboardScale: (v) => {
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0.8 || n > 1.6) throw new OpError('排行榜缩放须在 0.8–1.6 之间');
+    return Math.round(n * 100) / 100;
+  },
+  rankTieMode: (v) =>
+    (['competition', 'dense', 'none'].includes(v)
+      ? v
+      : (() => { throw new OpError('并列名次模式非法'); })()),
 };
 
 // ---------- op 全集 ----------
@@ -500,6 +581,7 @@ function applyOp(op, payload) {
       needProject(payload.projectId);
       if (Object.keys(state.projects).length <= 1) throw new OpError('至少保留一个项目');
       delete state.projects[payload.projectId];
+      runtime.clearProjectRuntime(payload.projectId);
       return {};
     }
   }
@@ -523,9 +605,52 @@ function applyOp(op, payload) {
       };
       return { personId: id };
     }
+    case 'addPeopleBatch': {
+      requireFeature(project, 'featureBatchAdd');
+      const rawNames = Array.isArray(payload.names) ? payload.names : [];
+      if (!rawNames.length) throw new OpError('姓名列表为空');
+      if (rawNames.length > 200) throw new OpError('单次最多添加 200 人');
+      if (Object.keys(project.people).length + rawNames.length > 2000) {
+        throw new OpError('项目人数已达上限（2000）');
+      }
+      const teamId = payload.teamId || null;
+      if (teamId) needTeam(project, teamId);
+      const existingNames = new Set(Object.values(project.people).map((p) => p.name));
+      const seen = new Set();
+      const personIds = [];
+      const skipped = [];
+      const now = Date.now();
+      rawNames.forEach((raw, index) => {
+        if (typeof raw !== 'string') throw new OpError(`第 ${index + 1} 个姓名非法`);
+        const name = raw.trim();
+        if (!name) return;
+        if (name.length > 20) throw new OpError(`第 ${index + 1} 个姓名过长（最多 20 字）`);
+        if (seen.has(name) || existingNames.has(name)) {
+          skipped.push(name);
+          return;
+        }
+        seen.add(name);
+        const id = genId('p');
+        project.people[id] = {
+          id,
+          name,
+          avatar: null,
+          cardImage: null,
+          score: 0,
+          teamId,
+          layout: null,
+          memberLayout: null,
+          createdAt: now + personIds.length,
+        };
+        personIds.push(id);
+      });
+      if (!personIds.length) throw new OpError('没有可添加的新人员');
+      return { personIds, added: personIds.length, skipped };
+    }
     case 'removePerson': {
       needPerson(project, payload.personId);
       delete project.people[payload.personId];
+      runtime.clearUndo(project.id);
       return {};
     }
     case 'addTeam': {
@@ -557,17 +682,94 @@ function applyOp(op, payload) {
     case 'addScore': {
       const p = needPerson(project, payload.personId);
       const delta = needScore(payload.delta, '分数');
-      p.score = Math.max(-100000, Math.min(100000, p.score + delta));
+      const before = p.score;
+      p.score = Math.max(-100000, Math.min(100000, before + delta));
+      if (p.score !== before) {
+        runtime.pushUndo(project.id, `${p.name} ${delta > 0 ? '+' : ''}${delta}`, [
+          { personId: p.id, before },
+        ]);
+      }
       return { score: p.score };
     }
     case 'setScore': {
       const p = needPerson(project, payload.personId);
+      const before = p.score;
       p.score = needScore(payload.score, '分数');
+      if (p.score !== before) {
+        runtime.pushUndo(project.id, `${p.name} 改为 ${p.score}`, [{ personId: p.id, before }]);
+      }
       return { score: p.score };
+    }
+    case 'addTeamScore': {
+      requireFeature(project, 'featureTeamScore');
+      const team = needTeam(project, payload.teamId);
+      const delta = needScore(payload.delta, '分数');
+      const members = Object.values(project.people).filter((p) => p.teamId === team.id);
+      if (!members.length) throw new OpError('团队暂无成员');
+      const entries = members.map((p) => {
+        const before = p.score;
+        p.score = Math.max(-100000, Math.min(100000, before + delta));
+        return { personId: p.id, before };
+      });
+      runtime.pushUndo(project.id, `${team.name} 各 ${delta > 0 ? '+' : ''}${delta}`, entries);
+      return { count: members.length };
+    }
+    case 'resetScores': {
+      requireFeature(project, 'featureResetScores');
+      const changed = Object.values(project.people).filter((p) => p.score !== 0);
+      if (!changed.length) return { count: 0 };
+      const entries = changed.map((p) => {
+        const before = p.score;
+        p.score = 0;
+        return { personId: p.id, before };
+      });
+      runtime.pushUndo(project.id, '重置本局分数', entries);
+      return { count: changed.length };
+    }
+    case 'undoScore': {
+      requireFeature(project, 'featureUndo');
+      const entry = runtime.popUndo(project.id);
+      if (!entry) throw new OpError('没有可撤销的记分');
+      for (const item of entry.entries) {
+        const p = project.people[item.personId];
+        if (p) p.score = item.before;
+      }
+      return { label: entry.label, undoCount: runtime.undoCount(project.id) };
+    }
+    case 'setAvatar': {
+      requireFeature(project, 'featureAvatarEdit');
+      const entity = needEntity(project, payload.kind, payload.id);
+      entity.avatar = needAvatar(payload.avatar === '' ? null : payload.avatar);
+      return {};
     }
     case 'setCardImage': {
       const entity = needEntity(project, payload.kind, payload.id);
       entity.cardImage = needAvatar(payload.image === '' ? null : payload.image);
+      return {};
+    }
+    case 'countdownStart': {
+      requireFeature(project, 'featureCountdown');
+      const sec = payload.durationSec != null
+        ? intRange(payload.durationSec, 1, 3600, '倒计时时长须为 1–3600 秒')
+        : project.settings.countdownDurationSec;
+      const c = runtime.startCountdown(project.id, sec * 1000);
+      return { countdown: c };
+    }
+    case 'countdownPause': {
+      requireFeature(project, 'featureCountdown');
+      const c = runtime.pauseCountdown(project.id);
+      if (!c) throw new OpError('没有运行中的倒计时');
+      return { countdown: c };
+    }
+    case 'countdownResume': {
+      requireFeature(project, 'featureCountdown');
+      const c = runtime.resumeCountdown(project.id);
+      if (!c) throw new OpError('没有暂停中的倒计时');
+      return { countdown: c };
+    }
+    case 'countdownReset': {
+      requireFeature(project, 'featureCountdown');
+      runtime.resetCountdown(project.id);
       return {};
     }
     case 'setLayout': {
@@ -591,16 +793,123 @@ function applyOp(op, payload) {
     case 'updateSettings': {
       const patch = payload.patch;
       if (!patch || typeof patch !== 'object') throw new OpError('patch 非法');
+      const validated = {};
       for (const [k, v] of Object.entries(patch)) {
         const validator = SETTINGS_VALIDATORS[k];
         if (!validator) continue; // 白名单之外的字段忽略
-        project.settings[k] = validator(v);
+        validated[k] = validator(v);
       }
+      const next = { ...project.settings, ...validated };
+      // 排行榜功能关闭时不允许停留在排行榜视图；主动开启则拒绝
+      if (next.displayView === 'leaderboard' && !next.featureLeaderboard) {
+        if (validated.displayView === 'leaderboard') throw new OpError('排行榜功能未开启');
+        next.displayView = 'cards';
+      }
+      Object.assign(project.settings, next);
+      // 关闭倒计时开关时立即清掉运行态，避免后台计时器继续跑
+      if (validated.featureCountdown === false) runtime.resetCountdown(project.id);
       return {};
     }
     default:
       throw new OpError('未知操作: ' + op);
   }
+}
+
+// ---------- 项目导出 / 导入 ----------
+function exportProjectData(projectId) {
+  return JSON.parse(JSON.stringify(needProject(projectId)));
+}
+
+function walkAssetRefs(project, mapper) {
+  for (const p of Object.values(project.people)) {
+    p.avatar = mapper(p.avatar);
+    p.cardImage = mapper(p.cardImage);
+  }
+  for (const t of Object.values(project.teams)) {
+    t.avatar = mapper(t.avatar);
+    t.cardImage = mapper(t.cardImage);
+  }
+  project.settings.bgImage = mapper(project.settings.bgImage);
+  project.settings.customSound = mapper(project.settings.customSound);
+}
+
+function sanitizeImportedProject(raw) {
+  const src = raw && typeof raw === 'object' && raw.project ? raw.project : raw;
+  if (!src || typeof src !== 'object') throw new OpError('导入数据格式非法');
+  const settings = { ...DEFAULT_SETTINGS };
+  if (src.settings && typeof src.settings === 'object') {
+    for (const [key, value] of Object.entries(src.settings)) {
+      const validator = SETTINGS_VALIDATORS[key];
+      if (!validator) continue;
+      try {
+        settings[key] = validator(value);
+      } catch (e) {
+        throw new OpError('设置项 ' + key + ' 非法：' + e.message);
+      }
+    }
+    // 旧数据兼容
+    if (!src.settings.cardStyle && src.settings.glassEnabled) settings.cardStyle = 'glass';
+    if (src.settings.cardBgMode == null) settings.cardBgMode = src.settings.cardBg ? 'custom' : 'auto';
+  }
+
+  const teams = {};
+  const rawTeams = src.teams && typeof src.teams === 'object' ? Object.entries(src.teams) : [];
+  if (rawTeams.length > 200) throw new OpError('团队数量超出上限（200）');
+  for (const [id, rawTeam] of rawTeams) {
+    if (!rawTeam || typeof rawTeam !== 'object') throw new OpError('团队数据非法');
+    let teamId = typeof rawTeam.id === 'string' && /^[A-Za-z0-9_-]+$/.test(rawTeam.id) && !teams[rawTeam.id]
+      ? rawTeam.id : genId('t');
+    if (teams[teamId]) teamId = genId('t');
+    teams[teamId] = {
+      id: teamId,
+      name: needString(rawTeam.name, '团队名', 20),
+      avatar: rawTeam.avatar ? needAvatar(rawTeam.avatar) : null,
+      cardImage: rawTeam.cardImage ? needAvatar(rawTeam.cardImage) : null,
+      layout: rawTeam.layout ? needLayout(rawTeam.layout) : null,
+      createdAt: Number.isFinite(rawTeam.createdAt) ? rawTeam.createdAt : Date.now(),
+    };
+  }
+
+  const people = {};
+  const rawPeople = src.people && typeof src.people === 'object' ? Object.entries(src.people) : [];
+  if (rawPeople.length > 1000) throw new OpError('人员数量超出上限（1000）');
+  for (const [id, rawPerson] of rawPeople) {
+    if (!rawPerson || typeof rawPerson !== 'object') throw new OpError('人员数据非法');
+    let personId = typeof rawPerson.id === 'string' && /^[A-Za-z0-9_-]+$/.test(rawPerson.id) && !people[rawPerson.id]
+      ? rawPerson.id : genId('p');
+    if (people[personId]) personId = genId('p');
+    const rawScore = Number(rawPerson.score);
+    people[personId] = {
+      id: personId,
+      name: needString(rawPerson.name, '姓名', 20),
+      avatar: rawPerson.avatar ? needAvatar(rawPerson.avatar) : null,
+      cardImage: rawPerson.cardImage ? needAvatar(rawPerson.cardImage) : null,
+      score: Number.isFinite(rawScore) ? Math.max(-100000, Math.min(100000, Math.round(rawScore))) : 0,
+      teamId: rawPerson.teamId && teams[rawPerson.teamId] ? rawPerson.teamId : null,
+      layout: rawPerson.layout ? needLayout(rawPerson.layout) : null,
+      memberLayout: rawPerson.memberLayout ? needLayout(rawPerson.memberLayout) : null,
+      createdAt: Number.isFinite(rawPerson.createdAt) ? rawPerson.createdAt : Date.now(),
+    };
+  }
+
+  const baseName = needString(typeof src.name === 'string' && src.name.trim() ? src.name : '导入项目', '项目名', 30);
+  const existing = new Set(Object.values(state.projects).map((p) => p.name));
+  let name = baseName;
+  let index = 2;
+  while (existing.has(name)) {
+    const suffix = '（' + index + '）';
+    name = baseName.slice(0, 30 - suffix.length) + suffix;
+    index += 1;
+  }
+
+  return {
+    id: genId('pr'),
+    name,
+    createdAt: Date.now(),
+    people,
+    teams,
+    settings,
+  };
 }
 
 module.exports = {
@@ -610,7 +919,11 @@ module.exports = {
   save,
   flushSave,
   OpError,
+  DATA_DIR,
   AVATAR_DIR,
   SOUND_DIR,
   storageKind: storage.kind,
+  exportProjectData,
+  sanitizeImportedProject,
+  walkAssetRefs,
 };

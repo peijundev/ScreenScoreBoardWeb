@@ -53,9 +53,14 @@ STORAGE=mysql MYSQL_URL=mysql://user:pass@localhost:3306/scoreboard npm start
 ## 功能
 
 **管理端**
-- 顶部「排版设置」按钮打开弹窗集中管理外观；下方预展区可放大/缩小（50%–160%，记忆上次比例）
-- 添加/删除人员（姓名 + 可上传头像，不上传则自动生成彩色首字头像）
-- 给人员记分：输入分数，点「+分」「−分」（支持负分）
+- 顶部「排版设置」按钮打开非模态窗口（可拖动、可拉右下角调整大小并记忆尺寸）；下方预展区可放大/缩小（50%–160%，记忆上次比例）
+- 添加/删除人员（姓名 + 可上传头像，不上传则自动生成彩色首字头像）；**已加入的人员/团队可随时更换或恢复默认头像**
+- 批量添加人员：粘贴名单（换行/逗号/顿号/分号/制表符分隔），自动去重并跳过重名
+- 人员 / 团队搜索过滤
+- 给人员记分：输入分数，点「+分」「−分」（支持负分），可选 +1/+5/+10/−1 快捷按钮
+- 团队整体记分：+1/+5/−1，对每位成员各加减一次
+- 撤销上一步记分、一键重置本局分数（均可关闭对应功能）
+- 所有新增功能都有独立开关（设置 → 功能开关），可单独隐藏/禁用
 - 创建/删除团队（删除团队不删人，成员自动移出）
 - 将人员移入/移出团队（人员列表下拉选择，或团队卡片中点 ×）
 - 排版设置：标题、每行列数、卡片密度、排序方式/方向、深浅主题、强调色、成员分数/团队总分显示开关
@@ -79,9 +84,63 @@ STORAGE=mysql MYSQL_URL=mysql://user:pass@localhost:3306/scoreboard npm start
 - 居中大标题 + 强调色短横线，字号与留白按「远处也能看清」设计
 - 个人卡片：头像、姓名、大号分数（正绿负红）、分数比例条
 - 团队卡片：团队头像、团队名、团队总分（成员分数之和）、成员列表（头像+姓名+分数）
-- 按分数从高到低排序时，卡片右上角显示名次；分数比例条按全场最高分归一化
+- 按分数从高到低排序时，卡片右上角显示名次；分数比例条按全场最高分归一化；支持并列名次（竞赛式 1,1,3 / 密集式 1,1,2 / 顺序 1,2,3）
+- 时钟（四角位置、12/24 小时、秒、日期可配）与倒计时（开始/暂停/继续/重置，刷新后恢复，结束时红色闪烁）
+- 大字排行榜视图：仅人员 / 仅团队 / 自动，条数与缩放可调；支持 `?view=leaderboard` 强制显示、`?view=board` 强制返回展板
 - 管理端任何操作实时同步，分数变化带可配置特效与音效
 - 断线自动重连（右上角圆点：绿=已连接，黄=重连中）
+
+## 数据导出与备份
+
+管理端「数据」区（可在功能开关中隐藏）：
+
+- **导出项目**：`GET /api/export?project=<id>&assets=1`，下载包含项目数据与头像/音效的 JSON
+- **导入项目**：`POST /api/import`，生成一个新项目；严格校验设置、布局、团队引用与资产魔数，失败不改变现有数据
+- **导出分数 CSV**：`GET /api/scores.csv?project=<id>&scope=all|people|teams`，UTF-8 BOM + CRLF，Excel 直接打开不乱码
+- **立即备份**：`POST /api/backups/run`，默认写入 `data/backups/state-时间.json`
+- **扫描/清理废弃文件**：`GET /api/orphans`、`POST /api/orphans/cleanup`，只删除超过宽限期且未被任何项目引用的头像/音效
+
+自动备份与自动清理通过环境变量控制（服务级，不随项目）：
+
+| 环境变量 | 默认 | 说明 |
+|---|---|---|
+| `BACKUP_ENABLED` | `1` | `0` 关闭自动备份（手动备份仍可用） |
+| `BACKUP_INTERVAL_MINUTES` | `30` | 自动备份间隔（分钟），0 关闭 |
+| `BACKUP_KEEP` | `20` | 保留最近多少份备份 |
+| `BACKUP_DIR` | `data/backups` | 备份目录 |
+| `ORPHAN_CLEANUP_ENABLED` | `0` | `1` 开启每天自动清理孤儿文件 |
+| `ORPHAN_CLEANUP_GRACE_HOURS` | `24` | 文件至少存在多少小时才可被自动清理 |
+
+> 安全提示：当前版本没有管理端登录与权限校验，导出/导入/清理接口与现有管理端一样，只适合部署在可信局域网或反向代理鉴权之后。
+
+## 部署（Docker / systemd）
+
+Docker：
+
+```bash
+docker compose up -d --build
+# 数据与备份持久化在 ./data，服务暴露 3000 端口
+```
+
+也可以直接使用：
+
+```bash
+docker build -t screen-scoreboard .
+docker run -d -p 3000:3000 -v ./data:/data screen-scoreboard
+```
+
+systemd：
+
+```bash
+sudo useradd -r -s /usr/sbin/nologin scoreboard
+sudo mkdir -p /opt/screenscoreboard /var/lib/screenscoreboard
+sudo cp -r server public package*.json /opt/screenscoreboard/
+cd /opt/screenscoreboard && sudo npm ci --omit=dev
+sudo cp deploy/screenscoreboard.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now screenscoreboard
+```
+
+环境变量可写入 `/etc/screenscoreboard/env`（systemd 单元已通过 `EnvironmentFile` 读取）。
 
 ## Electron 管理端
 
@@ -138,11 +197,15 @@ npm run verify   # 端到端：HTTP/上传/WS 同步/多项目/SQLite 存储/旧
 ## 结构
 
 ```
-server/index.js   入口：http 路由、头像上传、挂载 WS
-server/state.js   权威状态：多项目、applyOp 校验、防抖串行写盘
+server/index.js   入口：http 路由、上传、导出/导入/CSV/备份/清理 API、挂载 WS
+server/state.js   权威状态：多项目、applyOp 校验、防抖串行写盘、导入清洗
+server/runtime.js 运行时态：撤销栈、倒计时、广播快照（仅内存）
 server/storage.js 存储后端：json / sqlite / postgres / mysql
-server/wss.js     WebSocket：op 分发、全量广播、心跳
+server/wss.js     WebSocket：op 分发、全量广播（含 runtime）、心跳
+server/backup.js  自动备份
+server/cleanup.js 孤儿上传文件清理
 server/static.js  静态文件服务（防路径穿越）
 public/           display.* 显示端 / admin.* 管理端 / shared.js 共用
-scripts/verify.mjs 端到端验证（含多项目、SQLite、旧数据迁移）
+scripts/verify.mjs 端到端验证（120+ 断言）
+Dockerfile / docker-compose.yml / deploy/screenscoreboard.service 部署
 ```
