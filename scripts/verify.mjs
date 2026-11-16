@@ -250,18 +250,31 @@ async function main() {
   await adminOp('updateSettings', {
     patch: {
       scoreEffect: 'spotlight', spotlightScope: 'person_team',
-      spotlightWidth: 700, spotlightHeight: 420, spotlightReturnToOrigin: true,
+      spotlightWidth: 700, spotlightHeight: 420, spotlightTheme: 'fly',
       spotlightReturnDuration: 2200, customSound: soundUp.path,
     },
   });
   s = await viewer.waitState((st) => P(st).settings.scoreEffect === 'spotlight');
   assert(P(s).settings.customSound === soundUp.path && P(s).settings.spotlightScope === 'person_team' &&
     P(s).settings.spotlightWidth === 700 && P(s).settings.spotlightHeight === 420 &&
-    P(s).settings.spotlightReturnToOrigin === true && P(s).settings.spotlightReturnDuration === 2200,
-    '居中突显特效/范围/宽高/飞入飞回时长/自定义音效同步');
+    P(s).settings.spotlightTheme === 'fly' && P(s).settings.spotlightReturnDuration === 2200,
+    '居中突显特效/范围/宽高/主题/飞入飞回时长/自定义音效同步');
+  await adminOp('updateSettings', { patch: { spotlightTheme: 'genie' } });
+  s = await viewer.waitState((st) => P(st).settings.spotlightTheme === 'genie');
+  assert(true, '神灯主题可选');
+  await adminOp('updateSettings', { patch: { spotlightTheme: 'squeeze' } });
+  s = await viewer.waitState((st) => P(st).settings.spotlightTheme === 'squeeze');
+  assert(true, '联动避开主题可选');
+  await adminOp('updateSettings', { patch: { spotlightTheme: 'warp' } }).catch((e) => {
+    assert(/突显主题/.test(e.message), '非法突显主题被拒绝');
+  });
   await adminOp('updateSettings', { patch: { spotlightReturnDuration: 100 } }).catch((e) => {
     assert(/飞入飞回时长/.test(e.message), '非法飞入飞回时长被拒绝');
   });
+  await adminOp('updateSettings', { patch: { scoreEffect: 'highlight', scoreRolling: false } });
+  s = await viewer.waitState((st) => P(st).settings.scoreEffect === 'highlight' &&
+    P(st).settings.scoreRolling === false);
+  assert(true, '原位聚光灯/滚动数字设置同步');
   await adminOp('updateSettings', { patch: { customSound: '../../etc/passwd' } }).catch((e) => {
     assert(/音效文件路径/.test(e.message), '非法音效路径被拒绝');
   });
@@ -408,6 +421,32 @@ async function main() {
   });
   await adminOp('updateSettings', { patch: { featureUndo: true } });
 
+  // 快捷分预设 + undoTo + 分数日志
+  await adminOp('updateSettings', { patch: { quickScorePresets: [2, 4, 8, -2] } });
+  s = await viewer.waitState((st) => Array.isArray(P(st).settings.quickScorePresets) &&
+    P(st).settings.quickScorePresets[0] === 2);
+  assert(P(s).settings.quickScorePresets.length === 4, '快捷分预设自定义同步');
+  await adminOp('updateSettings', { patch: { quickScorePresets: [0, 1] } }).catch((e) => {
+    assert(/预设/.test(e.message), '非法快捷分预设被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { quickScorePresets: [1, 5, 10, -1] } });
+
+  await adminOp('addScore', { personId: pid, delta: 5 });
+  await viewer.waitRuntime((r) => r.scoreLogs && r.scoreLogs[projectId]);
+  assert(true, '分数日志记录 addScore');
+  await adminOp('addScore', { personId: pid, delta: 3 });
+  await adminOp('addScore', { personId: pid, delta: 2 });
+  const rt = viewer.runtimes[viewer.runtimes.length - 1];
+  assert(rt.undoLabels[projectId] && rt.undoLabels[projectId].length >= 3 &&
+    rt.scoreLogs[projectId].length >= 3, '撤销历史标签与分数日志快照');
+  const beforeUndoCount = rt.undoCounts[projectId];
+  await adminOp('undoTo', { keep: beforeUndoCount - 2 });
+  s = await viewer.waitState((st) => P(st).people[pid] && P(st).people[pid].score === 12);
+  assert(true, 'undoTo 连续撤销多步');
+  await adminOp('undoTo', { keep: 999 }).catch((e) => {
+    assert(/目标数量/.test(e.message), 'undoTo 越界拒绝');
+  });
+
   console.log('倒计时与排行榜:');
   await adminOp('updateSettings', { patch: { featureCountdown: true } });
   await adminOp('updateSettings', { patch: { countdownDisplayMode: 'fullscreen' } });
@@ -521,6 +560,30 @@ async function main() {
   assert(csv.text.includes('"A,B""Q"'), 'CSV 特殊字符转义');
   await adminOp('removePerson', { personId: commaAck.result.personId });
 
+  console.log('课堂玩法与欢迎幕布:');
+  await adminOp('updateSettings', {
+    patch: {
+      featureMarquee: true, marqueeText: '欢迎来到比赛',
+      featureWelcome: true, welcomeText: '欢迎光临', welcomeBgColor: '#123456',
+      featureCarousel: true, carouselViews: ['cards', 'leaderboard', 'welcome'],
+      carouselIntervalSec: 10,
+    },
+  });
+  s = await viewer.waitState((st) => P(st).settings.featureWelcome === true);
+  assert(P(s).settings.marqueeText === '欢迎来到比赛' &&
+    P(s).settings.welcomeText === '欢迎光临' && P(s).settings.welcomeBgColor === '#123456' &&
+    P(s).settings.carouselViews.length === 3 && P(s).settings.carouselIntervalSec === 10,
+    '跑马灯/欢迎幕布/轮播设置同步');
+  await adminOp('updateSettings', { patch: { carouselViews: ['cards', 'badview'] } }).catch((e) => {
+    assert(/轮播视图/.test(e.message), '非法轮播视图被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { carouselIntervalSec: 1 } }).catch((e) => {
+    assert(/轮播间隔/.test(e.message), '非法轮播间隔被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { bgmEnabled: true, bgmVolume: 0.6, bgmLoop: false } });
+  s = await viewer.waitState((st) => P(st).settings.bgmEnabled === true);
+  assert(P(s).settings.bgmVolume === 0.6 && P(s).settings.bgmLoop === false, '背景音乐设置同步');
+
   console.log('导出 / 导入 / 备份 / 清理:');
   const exportRes = await fetch(BASE + '/api/export?project=' + projectId + '&assets=1');
   const exportData = await exportRes.json();
@@ -625,11 +688,11 @@ async function main() {
     rp.settings.titleAlign === 'left', '重启后风格自由配置/标题设置恢复');
   assert(rp.settings.titleFree === true && rp.settings.titleX === 30 && rp.settings.titleY === 20,
     '重启后标题自由位置恢复');
-  assert(rp.settings.scoreEffect === 'spotlight' && rp.settings.customSound === soundUp.path &&
+  assert(rp.settings.scoreEffect === 'highlight' && rp.settings.customSound === soundUp.path &&
     rp.settings.spotlightScope === 'person_team' && rp.settings.spotlightWidth === 700 &&
-    rp.settings.spotlightHeight === 420 && rp.settings.spotlightReturnToOrigin === true &&
-    rp.settings.spotlightReturnDuration === 2200,
-    '重启后居中突显/范围/宽高/飞入飞回时长/自定义音效恢复');
+    rp.settings.spotlightHeight === 420 && rp.settings.spotlightTheme === 'squeeze' &&
+    rp.settings.spotlightReturnDuration === 2200 && rp.settings.scoreRolling === false,
+    '重启后居中突显/范围/宽高/主题/飞入飞回时长/滚动数字/自定义音效恢复');
   assert(rp.settings.countdownDisplayMode === 'fullscreen' && rp.settings.countdownShape === 'rounded-rect' &&
     rp.settings.countdownSize === 600 && rp.settings.countdownHeight === 300 &&
     rp.settings.countdownFontSize === 96 && rp.settings.countdownPosition === 'bottom-right' &&

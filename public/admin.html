@@ -14,6 +14,7 @@
     <button id="project-rename" class="btn small" type="button">重命名</button>
     <button id="project-delete" class="btn small danger" type="button">删除项目</button>
     <button id="settings-open" class="btn small" type="button">排版设置</button>
+    <button id="features-open" class="btn small" type="button">功能</button>
     <button id="undo-score" class="btn small" type="button" data-feature="featureUndo"
       title="撤销上一步记分" disabled>撤销记分</button>
     <span id="conn-dot" class="dot connecting" title="连接状态"></span>
@@ -86,6 +87,27 @@
         <label class="check">
           <input id="quick-edit" type="checkbox"> 编辑布局
         </label>
+        <label>视图
+          <select id="quick-view">
+            <option value="cards">计分板</option>
+            <option value="leaderboard">排行榜</option>
+            <option value="welcome">欢迎幕布</option>
+          </select>
+        </label>
+      </div>
+
+      <!-- 倒计时快捷操作（放在预览旁，方便一边看预览一边控制） -->
+      <div class="preview-countdown" data-feature="featureCountdown">
+        <label>倒计时（分钟）
+          <input id="quick-cd-min" type="number" min="1" max="60" step="1" value="5">
+        </label>
+        <span class="cd-btns">
+          <button id="quick-cd-start" class="btn small primary" type="button">开始</button>
+          <button id="quick-cd-pause" class="btn small" type="button">暂停</button>
+          <button id="quick-cd-resume" class="btn small" type="button">继续</button>
+          <button id="quick-cd-reset" class="btn small" type="button">重置</button>
+        </span>
+        <span id="quick-cd-status" class="hint cd-status">未开始</span>
       </div>
 
       <p class="preview-hint">默认与显示端 1:1 复刻（不含编辑控件）；勾选「编辑布局」后可拖动卡片、拉右下角调整大小；开启「标题自由位置」后可直接在预览里拖动标题。预览窗口可拖动设置面板，边看边调。</p>
@@ -155,6 +177,292 @@
       <p id="batch-preview" class="hint"></p>
       <button id="batch-add-submit" class="btn primary" type="button">添加</button>
     </div>
+  </dialog>
+
+  <!-- 功能弹窗 -->
+  <dialog id="features-dialog" class="settings-dialog">
+    <div id="features-resize" class="dialog-resize-handle" title="拖动调整功能窗口大小"></div>
+    <header class="dialog-header">
+      <h2>功能</h2>
+      <button id="features-close" class="btn small" type="button">关闭</button>
+    </header>
+      <div class="settings-form">
+        <div class="set-group advanced">
+          <h3>功能开关</h3>
+          <div class="feature-grid">
+            <div class="feature-cat">课堂效率</div>
+            <label class="check"><input id="f-avatar-edit" type="checkbox"> 头像修改</label>
+            <label class="check"><input id="f-settings-resize" type="checkbox"> 设置窗口缩放</label>
+            <label class="check"><input id="f-batch-add" type="checkbox"> 批量添加人员</label>
+            <label class="check"><input id="f-search" type="checkbox"> 人员 / 团队搜索</label>
+            <label class="check"><input id="f-quick-score" type="checkbox"> 快捷记分按钮</label>
+            <label class="check"><input id="f-team-score" type="checkbox"> 团队整体记分</label>
+            <label class="check"><input id="f-undo" type="checkbox"> 撤销上一步记分</label>
+            <label class="check"><input id="f-reset-scores" type="checkbox"> 重置本局分数</label>
+            <div class="feature-cat">大屏演示</div>
+            <label class="check"><input id="f-clock" type="checkbox"> 时钟</label>
+            <label class="check"><input id="f-countdown" type="checkbox"> 倒计时</label>
+            <label class="check"><input id="f-leaderboard" type="checkbox"> 排行榜视图</label>
+            <label class="check"><input id="f-rank-ties" type="checkbox"> 并列名次</label>
+            <div class="feature-cat">数据</div>
+            <label class="check"><input id="f-export-import" type="checkbox"> 导出 / 导入项目</label>
+            <label class="check"><input id="f-csv-export" type="checkbox"> 分数 CSV 导出</label>
+            <label class="check"><input id="f-data-maintenance" type="checkbox"> 备份 / 清理工具</label>
+          </div>
+        </div>
+
+        <div class="set-group">
+          <h3>时钟与倒计时</h3>
+          <div class="feature-block" data-feature="featureClock">
+            <label>时钟位置
+              <select id="set-clock-position">
+                <option value="top-left">左上</option>
+                <option value="top-right">右上</option>
+                <option value="bottom-left">左下</option>
+                <option value="bottom-right">右下</option>
+              </select>
+            </label>
+            <label>时钟格式
+              <select id="set-clock-format">
+                <option value="24">24 小时</option>
+                <option value="12">12 小时</option>
+              </select>
+            </label>
+            <label class="check"><input id="set-clock-seconds" type="checkbox"> 显示秒</label>
+            <label class="check"><input id="set-clock-date" type="checkbox"> 显示日期</label>
+          </div>
+          <div class="feature-block" data-feature="featureCountdown">
+            <label>倒计时时长（分钟）
+              <input id="set-countdown-min" type="number" min="1" max="60" step="1">
+            </label>
+            <label>倒计时显示模式
+              <select id="set-countdown-mode">
+                <option value="corner">角落小窗</option>
+                <option value="center">居中大窗口</option>
+                <option value="fullscreen">全屏模式</option>
+              </select>
+            </label>
+            <div class="countdown-style">
+              <label>窗口形状
+                <select id="set-cd-shape">
+                  <option value="circle">圆形</option>
+                  <option value="square">方形</option>
+                  <option value="rounded">圆角方形</option>
+                  <option value="rounded-rect">圆角矩形</option>
+                  <option value="rect">矩形</option>
+                </select>
+              </label>
+              <label>窗口位置
+                <select id="set-cd-position">
+                  <option value="center">居中</option>
+                  <option value="top-left">左上</option>
+                  <option value="top">上</option>
+                  <option value="top-right">右上</option>
+                  <option value="left">左</option>
+                  <option value="right">右</option>
+                  <option value="bottom-left">左下</option>
+                  <option value="bottom">下</option>
+                  <option value="bottom-right">右下</option>
+                </select>
+              </label>
+              <label>窗口宽度 <span id="cd-size-val">520</span> px
+                <input id="set-cd-size" type="range" min="200" max="900" step="10">
+              </label>
+              <label>窗口高度 <span id="cd-height-val">自动</span>
+                <input id="set-cd-height" type="range" min="0" max="900" step="10">
+              </label>
+              <label>窗口圆角 <span id="cd-radius-val">28</span> px
+                <input id="set-cd-radius" type="range" min="0" max="120" step="2">
+              </label>
+              <label>数字字号 <span id="cd-fontsize-val">自动</span>
+                <input id="set-cd-fontsize" type="range" min="0" max="300" step="2">
+              </label>
+              <label>窗口不透明度 <span id="cd-opacity-val">100</span>%
+                <input id="set-cd-opacity" type="range" min="0.2" max="1" step="0.05">
+              </label>
+              <label class="check">
+                <input id="set-cd-progress" type="checkbox"> 显示进度环
+              </label>
+              <label class="check">
+                <input id="set-cd-backdrop" type="checkbox"> 显示背景遮罩
+              </label>
+              <label>窗口背景
+                <select id="set-cd-bg-mode">
+                  <option value="theme">跟随主题</option>
+                  <option value="custom">自定义颜色</option>
+                  <option value="translucent">半透明</option>
+                  <option value="acrylic">亚克力（半透明 + 虚化）</option>
+                </select>
+              </label>
+              <label>窗口底色
+                <input id="set-cd-bg" type="color">
+              </label>
+              <label>亚克力模糊 <span id="cd-blur-val">12</span> px
+                <input id="set-cd-blur" type="range" min="0" max="40" step="1">
+              </label>
+              <label class="check">
+                <input id="set-cd-text-enabled" type="checkbox"> 自定义文字颜色
+              </label>
+              <label>文字颜色
+                <input id="set-cd-text" type="color" disabled>
+              </label>
+            </div>
+            <div class="countdown-btns">
+              <button id="cd-start" class="btn small primary" type="button">开始</button>
+              <button id="cd-pause" class="btn small" type="button">暂停</button>
+              <button id="cd-resume" class="btn small" type="button">继续</button>
+              <button id="cd-reset" class="btn small" type="button">重置</button>
+            </div>
+            <span id="countdown-status" class="hint">未开始</span>
+          </div>
+        </div>
+
+        <div class="set-group">
+          <h3>排行榜</h3>
+          <div class="feature-block" data-feature="featureLeaderboard">
+            <label>排行榜范围
+              <select id="set-lb-scope">
+                <option value="auto">自动（团队 + 独立人员）</option>
+                <option value="people">仅人员</option>
+                <option value="teams">仅团队</option>
+              </select>
+            </label>
+            <label>显示条数（0=全部）
+              <input id="set-lb-limit" type="number" min="0" max="200" step="1">
+            </label>
+            <label>排行榜缩放 <span id="lb-scale-val">1</span> 倍
+              <input id="set-lb-scale" type="range" min="0.8" max="1.6" step="0.05">
+            </label>
+            <button id="toggle-leaderboard" class="btn small" type="button">切换到排行榜</button>
+          </div>
+          <div class="feature-block" data-feature="featureRankTies">
+            <label>并列名次模式
+              <select id="set-rank-tie-mode">
+                <option value="competition">竞赛式（1,1,3）</option>
+                <option value="dense">密集式（1,1,2）</option>
+                <option value="none">顺序编号（1,2,3）</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div class="set-group">
+          <h3>数据</h3>
+          <div class="data-buttons">
+            <button id="export-project" class="btn small" type="button"
+              data-feature="featureExportImport">导出项目</button>
+            <label class="file-btn" data-feature="featureExportImport">导入项目
+              <input id="import-project" type="file" accept="application/json,.json" hidden>
+            </label>
+            <button id="export-csv" class="btn small" type="button"
+              data-feature="featureCsvExport">导出分数 CSV</button>
+            <button id="backup-now" class="btn small" type="button"
+              data-feature="featureDataMaintenance">立即备份</button>
+            <button id="scan-orphans" class="btn small" type="button"
+              data-feature="featureDataMaintenance">扫描废弃文件</button>
+            <button id="cleanup-orphans" class="btn small danger" type="button"
+              data-feature="featureDataMaintenance">清理废弃文件</button>
+          </div>
+          <p id="data-status" class="hint"></p>
+        </div>
+
+        <div class="set-group">
+          <h3>记分效率</h3>
+          <label>快捷分预设（逗号分隔，1–6 个非 0 整数）
+            <input id="set-quick-presets" type="text" placeholder="1, 5, 10, -1">
+          </label>
+          <div class="data-buttons">
+            <button id="score-log" class="btn small" type="button">分数日志</button>
+            <button id="undo-history" class="btn small" type="button"
+              data-feature="featureUndo">撤销历史</button>
+          </div>
+        </div>
+
+        <div class="set-group">
+          <h3>课堂玩法</h3>
+          <label class="check"><input id="set-feature-marquee" type="checkbox"> 跑马灯横幅</label>
+          <label>跑马灯文字
+            <input id="set-marquee-text" type="text" maxlength="200" placeholder="欢迎来到比赛现场">
+          </label>
+          <div class="countdown-style">
+            <label>跑马灯位置
+              <select id="set-marquee-position">
+                <option value="top">顶部</option>
+                <option value="bottom">底部</option>
+              </select>
+            </label>
+            <label>跑马灯特效
+              <select id="set-marquee-effect">
+                <option value="scroll">滚动</option>
+                <option value="blink">闪烁</option>
+                <option value="none">静止</option>
+              </select>
+            </label>
+            <label>跑马灯字号 <span id="marquee-font-val">自动</span>
+              <input id="set-marquee-font-size" type="range" min="0" max="120" step="2">
+            </label>
+            <label>滚动速度 <span id="marquee-speed-val">1</span> 倍
+              <input id="set-marquee-speed" type="range" min="0.5" max="3" step="0.1">
+            </label>
+            <label class="check">
+              <input id="set-marquee-color-enabled" type="checkbox"> 自定义文字颜色
+            </label>
+            <label>文字颜色
+              <input id="set-marquee-color" type="color" disabled>
+            </label>
+            <label class="check">
+              <input id="set-marquee-bg-enabled" type="checkbox"> 自定义背景色
+            </label>
+            <label>背景色
+              <input id="set-marquee-bg-color" type="color" disabled>
+            </label>
+          </div>
+          <label class="check"><input id="set-bgm-enabled" type="checkbox"> 背景音乐</label>
+          <div class="sound-row">
+            <label class="file-btn">上传背景音乐
+              <input id="set-bgm-file" type="file" accept="audio/wav,audio/ogg,audio/mpeg,audio/mp4,.wav,.ogg,.mp3,.m4a" hidden>
+            </label>
+            <button id="clear-bgm-file" class="btn small" type="button">清除</button>
+          </div>
+          <label>背景音乐音量 <span id="bgm-volume-val">30</span>%
+            <input id="set-bgm-volume" type="range" min="0" max="1" step="0.05">
+          </label>
+          <label class="check"><input id="set-bgm-loop" type="checkbox"> 循环播放</label>
+
+          <label class="check"><input id="set-feature-welcome" type="checkbox"> 欢迎幕布</label>
+          <label>欢迎文字
+            <input id="set-welcome-text" type="text" maxlength="200" placeholder="欢迎光临">
+          </label>
+          <label class="check"><input id="set-welcome-bg-color-enabled" type="checkbox"> 自定义画板底色</label>
+          <label>画板底色
+            <input id="set-welcome-bg-color" type="color" disabled>
+          </label>
+          <div class="sound-row">
+            <label class="file-btn">上传欢迎背景图
+              <input id="set-welcome-image" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+            </label>
+            <button id="clear-welcome-image" class="btn small" type="button">清除</button>
+          </div>
+        </div>
+      </div>
+  </dialog>
+
+  <!-- 分数日志弹窗 -->
+  <dialog id="score-log-dialog" class="batch-dialog">
+    <header class="dialog-header">
+      <h2>分数日志</h2>
+      <button id="score-log-close" class="btn small" type="button">关闭</button>
+    </header>
+    <div class="batch-body" id="score-log-body"></div>
+  </dialog>
+
+  <!-- 撤销历史弹窗 -->
+  <dialog id="undo-history-dialog" class="batch-dialog">
+    <header class="dialog-header">
+      <h2>撤销历史</h2>
+      <button id="undo-history-close" class="btn small" type="button">关闭</button>
+    </header>
+    <div class="batch-body" id="undo-history-body"></div>
   </dialog>
 
   <!-- 排版设置弹窗 -->
@@ -465,7 +773,16 @@
               <option value="shake">抖动</option>
               <option value="confetti">彩带</option>
               <option value="spotlight">居中放大突显</option>
+              <option value="highlight">原位聚光灯</option>
               <option value="none">关闭</option>
+            </select>
+          </label>
+          <label>突显主题
+            <select id="set-spotlight-theme">
+              <option value="pop">放大缩回</option>
+              <option value="fly">飞入飞回</option>
+              <option value="genie">神灯特效</option>
+              <option value="squeeze">联动避开</option>
             </select>
           </label>
           <label>突显范围（居中放大时）
@@ -481,10 +798,7 @@
           <label>突显高度 <span id="spotlight-height-val">自动</span>
             <input id="set-spotlight-height" type="range" min="0" max="1200" step="20">
           </label>
-          <label class="check">
-            <input id="set-spotlight-return" type="checkbox"> 从原位置飞入居中，再飞回原位
-          </label>
-          <label>飞入飞回时长 <span id="spotlight-return-duration-val">1600</span> ms
+          <label>飞行动画时长 <span id="spotlight-return-duration-val">1600</span> ms
             <input id="set-spotlight-return-duration" type="range" min="600" max="6000" step="100">
           </label>
           <button id="preview-spotlight" class="btn small" type="button">预览突显效果</button>
@@ -514,186 +828,12 @@
             <span id="custom-sound-name" class="hint">未设置（内置合成音）</span>
             <button id="clear-custom-sound" class="btn small" type="button">清除</button>
           </div>
+          <label class="check"><input id="set-score-rolling" type="checkbox"> 记分滚动数字</label>
+          <label class="check"><input id="set-sort-animation" type="checkbox"> 排序重排动画</label>
+          <label class="check"><input id="set-rank-change-animation" type="checkbox"> 名次升降动画</label>
         </div>
 
-        <div class="set-group advanced">
-          <h3>功能开关</h3>
-          <div class="feature-grid">
-            <div class="feature-cat">课堂效率</div>
-            <label class="check"><input id="f-avatar-edit" type="checkbox"> 头像修改</label>
-            <label class="check"><input id="f-settings-resize" type="checkbox"> 设置窗口缩放</label>
-            <label class="check"><input id="f-batch-add" type="checkbox"> 批量添加人员</label>
-            <label class="check"><input id="f-search" type="checkbox"> 人员 / 团队搜索</label>
-            <label class="check"><input id="f-quick-score" type="checkbox"> 快捷记分按钮</label>
-            <label class="check"><input id="f-team-score" type="checkbox"> 团队整体记分</label>
-            <label class="check"><input id="f-undo" type="checkbox"> 撤销上一步记分</label>
-            <label class="check"><input id="f-reset-scores" type="checkbox"> 重置本局分数</label>
-            <div class="feature-cat">大屏演示</div>
-            <label class="check"><input id="f-clock" type="checkbox"> 时钟</label>
-            <label class="check"><input id="f-countdown" type="checkbox"> 倒计时</label>
-            <label class="check"><input id="f-leaderboard" type="checkbox"> 排行榜视图</label>
-            <label class="check"><input id="f-rank-ties" type="checkbox"> 并列名次</label>
-            <div class="feature-cat">数据</div>
-            <label class="check"><input id="f-export-import" type="checkbox"> 导出 / 导入项目</label>
-            <label class="check"><input id="f-csv-export" type="checkbox"> 分数 CSV 导出</label>
-            <label class="check"><input id="f-data-maintenance" type="checkbox"> 备份 / 清理工具</label>
-          </div>
-        </div>
 
-        <div class="set-group">
-          <h3>时钟与倒计时</h3>
-          <div class="feature-block" data-feature="featureClock">
-            <label>时钟位置
-              <select id="set-clock-position">
-                <option value="top-left">左上</option>
-                <option value="top-right">右上</option>
-                <option value="bottom-left">左下</option>
-                <option value="bottom-right">右下</option>
-              </select>
-            </label>
-            <label>时钟格式
-              <select id="set-clock-format">
-                <option value="24">24 小时</option>
-                <option value="12">12 小时</option>
-              </select>
-            </label>
-            <label class="check"><input id="set-clock-seconds" type="checkbox"> 显示秒</label>
-            <label class="check"><input id="set-clock-date" type="checkbox"> 显示日期</label>
-          </div>
-          <div class="feature-block" data-feature="featureCountdown">
-            <label>倒计时时长（分钟）
-              <input id="set-countdown-min" type="number" min="1" max="60" step="1">
-            </label>
-            <label>倒计时显示模式
-              <select id="set-countdown-mode">
-                <option value="corner">角落小窗</option>
-                <option value="center">居中大窗口</option>
-                <option value="fullscreen">全屏模式</option>
-              </select>
-            </label>
-            <div class="countdown-style">
-              <label>窗口形状
-                <select id="set-cd-shape">
-                  <option value="circle">圆形</option>
-                  <option value="square">方形</option>
-                  <option value="rounded">圆角方形</option>
-                  <option value="rounded-rect">圆角矩形</option>
-                  <option value="rect">矩形</option>
-                </select>
-              </label>
-              <label>窗口位置
-                <select id="set-cd-position">
-                  <option value="center">居中</option>
-                  <option value="top-left">左上</option>
-                  <option value="top">上</option>
-                  <option value="top-right">右上</option>
-                  <option value="left">左</option>
-                  <option value="right">右</option>
-                  <option value="bottom-left">左下</option>
-                  <option value="bottom">下</option>
-                  <option value="bottom-right">右下</option>
-                </select>
-              </label>
-              <label>窗口宽度 <span id="cd-size-val">520</span> px
-                <input id="set-cd-size" type="range" min="200" max="900" step="10">
-              </label>
-              <label>窗口高度 <span id="cd-height-val">自动</span>
-                <input id="set-cd-height" type="range" min="0" max="900" step="10">
-              </label>
-              <label>窗口圆角 <span id="cd-radius-val">28</span> px
-                <input id="set-cd-radius" type="range" min="0" max="120" step="2">
-              </label>
-              <label>数字字号 <span id="cd-fontsize-val">自动</span>
-                <input id="set-cd-fontsize" type="range" min="0" max="300" step="2">
-              </label>
-              <label>窗口不透明度 <span id="cd-opacity-val">100</span>%
-                <input id="set-cd-opacity" type="range" min="0.2" max="1" step="0.05">
-              </label>
-              <label class="check">
-                <input id="set-cd-progress" type="checkbox"> 显示进度环
-              </label>
-              <label class="check">
-                <input id="set-cd-backdrop" type="checkbox"> 显示背景遮罩
-              </label>
-              <label>窗口背景
-                <select id="set-cd-bg-mode">
-                  <option value="theme">跟随主题</option>
-                  <option value="custom">自定义颜色</option>
-                  <option value="translucent">半透明</option>
-                  <option value="acrylic">亚克力（半透明 + 虚化）</option>
-                </select>
-              </label>
-              <label>窗口底色
-                <input id="set-cd-bg" type="color">
-              </label>
-              <label>亚克力模糊 <span id="cd-blur-val">12</span> px
-                <input id="set-cd-blur" type="range" min="0" max="40" step="1">
-              </label>
-              <label class="check">
-                <input id="set-cd-text-enabled" type="checkbox"> 自定义文字颜色
-              </label>
-              <label>文字颜色
-                <input id="set-cd-text" type="color" disabled>
-              </label>
-            </div>
-            <div class="countdown-btns">
-              <button id="cd-start" class="btn small primary" type="button">开始</button>
-              <button id="cd-pause" class="btn small" type="button">暂停</button>
-              <button id="cd-resume" class="btn small" type="button">继续</button>
-              <button id="cd-reset" class="btn small" type="button">重置</button>
-            </div>
-            <span id="countdown-status" class="hint">未开始</span>
-          </div>
-        </div>
-
-        <div class="set-group">
-          <h3>排行榜</h3>
-          <div class="feature-block" data-feature="featureLeaderboard">
-            <label>排行榜范围
-              <select id="set-lb-scope">
-                <option value="auto">自动（团队 + 独立人员）</option>
-                <option value="people">仅人员</option>
-                <option value="teams">仅团队</option>
-              </select>
-            </label>
-            <label>显示条数（0=全部）
-              <input id="set-lb-limit" type="number" min="0" max="200" step="1">
-            </label>
-            <label>排行榜缩放 <span id="lb-scale-val">1</span> 倍
-              <input id="set-lb-scale" type="range" min="0.8" max="1.6" step="0.05">
-            </label>
-            <button id="toggle-leaderboard" class="btn small" type="button">切换到排行榜</button>
-          </div>
-          <div class="feature-block" data-feature="featureRankTies">
-            <label>并列名次模式
-              <select id="set-rank-tie-mode">
-                <option value="competition">竞赛式（1,1,3）</option>
-                <option value="dense">密集式（1,1,2）</option>
-                <option value="none">顺序编号（1,2,3）</option>
-              </select>
-            </label>
-          </div>
-        </div>
-
-        <div class="set-group">
-          <h3>数据</h3>
-          <div class="data-buttons">
-            <button id="export-project" class="btn small" type="button"
-              data-feature="featureExportImport">导出项目</button>
-            <label class="file-btn" data-feature="featureExportImport">导入项目
-              <input id="import-project" type="file" accept="application/json,.json" hidden>
-            </label>
-            <button id="export-csv" class="btn small" type="button"
-              data-feature="featureCsvExport">导出分数 CSV</button>
-            <button id="backup-now" class="btn small" type="button"
-              data-feature="featureDataMaintenance">立即备份</button>
-            <button id="scan-orphans" class="btn small" type="button"
-              data-feature="featureDataMaintenance">扫描废弃文件</button>
-            <button id="cleanup-orphans" class="btn small danger" type="button"
-              data-feature="featureDataMaintenance">清理废弃文件</button>
-          </div>
-          <p id="data-status" class="hint"></p>
-        </div>
       </div>
   </dialog>
 

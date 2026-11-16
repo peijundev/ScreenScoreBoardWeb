@@ -4,6 +4,9 @@ const UNDO_LIMIT = 50;
 
 const undoStacks = new Map();   // projectId -> [{ label, entries, at }]
 const countdowns = new Map();   // projectId -> { state, durationMs, endsAt, remainingMs, endedAt, timer }
+const scoreLogs = new Map();    // projectId -> [{ at, label, delta }]
+
+const SCORE_LOG_LIMIT = 200;
 
 let broadcast = () => {};
 function setBroadcaster(fn) {
@@ -37,6 +40,40 @@ function undoCount(projectId) {
 
 function clearUndo(projectId) {
   undoStacks.delete(projectId);
+}
+
+// 撤销到剩余 keep 条：返回被撤销的 entry 列表（最新在前）
+function undoTo(projectId, keep) {
+  const stack = undoStacks.get(projectId);
+  if (!stack || stack.length <= keep) return [];
+  const undone = [];
+  while (stack.length > keep) undone.push(stack.pop());
+  if (!stack.length) undoStacks.delete(projectId);
+  return undone;
+}
+
+function undoLabels(projectId, n) {
+  const stack = undoStacks.get(projectId);
+  if (!stack || !stack.length) return [];
+  return stack.slice(-n).map((entry, i) => ({
+    index: stack.length - n + i,
+    label: entry.label,
+  })).reverse();
+}
+
+// ---------- 分数日志 ----------
+function pushScoreLog(projectId, label, delta) {
+  if (!projectId) return;
+  const logs = scoreLogs.get(projectId) || [];
+  logs.push({ at: Date.now(), label, delta });
+  while (logs.length > SCORE_LOG_LIMIT) logs.shift();
+  scoreLogs.set(projectId, logs);
+}
+
+function getScoreLogs(projectId, n) {
+  const logs = scoreLogs.get(projectId);
+  if (!logs || !logs.length) return [];
+  return logs.slice(-n).reverse();
 }
 
 // ---------- 倒计时 ----------
@@ -130,20 +167,31 @@ function compactCountdown(entry) {
 function clearProjectRuntime(projectId) {
   resetCountdown(projectId);
   clearUndo(projectId);
+  scoreLogs.delete(projectId);
 }
 
 // ---------- 广播快照 ----------
 function getRuntimeSnapshot() {
   const undoCounts = {};
+  const undoLabelsMap = {};
   for (const [projectId, stack] of undoStacks) {
-    if (stack.length) undoCounts[projectId] = stack.length;
+    if (stack.length) {
+      undoCounts[projectId] = stack.length;
+      undoLabelsMap[projectId] = undoLabels(projectId, 10);
+    }
   }
   const snapshotCountdowns = {};
   for (const [projectId, entry] of countdowns) {
     snapshotCountdowns[projectId] = compactCountdown(entry);
   }
+  const snapshotLogs = {};
+  for (const [projectId] of scoreLogs) {
+    snapshotLogs[projectId] = getScoreLogs(projectId, 50);
+  }
   return {
     undoCounts,
+    undoLabels: undoLabelsMap,
+    scoreLogs: snapshotLogs,
     countdowns: snapshotCountdowns,
     serverNow: Date.now(),
   };
@@ -153,8 +201,12 @@ module.exports = {
   UNDO_LIMIT,
   pushUndo,
   popUndo,
+  undoTo,
   undoCount,
+  undoLabels,
   clearUndo,
+  pushScoreLog,
+  getScoreLogs,
   startCountdown,
   pauseCountdown,
   resumeCountdown,

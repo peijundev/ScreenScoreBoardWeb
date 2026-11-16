@@ -43,8 +43,9 @@ const DEFAULT_SETTINGS = {
   spotlightScope: 'person', // team（仅团队）| person_team（人物 + 团队）| person（仅人物）
   spotlightWidth: 520,      // 居中突显宽度 px（200–1600）
   spotlightHeight: 0,       // 居中突显高度 px；0 = 自动
-  spotlightReturnToOrigin: false, // 从原位置飞入居中，再飞回原位
-  spotlightReturnDuration: 1600,  // 飞入飞回时长 ms（600–6000）
+  spotlightTheme: 'pop',    // pop | fly | genie | squeeze
+  spotlightReturnToOrigin: false, // （兼容）fly 主题开关
+  spotlightReturnDuration: 1600,  // fly 主题时长 ms（600–6000）
   scoreEffectDuration: 700, // 特效时长 ms（200–3000）
   scoreEffectColor: '',     // '' = 自动（加分绿/减分红）；或 #rrggbb
   scoreEffectOnlyPositive: false, // 仅加分触发特效
@@ -126,6 +127,33 @@ const DEFAULT_SETTINGS = {
   leaderboardLimit: 0,        // 0 = 全部
   leaderboardScale: 1,        // 0.8–1.6
   rankTieMode: 'competition', // competition | dense | none
+
+  // ---- 记分效率与动效 ----
+  quickScorePresets: [1, 5, 10, -1], // 快捷记分预设
+  scoreRolling: true,         // 滚动数字
+  sortAnimation: true,        // 排序重排动画（FLIP）
+  rankChangeAnimation: true,  // 名次升降动画
+  featureMarquee: false,      // 跑马灯横幅
+  bgmEnabled: false,          // 背景音乐
+  bgmFile: '',                // 背景音乐文件（sounds/xxx）
+  bgmVolume: 0.3,             // 背景音乐音量 0–1
+  bgmLoop: true,              // 背景音乐循环
+  featureBuzzer: false,       // 抢答模式
+  featureTeamPk: false,       // 团队 PK
+  featureCarousel: false,     // 轮播多屏
+  carouselViews: ['cards', 'leaderboard', 'welcome'], // 轮播视图顺序
+  carouselIntervalSec: 15,    // 轮播间隔秒
+  featureWelcome: false,      // 欢迎幕布
+  marqueeText: '',            // 跑马灯文字
+  marqueeFontSize: 0,         // 跑马灯字号 px；0=自动
+  marqueePosition: 'top',     // top | bottom
+  marqueeEffect: 'scroll',    // scroll | blink | none
+  marqueeColor: '',           // '' = 跟随强调色
+  marqueeBgColor: '',         // '' = 跟随主题
+  marqueeSpeed: 1,            // 滚动速度倍率 0.5–3
+  welcomeText: '',            // 欢迎幕布文字
+  welcomeImage: '',           // 欢迎幕布背景图
+  welcomeBgColor: '',         // 欢迎幕布纯色画板底色（图空时用）
 };
 
 const storage = createStorage();
@@ -165,6 +193,10 @@ function normalizeProject(raw) {
   // 旧版本：有自定义倒计时窗口底色 → 迁移为「自定义颜色」模式
   if (p.settings && p.settings.countdownBgMode == null) {
     settings.countdownBgMode = p.settings.countdownBg ? 'custom' : 'theme';
+  }
+  // 旧版本：开启「从哪来回哪去」→ 迁移为 fly 主题
+  if (p.settings && p.settings.spotlightTheme == null) {
+    settings.spotlightTheme = p.settings.spotlightReturnToOrigin ? 'fly' : 'pop';
   }
   delete settings.glassEnabled;
 
@@ -441,7 +473,7 @@ const SETTINGS_VALIDATORS = {
     return Math.round(n * 100) / 100;
   },
   scoreEffect: (v) =>
-    (['none', 'bounce', 'glow', 'float', 'shake', 'confetti', 'spotlight'].includes(v)
+    (['none', 'bounce', 'glow', 'float', 'shake', 'confetti', 'spotlight', 'highlight'].includes(v)
       ? v
       : (() => { throw new OpError('加分特效类型非法'); })()),
   spotlightScope: (v) =>
@@ -452,6 +484,10 @@ const SETTINGS_VALIDATORS = {
   spotlightHeight: (v) => intRange(v, 0, 1200, '突显高度须为 0–1200（0=自动）'),
   spotlightReturnToOrigin: (v) => boolStrict(v, '从哪来回哪去开关'),
   spotlightReturnDuration: (v) => intRange(v, 600, 6000, '飞入飞回时长须为 600–6000 ms'),
+  spotlightTheme: (v) =>
+    (['pop', 'fly', 'genie', 'squeeze'].includes(v)
+      ? v
+      : (() => { throw new OpError('突显主题非法'); })()),
   scoreEffectDuration: (v) => {
     const n = Number(v);
     if (!Number.isInteger(n) || n < 200 || n > 3000) throw new OpError('特效时长须为 200–3000 的整数');
@@ -599,7 +635,9 @@ const SETTINGS_VALIDATORS = {
   },
   countdownTextColor: (v) => hexOrEmpty(v, '倒计时文字颜色须为 #rrggbb 或留空'),
   displayView: (v) =>
-    (['cards', 'leaderboard'].includes(v) ? v : (() => { throw new OpError('显示视图非法'); })()),
+    (['cards', 'leaderboard', 'welcome'].includes(v)
+      ? v
+      : (() => { throw new OpError('显示视图非法'); })()),
   leaderboardScope: (v) =>
     (['auto', 'people', 'teams'].includes(v) ? v : (() => { throw new OpError('排行榜范围非法'); })()),
   leaderboardLimit: (v) => intRange(v, 0, 200, '排行榜条数须为 0–200'),
@@ -612,6 +650,65 @@ const SETTINGS_VALIDATORS = {
     (['competition', 'dense', 'none'].includes(v)
       ? v
       : (() => { throw new OpError('并列名次模式非法'); })()),
+
+  // ---- 记分效率与动效 ----
+  quickScorePresets: (v) => {
+    if (!Array.isArray(v)) throw new OpError('快捷分预设须为数组');
+    if (v.length < 1 || v.length > 6) throw new OpError('快捷分预设须为 1–6 个');
+    const out = v.map((n) => {
+      const num = Number(n);
+      if (!Number.isInteger(num) || num === 0 || Math.abs(num) > 10000) {
+        throw new OpError('快捷分预设每项须为 ±10000 内非 0 整数');
+      }
+      return num;
+    });
+    return out;
+  },
+  scoreRolling: (v) => boolStrict(v, '滚动数字开关'),
+  sortAnimation: (v) => boolStrict(v, '排序重排开关'),
+  rankChangeAnimation: (v) => boolStrict(v, '名次升降开关'),
+  featureMarquee: (v) => boolStrict(v, '跑马灯开关'),
+  bgmEnabled: (v) => boolStrict(v, '背景音乐开关'),
+  bgmFile: (v) => needAvatar(v === '' ? null : v),
+  bgmVolume: (v) => {
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0 || n > 1) throw new OpError('背景音乐音量须在 0–1 之间');
+    return Math.round(n * 100) / 100;
+  },
+  bgmLoop: (v) => boolStrict(v, '背景音乐循环开关'),
+  featureBuzzer: (v) => boolStrict(v, '抢答模式开关'),
+  featureTeamPk: (v) => boolStrict(v, '团队 PK 开关'),
+  featureCarousel: (v) => boolStrict(v, '轮播开关'),
+  carouselViews: (v) => {
+    if (!Array.isArray(v)) throw new OpError('轮播视图须为数组');
+    if (v.length < 1 || v.length > 5) throw new OpError('轮播视图须为 1–5 个');
+    const allowed = ['cards', 'leaderboard', 'welcome'];
+    const out = v.map((x) => {
+      if (!allowed.includes(x)) throw new OpError('轮播视图取值非法');
+      return x;
+    });
+    return out;
+  },
+  carouselIntervalSec: (v) => intRange(v, 3, 300, '轮播间隔须为 3–300 秒'),
+  featureWelcome: (v) => boolStrict(v, '欢迎幕布开关'),
+  marqueeText: (v) => (typeof v === 'string' ? v.slice(0, 200) : ''),
+  marqueeFontSize: (v) => intRange(v, 0, 120, '跑马灯字号须为 0–120（0=自动）'),
+  marqueePosition: (v) =>
+    (['top', 'bottom'].includes(v) ? v : (() => { throw new OpError('跑马灯位置非法'); })()),
+  marqueeEffect: (v) =>
+    (['scroll', 'blink', 'none'].includes(v)
+      ? v
+      : (() => { throw new OpError('跑马灯特效非法'); })()),
+  marqueeColor: (v) => hexOrEmpty(v, '跑马灯文字颜色须为 #rrggbb 或留空'),
+  marqueeBgColor: (v) => hexOrEmpty(v, '跑马灯背景色须为 #rrggbb 或留空'),
+  marqueeSpeed: (v) => {
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0.5 || n > 3) throw new OpError('跑马灯速度须在 0.5–3 之间');
+    return Math.round(n * 100) / 100;
+  },
+  welcomeText: (v) => (typeof v === 'string' ? v.slice(0, 200) : ''),
+  welcomeImage: (v) => needAvatar(v === '' ? null : v),
+  welcomeBgColor: (v) => hexOrEmpty(v, '欢迎幕布底色须为 #rrggbb 或留空'),
 };
 
 // ---------- op 全集 ----------
@@ -738,9 +835,9 @@ function applyOp(op, payload) {
       const before = p.score;
       p.score = Math.max(-100000, Math.min(100000, before + delta));
       if (p.score !== before) {
-        runtime.pushUndo(project.id, `${p.name} ${delta > 0 ? '+' : ''}${delta}`, [
-          { personId: p.id, before },
-        ]);
+        const label = `${p.name} ${delta > 0 ? '+' : ''}${delta}`;
+        runtime.pushUndo(project.id, label, [{ personId: p.id, before }]);
+        runtime.pushScoreLog(project.id, label, delta);
       }
       return { score: p.score };
     }
@@ -749,7 +846,9 @@ function applyOp(op, payload) {
       const before = p.score;
       p.score = needScore(payload.score, '分数');
       if (p.score !== before) {
-        runtime.pushUndo(project.id, `${p.name} 改为 ${p.score}`, [{ personId: p.id, before }]);
+        const label = `${p.name} 改为 ${p.score}`;
+        runtime.pushUndo(project.id, label, [{ personId: p.id, before }]);
+        runtime.pushScoreLog(project.id, label, p.score - before);
       }
       return { score: p.score };
     }
@@ -764,7 +863,9 @@ function applyOp(op, payload) {
         p.score = Math.max(-100000, Math.min(100000, before + delta));
         return { personId: p.id, before };
       });
-      runtime.pushUndo(project.id, `${team.name} 各 ${delta > 0 ? '+' : ''}${delta}`, entries);
+      const label = `${team.name} 各 ${delta > 0 ? '+' : ''}${delta}`;
+      runtime.pushUndo(project.id, label, entries);
+      runtime.pushScoreLog(project.id, label, delta);
       return { count: members.length };
     }
     case 'resetScores': {
@@ -777,6 +878,7 @@ function applyOp(op, payload) {
         return { personId: p.id, before };
       });
       runtime.pushUndo(project.id, '重置本局分数', entries);
+      runtime.pushScoreLog(project.id, '重置本局分数', 0);
       return { count: changed.length };
     }
     case 'undoScore': {
@@ -787,7 +889,22 @@ function applyOp(op, payload) {
         const p = project.people[item.personId];
         if (p) p.score = item.before;
       }
+      runtime.pushScoreLog(project.id, '撤销：' + entry.label, 0);
       return { label: entry.label, undoCount: runtime.undoCount(project.id) };
+    }
+    case 'undoTo': {
+      requireFeature(project, 'featureUndo');
+      const keep = intRange(payload.keep, 0, runtime.UNDO_LIMIT, '撤销目标数量非法');
+      const undone = runtime.undoTo(project.id, keep);
+      if (!undone.length) throw new OpError('没有可撤销的记分');
+      for (const entry of undone) {
+        for (const item of entry.entries) {
+          const p = project.people[item.personId];
+          if (p) p.score = item.before;
+        }
+      }
+      runtime.pushScoreLog(project.id, '连续撤销 ' + undone.length + ' 步', 0);
+      return { count: undone.length, undoCount: runtime.undoCount(project.id) };
     }
     case 'setAvatar': {
       requireFeature(project, 'featureAvatarEdit');

@@ -340,6 +340,30 @@ body {
 }
 .file-mini { padding: 2px 8px; font-size: 12px; }
 .hint { font-size: 12px; color: var(--text-dim); }
+.preview-countdown {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 8px 0;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #2a2e32;
+}
+.preview-countdown > label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.preview-countdown input[type="number"] { width: 64px; }
+.preview-countdown .cd-btns { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.preview-countdown .cd-status {
+  min-width: 110px;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--text);
+}
 .panel-subbar {
   display: flex;
   align-items: center;
@@ -398,6 +422,17 @@ body {
   font-size: 12px;
   color: var(--text-dim);
 }
+.log-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  border-bottom: 1px solid #2a2e32;
+  font-size: 13px;
+}
+.log-row .hint { min-width: 64px; flex: 0 0 auto; }
+#undo-history-body { display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow: auto; }
+#undo-history-body .undo-to { text-align: left; }
 
 /* ---- 表单控件 ---- */
 input[type="text"],

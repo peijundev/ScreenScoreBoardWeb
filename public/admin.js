@@ -18,6 +18,9 @@ const previewResolution = document.getElementById('preview-resolution');
 const settingsDialog = document.getElementById('settings-dialog');
 const settingsOpenBtn = document.getElementById('settings-open');
 const settingsCloseBtn = document.getElementById('settings-close');
+const featuresDialog = document.getElementById('features-dialog');
+const featuresOpenBtn = document.getElementById('features-open');
+const featuresCloseBtn = document.getElementById('features-close');
 const previewOutBtn = document.getElementById('preview-out');
 const previewInBtn = document.getElementById('preview-in');
 const previewResetBtn = document.getElementById('preview-reset');
@@ -31,6 +34,7 @@ const quick = {
   sort: document.getElementById('quick-sort'),
   accent: document.getElementById('quick-accent'),
   edit: document.getElementById('quick-edit'),
+  view: document.getElementById('quick-view'),
 };
 
 let previewEdit = false;
@@ -181,7 +185,10 @@ settingsOpenBtn.addEventListener('click', () => {
 settingsCloseBtn.addEventListener('click', () => settingsDialog.close());
 
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && settingsDialog.open) settingsDialog.close();
+  if (e.key === 'Escape') {
+    if (settingsDialog.open) settingsDialog.close();
+    if (featuresDialog.open) featuresDialog.close();
+  }
 });
 
 // 拖标题栏移动窗口
@@ -219,6 +226,114 @@ function endDialogDrag() {
 }
 dialogHeader.addEventListener('pointerup', endDialogDrag);
 dialogHeader.addEventListener('pointercancel', endDialogDrag);
+
+// ============ 功能窗口：非模态、可拖动、可缩放 ============
+function placeFeaturesDialog() {
+  let left = null;
+  let top = null;
+  try {
+    const saved = JSON.parse(localStorage.getItem('featuresDialogPos') || 'null');
+    if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) {
+      left = saved.left;
+      top = saved.top;
+    }
+  } catch (_) {}
+
+  const rect = featuresDialog.getBoundingClientRect();
+  if (left == null) left = (window.innerWidth - rect.width) / 2;
+  if (top == null) top = Math.max(16, Math.min(80, window.innerHeight * 0.08));
+  left = clampNum(left, 4, Math.max(4, window.innerWidth - rect.width - 4));
+  top = clampNum(top, 4, Math.max(4, window.innerHeight - 44));
+  featuresDialog.style.left = left + 'px';
+  featuresDialog.style.top = top + 'px';
+}
+
+function applyFeaturesDialogSize() {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem('featuresDialogSize') || 'null'); } catch (_) {}
+  const maxW = Math.max(480, window.innerWidth * 0.96);
+  const maxH = Math.max(260, window.innerHeight * 0.92);
+  let w = saved && Number.isFinite(saved.w) ? saved.w : 900;
+  const h = saved && Number.isFinite(saved.h) ? saved.h : 0;
+  w = Math.min(Math.max(480, w), maxW);
+  if (h > 0) {
+    featuresDialog.style.height = Math.min(Math.max(260, h), maxH) + 'px';
+  }
+  featuresDialog.style.width = w + 'px';
+}
+
+featuresOpenBtn.addEventListener('click', () => {
+  if (featuresDialog.open) {
+    featuresDialog.close();
+    return;
+  }
+  featuresDialog.show();
+  applyFeaturesDialogSize();
+  placeFeaturesDialog();
+});
+featuresCloseBtn.addEventListener('click', () => featuresDialog.close());
+
+const featuresHeader = featuresDialog.querySelector('.dialog-header');
+let featuresDrag = null;
+featuresHeader.addEventListener('pointerdown', (e) => {
+  if (e.target.closest('button')) return;
+  e.preventDefault();
+  const rect = featuresDialog.getBoundingClientRect();
+  featuresDrag = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
+  featuresHeader.setPointerCapture(e.pointerId);
+  featuresDialog.classList.add('dragging');
+});
+featuresHeader.addEventListener('pointermove', (e) => {
+  if (!featuresDrag) return;
+  const width = featuresDialog.offsetWidth;
+  const left = clampNum(e.clientX - featuresDrag.dx, 4, Math.max(4, window.innerWidth - width - 4));
+  const top = clampNum(e.clientY - featuresDrag.dy, 4, Math.max(4, window.innerHeight - 44));
+  featuresDialog.style.left = left + 'px';
+  featuresDialog.style.top = top + 'px';
+});
+function endFeaturesDrag() {
+  if (!featuresDrag) return;
+  featuresDrag = null;
+  featuresDialog.classList.remove('dragging');
+  try {
+    localStorage.setItem('featuresDialogPos', JSON.stringify({
+      left: parseFloat(featuresDialog.style.left) || 0,
+      top: parseFloat(featuresDialog.style.top) || 0,
+    }));
+  } catch (_) {}
+}
+featuresHeader.addEventListener('pointerup', endFeaturesDrag);
+featuresHeader.addEventListener('pointercancel', endFeaturesDrag);
+
+const featuresResize = document.getElementById('features-resize');
+let featuresResizeDrag = null;
+featuresResize.addEventListener('pointerdown', (e) => {
+  const project = currentProject();
+  if (!project || !project.settings.featureSettingsResize) return;
+  e.preventDefault();
+  const rect = featuresDialog.getBoundingClientRect();
+  featuresResizeDrag = { startX: e.clientX, startY: e.clientY, w: rect.width, h: rect.height };
+  featuresResize.setPointerCapture(e.pointerId);
+});
+window.addEventListener('pointermove', (e) => {
+  if (!featuresResizeDrag) return;
+  const maxW = Math.max(480, window.innerWidth * 0.96);
+  const maxH = Math.max(260, window.innerHeight * 0.92);
+  const w = Math.min(Math.max(480, featuresResizeDrag.w + (e.clientX - featuresResizeDrag.startX)), maxW);
+  const h = Math.min(Math.max(260, featuresResizeDrag.h + (e.clientY - featuresResizeDrag.startY)), maxH);
+  featuresDialog.style.width = w + 'px';
+  featuresDialog.style.height = h + 'px';
+});
+window.addEventListener('pointerup', () => {
+  if (!featuresResizeDrag) return;
+  featuresResizeDrag = null;
+  try {
+    localStorage.setItem('featuresDialogSize', JSON.stringify({
+      w: featuresDialog.offsetWidth,
+      h: featuresDialog.offsetHeight,
+    }));
+  } catch (_) {}
+});
 
 // ============ 预览：固定分辨率复刻 + 缩放 ============
 function applyPreviewLayout() {
@@ -288,6 +403,14 @@ quick.sort.addEventListener('change', () => {
 quick.edit.addEventListener('change', () => {
   previewEdit = quick.edit.checked;
   if (currentState) syncProjectUI(currentState);
+});
+quick.view.addEventListener('change', () => {
+  const v = quick.view.value;
+  const patch = {};
+  if (v === 'leaderboard') { patch.displayView = 'leaderboard'; patch.featureLeaderboard = true; }
+  else if (v === 'welcome') { patch.displayView = 'welcome'; patch.featureWelcome = true; }
+  else patch.displayView = 'cards';
+  projectOp('updateSettings', { patch }).catch((e) => toast(e.message));
 });
 
 applyPreviewLayout();
@@ -374,8 +497,10 @@ function renderPeople(project) {
     const teamOptions = '<option value="">无团队</option>' + Object.values(project.teams).map((t) =>
       '<option value="' + t.id + '"' + (p.teamId === t.id ? ' selected' : '') + '>' + escapeHTML(t.name) + '</option>'
     ).join('');
+    const presets = Array.isArray(project.settings.quickScorePresets)
+      ? project.settings.quickScorePresets : [1, 5, 10, -1];
     const quickScores = project.settings.featureQuickScore
-      ? '<span class="quick-scores">' + [1, 5, 10, -1].map((v) =>
+      ? '<span class="quick-scores">' + presets.map((v) =>
         '<button class="btn small quick-score" data-delta="' + v + '">' + (v > 0 ? '+' : '') + v + '</button>'
       ).join('') + '</span>'
       : '';
@@ -492,8 +617,10 @@ function renderTeams(project) {
       escapeHTML(m.name) +
       '<span class="x" data-person="' + m.id + '" title="移出团队">×</span></span>'
     ).join('') || '<span style="color:var(--text-dim);font-size:13px">暂无成员（在人员列表中选择团队加入）</span>';
+    const presets = Array.isArray(project.settings.quickScorePresets)
+      ? project.settings.quickScorePresets : [1, 5, 10, -1];
     const quickScores = project.settings.featureTeamScore
-      ? '<span class="quick-scores">' + [1, 5, -1].map((v) =>
+      ? '<span class="quick-scores">' + presets.map((v) =>
         '<button class="btn small team-quick" data-delta="' + v +
         '" title="每位成员 ' + (v > 0 ? '+' : '') + v + '">' +
         (v > 0 ? '+' : '') + v + '</button>'
@@ -615,7 +742,7 @@ const settingEls = {
   spotlightScope: document.getElementById('set-spotlight-scope'),
   spotlightWidth: document.getElementById('set-spotlight-width'),
   spotlightHeight: document.getElementById('set-spotlight-height'),
-  spotlightReturn: document.getElementById('set-spotlight-return'),
+  spotlightTheme: document.getElementById('set-spotlight-theme'),
   spotlightReturnDuration: document.getElementById('set-spotlight-return-duration'),
   previewSpotlight: document.getElementById('preview-spotlight'),
   fxDuration: document.getElementById('set-fx-duration'),
@@ -627,6 +754,9 @@ const settingEls = {
   customSoundInput: document.getElementById('set-custom-sound'),
   customSoundName: document.getElementById('custom-sound-name'),
   clearCustomSound: document.getElementById('clear-custom-sound'),
+  scoreRolling: document.getElementById('set-score-rolling'),
+  sortAnimation: document.getElementById('set-sort-animation'),
+  rankChangeAnimation: document.getElementById('set-rank-change-animation'),
 };
 const columnsVal = document.getElementById('columns-val');
 const radiusVal = document.getElementById('radius-val');
@@ -687,6 +817,12 @@ const classEls = {
   cdPause: document.getElementById('cd-pause'),
   cdResume: document.getElementById('cd-resume'),
   cdReset: document.getElementById('cd-reset'),
+  quickCdMin: document.getElementById('quick-cd-min'),
+  quickCdStart: document.getElementById('quick-cd-start'),
+  quickCdPause: document.getElementById('quick-cd-pause'),
+  quickCdResume: document.getElementById('quick-cd-resume'),
+  quickCdReset: document.getElementById('quick-cd-reset'),
+  quickCdStatus: document.getElementById('quick-cd-status'),
   countdownStatus: document.getElementById('countdown-status'),
   lbScope: document.getElementById('set-lb-scope'),
   lbLimit: document.getElementById('set-lb-limit'),
@@ -702,6 +838,39 @@ const classEls = {
   cleanupOrphans: document.getElementById('cleanup-orphans'),
   dataStatus: document.getElementById('data-status'),
   settingsResize: document.getElementById('settings-resize'),
+  quickPresets: document.getElementById('set-quick-presets'),
+  scoreLogBtn: document.getElementById('score-log'),
+  scoreLogDialog: document.getElementById('score-log-dialog'),
+  scoreLogBody: document.getElementById('score-log-body'),
+  scoreLogClose: document.getElementById('score-log-close'),
+  undoHistoryBtn: document.getElementById('undo-history'),
+  undoHistoryDialog: document.getElementById('undo-history-dialog'),
+  undoHistoryBody: document.getElementById('undo-history-body'),
+  undoHistoryClose: document.getElementById('undo-history-close'),
+  featureMarquee: document.getElementById('set-feature-marquee'),
+  marqueeText: document.getElementById('set-marquee-text'),
+  marqueePosition: document.getElementById('set-marquee-position'),
+  marqueeEffect: document.getElementById('set-marquee-effect'),
+  marqueeFontSize: document.getElementById('set-marquee-font-size'),
+  marqueeFontVal: document.getElementById('marquee-font-val'),
+  marqueeSpeed: document.getElementById('set-marquee-speed'),
+  marqueeSpeedVal: document.getElementById('marquee-speed-val'),
+  marqueeColorEnabled: document.getElementById('set-marquee-color-enabled'),
+  marqueeColor: document.getElementById('set-marquee-color'),
+  marqueeBgEnabled: document.getElementById('set-marquee-bg-enabled'),
+  marqueeBgColor: document.getElementById('set-marquee-bg-color'),
+  bgmEnabled: document.getElementById('set-bgm-enabled'),
+  bgmFile: document.getElementById('set-bgm-file'),
+  clearBgmFile: document.getElementById('clear-bgm-file'),
+  bgmVolume: document.getElementById('set-bgm-volume'),
+  bgmVolumeVal: document.getElementById('bgm-volume-val'),
+  bgmLoop: document.getElementById('set-bgm-loop'),
+  featureWelcome: document.getElementById('set-feature-welcome'),
+  welcomeText: document.getElementById('set-welcome-text'),
+  welcomeBgColorEnabled: document.getElementById('set-welcome-bg-color-enabled'),
+  welcomeBgColor: document.getElementById('set-welcome-bg-color'),
+  welcomeImage: document.getElementById('set-welcome-image'),
+  clearWelcomeImage: document.getElementById('clear-welcome-image'),
 };
 
 const featureEls = {
@@ -912,8 +1081,8 @@ settingEls.spotlightHeight.addEventListener('input', () => {
   spotlightHeightVal.textContent = v === 0 ? '自动' : v;
   pushSetting('spotlightHeight', v);
 });
-settingEls.spotlightReturn.addEventListener('change', () =>
-  pushSetting('spotlightReturnToOrigin', settingEls.spotlightReturn.checked, true));
+settingEls.spotlightTheme.addEventListener('change', () =>
+  pushSetting('spotlightTheme', settingEls.spotlightTheme.value, true));
 settingEls.spotlightReturnDuration.addEventListener('input', () => {
   spotlightReturnDurationVal.textContent = settingEls.spotlightReturnDuration.value;
   pushSetting('spotlightReturnDuration', Number(settingEls.spotlightReturnDuration.value));
@@ -949,6 +1118,12 @@ settingEls.customSoundInput.addEventListener('change', async () => {
 settingEls.clearCustomSound.addEventListener('click', () => {
   projectOp('updateSettings', { patch: { customSound: '' } }).catch((e) => toast(e.message));
 });
+settingEls.scoreRolling.addEventListener('change', () =>
+  pushSetting('scoreRolling', settingEls.scoreRolling.checked, true));
+settingEls.sortAnimation.addEventListener('change', () =>
+  pushSetting('sortAnimation', settingEls.sortAnimation.checked, true));
+settingEls.rankChangeAnimation.addEventListener('change', () =>
+  pushSetting('rankChangeAnimation', settingEls.rankChangeAnimation.checked, true));
 
 // ---- 高级外观：滑块 / 下拉 / 开关 / 颜色 ----
 const fmtAuto = (v) => (Number(v) === 0 ? '自动' : String(v));
@@ -1069,6 +1244,7 @@ function applyFeatureVisibility(settings) {
     el.classList.toggle('hidden', !settings[el.dataset.feature]);
   });
   settingsDialog.classList.toggle('no-resize', !settings.featureSettingsResize);
+  featuresDialog.classList.toggle('no-resize', !settings.featureSettingsResize);
   if (!settings.featureSearch) {
     peopleQuery = '';
     teamsQuery = '';
@@ -1102,7 +1278,6 @@ function countdownRemaining(c) {
 }
 
 function updateCountdownStatus() {
-  if (!classEls.countdownStatus) return;
   const project = currentProject();
   const c = currentRuntime && currentRuntime.countdowns ? currentRuntime.countdowns[currentProjectId] : null;
   let text = '未开始';
@@ -1111,10 +1286,19 @@ function updateCountdownStatus() {
     else if (c.state === 'paused') text = '已暂停 ' + formatClock(countdownRemaining(c));
     else if (c.state === 'ended') text = '时间到';
   }
-  classEls.countdownStatus.textContent = text;
+
+  // 弹窗内控件
+  if (classEls.countdownStatus) classEls.countdownStatus.textContent = text;
   if (classEls.cdPause) classEls.cdPause.disabled = !c || c.state !== 'running';
   if (classEls.cdResume) classEls.cdResume.disabled = !c || c.state !== 'paused';
   if (classEls.cdReset) classEls.cdReset.disabled = !c;
+
+  // 预览旁快捷控件
+  if (classEls.quickCdStatus) classEls.quickCdStatus.textContent = text;
+  if (classEls.quickCdPause) classEls.quickCdPause.disabled = !c || c.state !== 'running';
+  if (classEls.quickCdResume) classEls.quickCdResume.disabled = !c || c.state !== 'paused';
+  if (classEls.quickCdReset) classEls.quickCdReset.disabled = !c;
+
   if (classEls.toggleLeaderboard && project) {
     classEls.toggleLeaderboard.textContent =
       project.settings.displayView === 'leaderboard' ? '返回计分板' : '切换到排行榜';
@@ -1140,6 +1324,112 @@ classEls.undo.addEventListener('click', () => {
     toast('已撤销：' + (result && result.label ? result.label : '上一步记分'));
   }).catch((e) => toast(e.message));
 });
+
+// ---- 分数日志 / 撤销历史 ----
+function formatLogTime(ts) {
+  const d = new Date(ts);
+  const p = (n) => String(n).padStart(2, '0');
+  return d.getHours() + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+}
+
+classEls.scoreLogBtn.addEventListener('click', () => {
+  const logs = currentRuntime && currentRuntime.scoreLogs
+    ? currentRuntime.scoreLogs[currentProjectId] || [] : [];
+  classEls.scoreLogBody.innerHTML = logs.length
+    ? logs.map((l) => '<div class="log-row"><span class="hint">' + formatLogTime(l.at) +
+        '</span><span>' + escapeHTML(l.label) + '</span></div>').join('')
+    : '<p class="hint">暂无分数变化记录</p>';
+  if (!classEls.scoreLogDialog.open) classEls.scoreLogDialog.showModal();
+});
+classEls.scoreLogClose.addEventListener('click', () => classEls.scoreLogDialog.close());
+
+classEls.undoHistoryBtn.addEventListener('click', () => {
+  const labels = currentRuntime && currentRuntime.undoLabels
+    ? currentRuntime.undoLabels[currentProjectId] || [] : [];
+  // labels 是最新在前的倒序（index 从大往小）；展示时也按最新在前
+  classEls.undoHistoryBody.innerHTML = labels.length
+    ? labels.map((l) => '<button class="btn small undo-to" data-keep="' + l.index + '">撤销到：' +
+        escapeHTML(l.label) + '</button>').join('')
+    : '<p class="hint">没有可撤销的记分</p>';
+  classEls.undoHistoryBody.querySelectorAll('.undo-to').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      projectOp('undoTo', { keep: Number(btn.dataset.keep) }).then((res) => {
+        const result = res.result || res;
+        toast('已连续撤销 ' + result.count + ' 步');
+        classEls.undoHistoryDialog.close();
+      }).catch((e) => toast(e.message));
+    });
+  });
+  if (!classEls.undoHistoryDialog.open) classEls.undoHistoryDialog.showModal();
+});
+classEls.undoHistoryClose.addEventListener('click', () => classEls.undoHistoryDialog.close());
+
+// ---- 快捷分预设 ----
+classEls.quickPresets.addEventListener('input', () => {
+  const items = classEls.quickPresets.value.split(/[,，、\s]+/)
+    .map((s) => s.trim()).filter(Boolean).map(Number);
+  if (items.length && items.every((n) => Number.isInteger(n) && n !== 0)) {
+    pushSetting('quickScorePresets', items);
+  }
+});
+
+// ---- 课堂玩法：跑马灯 / 背景音乐 / 欢迎幕布 ----
+classEls.featureMarquee.addEventListener('change', () =>
+  pushSetting('featureMarquee', classEls.featureMarquee.checked, true));
+classEls.marqueeText.addEventListener('input', () =>
+  pushSetting('marqueeText', classEls.marqueeText.value));
+classEls.marqueePosition.addEventListener('change', () =>
+  pushSetting('marqueePosition', classEls.marqueePosition.value, true));
+classEls.marqueeEffect.addEventListener('change', () =>
+  pushSetting('marqueeEffect', classEls.marqueeEffect.value, true));
+classEls.marqueeFontSize.addEventListener('input', () => {
+  const v = Number(classEls.marqueeFontSize.value);
+  classEls.marqueeFontVal.textContent = v === 0 ? '自动' : v + ' px';
+  pushSetting('marqueeFontSize', v);
+});
+classEls.marqueeSpeed.addEventListener('input', () => {
+  classEls.marqueeSpeedVal.textContent = String(Number(classEls.marqueeSpeed.value));
+  pushSetting('marqueeSpeed', Number(classEls.marqueeSpeed.value));
+});
+bindAdvColorToggle(classEls.marqueeColorEnabled, classEls.marqueeColor, 'marqueeColor');
+bindAdvColorToggle(classEls.marqueeBgEnabled, classEls.marqueeBgColor, 'marqueeBgColor');
+
+classEls.bgmEnabled.addEventListener('change', () =>
+  pushSetting('bgmEnabled', classEls.bgmEnabled.checked, true));
+classEls.bgmFile.addEventListener('change', async () => {
+  const f = classEls.bgmFile.files[0];
+  if (!f) return;
+  try {
+    const path = await uploadSound(f);
+    await projectOp('updateSettings', { patch: { bgmFile: path } });
+  } catch (e) { toast(e.message); }
+  classEls.bgmFile.value = '';
+});
+classEls.clearBgmFile.addEventListener('click', () =>
+  projectOp('updateSettings', { patch: { bgmFile: '' } }).catch((e) => toast(e.message)));
+classEls.bgmVolume.addEventListener('input', () => {
+  classEls.bgmVolumeVal.textContent = Math.round(Number(classEls.bgmVolume.value) * 100);
+  pushSetting('bgmVolume', Number(classEls.bgmVolume.value));
+});
+classEls.bgmLoop.addEventListener('change', () =>
+  pushSetting('bgmLoop', classEls.bgmLoop.checked, true));
+
+classEls.featureWelcome.addEventListener('change', () =>
+  pushSetting('featureWelcome', classEls.featureWelcome.checked, true));
+classEls.welcomeText.addEventListener('input', () =>
+  pushSetting('welcomeText', classEls.welcomeText.value));
+bindAdvColorToggle(classEls.welcomeBgColorEnabled, classEls.welcomeBgColor, 'welcomeBgColor');
+classEls.welcomeImage.addEventListener('change', async () => {
+  const f = classEls.welcomeImage.files[0];
+  if (!f) return;
+  try {
+    const path = await uploadAvatar(f);
+    await projectOp('updateSettings', { patch: { welcomeImage: path } });
+  } catch (e) { toast(e.message); }
+  classEls.welcomeImage.value = '';
+});
+classEls.clearWelcomeImage.addEventListener('click', () =>
+  projectOp('updateSettings', { patch: { welcomeImage: '' } }).catch((e) => toast(e.message)));
 
 classEls.resetScores.addEventListener('click', () => {
   if (!confirm('将所有人员分数清零？此操作可以撤销。')) return;
@@ -1305,6 +1595,26 @@ classEls.cdResume.addEventListener('click', () =>
 classEls.cdReset.addEventListener('click', () =>
   projectOp('countdownReset', {}).catch((e) => toast(e.message)));
 
+// 预览旁倒计时快捷操作
+classEls.quickCdMin.addEventListener('input', () => {
+  const mins = Number(classEls.quickCdMin.value);
+  if (Number.isFinite(mins) && mins >= 1 && mins <= 60) {
+    pushSetting('countdownDurationSec', Math.round(mins * 60));
+  }
+});
+const quickCdMins = () => {
+  const mins = Number(classEls.quickCdMin.value);
+  return Number.isFinite(mins) && mins >= 1 && mins <= 60 ? Math.round(mins * 60) : 300;
+};
+classEls.quickCdStart.addEventListener('click', () =>
+  projectOp('countdownStart', { durationSec: quickCdMins() }).catch((e) => toast(e.message)));
+classEls.quickCdPause.addEventListener('click', () =>
+  projectOp('countdownPause', {}).catch((e) => toast(e.message)));
+classEls.quickCdResume.addEventListener('click', () =>
+  projectOp('countdownResume', {}).catch((e) => toast(e.message)));
+classEls.quickCdReset.addEventListener('click', () =>
+  projectOp('countdownReset', {}).catch((e) => toast(e.message)));
+
 classEls.lbScope.addEventListener('change', () =>
   pushSetting('leaderboardScope', classEls.lbScope.value, true));
 classEls.lbLimit.addEventListener('input', () =>
@@ -1436,6 +1746,7 @@ window.addEventListener('pointerup', () => {
 });
 window.addEventListener('resize', () => {
   if (settingsDialog.open) applySettingsDialogSize();
+  if (featuresDialog.open) applyFeaturesDialogSize();
 });
 
 function syncAdvRange(input, label, val, fmt) {
@@ -1482,6 +1793,7 @@ function renderSettings(settings) {
   if (document.activeElement !== quick.accent && quick.accent.value !== settings.accent) {
     quick.accent.value = settings.accent;
   }
+  quick.view.value = settings.displayView || 'cards';
   settingEls.density.value = settings.density;
   settingEls.sortBy.value = settings.sortBy;
   settingEls.sortOrder.value = settings.sortOrder;
@@ -1562,7 +1874,8 @@ function renderSettings(settings) {
     settingEls.spotlightHeight.value = settings.spotlightHeight;
     spotlightHeightVal.textContent = settings.spotlightHeight === 0 ? '自动' : settings.spotlightHeight;
   }
-  settingEls.spotlightReturn.checked = Boolean(settings.spotlightReturnToOrigin);
+  settingEls.spotlightTheme.value = settings.spotlightTheme ||
+    (settings.spotlightReturnToOrigin ? 'fly' : 'pop');
   if (Number(settingEls.spotlightReturnDuration.value) !== settings.spotlightReturnDuration) {
     settingEls.spotlightReturnDuration.value = settings.spotlightReturnDuration;
     spotlightReturnDurationVal.textContent = settings.spotlightReturnDuration;
@@ -1642,6 +1955,9 @@ function renderSettings(settings) {
   if (document.activeElement !== classEls.countdownMin) {
     classEls.countdownMin.value = String(Math.max(1, Math.round(settings.countdownDurationSec / 60)));
   }
+  if (document.activeElement !== classEls.quickCdMin) {
+    classEls.quickCdMin.value = String(Math.max(1, Math.round(settings.countdownDurationSec / 60)));
+  }
   classEls.countdownMode.value = settings.countdownDisplayMode || 'corner';
   classEls.cdShape.value = settings.countdownShape || 'circle';
   classEls.cdPosition.value = settings.countdownPosition || 'center';
@@ -1686,6 +2002,46 @@ function renderSettings(settings) {
   classEls.lbScale.value = settings.leaderboardScale;
   classEls.lbScaleVal.textContent = String(settings.leaderboardScale);
   classEls.rankTieMode.value = settings.rankTieMode;
+  if (document.activeElement !== classEls.quickPresets) {
+    const presets = (settings.quickScorePresets || [1, 5, 10, -1]).join(', ');
+    if (classEls.quickPresets.value !== presets) classEls.quickPresets.value = presets;
+  }
+  settingEls.scoreRolling.checked = settings.scoreRolling !== false;
+  settingEls.sortAnimation.checked = settings.sortAnimation !== false;
+  settingEls.rankChangeAnimation.checked = settings.rankChangeAnimation !== false;
+
+  // 课堂玩法
+  classEls.featureMarquee.checked = settings.featureMarquee;
+  if (document.activeElement !== classEls.marqueeText &&
+    classEls.marqueeText.value !== (settings.marqueeText || '')) {
+    classEls.marqueeText.value = settings.marqueeText || '';
+  }
+  classEls.marqueePosition.value = settings.marqueePosition || 'top';
+  classEls.marqueeEffect.value = settings.marqueeEffect || 'scroll';
+  if (Number(classEls.marqueeFontSize.value) !== settings.marqueeFontSize) {
+    classEls.marqueeFontSize.value = settings.marqueeFontSize;
+  }
+  classEls.marqueeFontVal.textContent = settings.marqueeFontSize === 0 ? '自动' : settings.marqueeFontSize + ' px';
+  if (Number(classEls.marqueeSpeed.value) !== settings.marqueeSpeed) {
+    classEls.marqueeSpeed.value = settings.marqueeSpeed;
+  }
+  classEls.marqueeSpeedVal.textContent = String(settings.marqueeSpeed);
+  syncAdvColorToggle(classEls.marqueeColorEnabled, classEls.marqueeColor, settings.marqueeColor, settings.accent);
+  syncAdvColorToggle(classEls.marqueeBgEnabled, classEls.marqueeBgColor, settings.marqueeBgColor,
+    settings.theme === 'light' ? '#ffffff' : '#1a1f26');
+  classEls.bgmEnabled.checked = settings.bgmEnabled;
+  if (Number(classEls.bgmVolume.value) !== settings.bgmVolume) {
+    classEls.bgmVolume.value = settings.bgmVolume;
+  }
+  classEls.bgmVolumeVal.textContent = Math.round(settings.bgmVolume * 100);
+  classEls.bgmLoop.checked = settings.bgmLoop !== false;
+  classEls.featureWelcome.checked = settings.featureWelcome;
+  if (document.activeElement !== classEls.welcomeText &&
+    classEls.welcomeText.value !== (settings.welcomeText || '')) {
+    classEls.welcomeText.value = settings.welcomeText || '';
+  }
+  syncAdvColorToggle(classEls.welcomeBgColorEnabled, classEls.welcomeBgColor, settings.welcomeBgColor,
+    settings.theme === 'light' ? '#ffffff' : '#12161c');
 }
 
 // ============ 总渲染 ============

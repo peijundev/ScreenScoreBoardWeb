@@ -350,66 +350,181 @@ body.countdown-fullscreen .overlay-clock { display: none !important; }
   padding: 8px 28px 48px;
   display: flex;
   flex-direction: column;
-  gap: calc(10px * var(--lb-scale, 1));
+  gap: calc(12px * var(--lb-scale, 1));
+}
+.lb-header {
+  text-align: center;
+  padding: calc(10px * var(--lb-scale, 1)) 0 calc(18px * var(--lb-scale, 1));
+}
+.lb-header h2 {
+  font-size: calc(30px * var(--lb-scale, 1));
+  font-weight: 800;
+  letter-spacing: 0.08em;
 }
 .lb-row {
   position: relative;
   display: flex;
   align-items: center;
-  gap: calc(16px * var(--lb-scale, 1));
-  padding: calc(14px * var(--lb-scale, 1)) calc(18px * var(--lb-scale, 1)) calc(18px * var(--lb-scale, 1));
+  gap: calc(18px * var(--lb-scale, 1));
+  padding: calc(16px * var(--lb-scale, 1)) calc(20px * var(--lb-scale, 1)) calc(22px * var(--lb-scale, 1));
   background: var(--card);
   border: 1px solid var(--card-border);
-  border-radius: var(--radius);
+  border-radius: calc(var(--radius) + 4px);
   overflow: hidden;
 }
 .lb-row img {
-  width: calc(48px * var(--lb-scale, 1));
-  height: calc(48px * var(--lb-scale, 1));
+  width: calc(52px * var(--lb-scale, 1));
+  height: calc(52px * var(--lb-scale, 1));
   border-radius: 50%;
   object-fit: cover;
   flex: 0 0 auto;
+  border: 2px solid var(--card-border);
 }
 .lb-rank {
-  min-width: 2.2em;
-  text-align: center;
-  font-size: calc(24px * var(--lb-scale, 1));
+  min-width: 1.7em;
+  height: 1.7em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: calc(20px * var(--lb-scale, 1));
   font-weight: 800;
-  color: var(--accent);
+  color: var(--text-dim);
+  background: color-mix(in srgb, var(--card-border) 35%, transparent);
   font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
 }
 .lb-main { flex: 1; min-width: 0; }
 .lb-name {
-  font-size: calc(22px * var(--lb-scale, 1));
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--lb-scale, 1));
+  font-size: calc(24px * var(--lb-scale, 1));
   font-weight: 700;
   word-break: break-all;
 }
+.lb-kind {
+  font-size: calc(12px * var(--lb-scale, 1));
+  font-weight: 600;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 0 calc(8px * var(--lb-scale, 1));
+  flex: 0 0 auto;
+}
 .lb-team {
-  font-size: calc(14px * var(--lb-scale, 1));
+  font-size: calc(15px * var(--lb-scale, 1));
   color: var(--text-dim);
+  margin-top: 2px;
 }
 .lb-score {
-  font-size: calc(34px * var(--lb-scale, 1));
+  font-size: calc(38px * var(--lb-scale, 1));
   font-weight: 800;
+  letter-spacing: -0.01em;
 }
 .lb-bar {
   position: absolute;
   left: 0;
   bottom: 0;
-  height: 5px;
-  background: var(--accent);
+  height: calc(6px * var(--lb-scale, 1));
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 40%, transparent));
   opacity: 0.9;
   max-width: 100%;
+  transition: width 0.5s ease;
 }
-.lb-row.lb-neg .lb-bar { background: #e06c75; }
-.lb-top-1 .lb-rank { color: #e8a33d; }
-.lb-top-2 .lb-rank { color: #b8c0cc; }
-.lb-top-3 .lb-rank { color: #c98f3a; }
+.lb-row.lb-neg .lb-bar {
+  background: linear-gradient(90deg, #e06c75, color-mix(in srgb, #e06c75 40%, transparent));
+}
+
+/* 前三名奖章与卡片层次 */
+.lb-top-1 { border-color: #e8a33d; box-shadow: 0 4px 24px rgba(232, 163, 61, 0.18); }
+.lb-top-2 { border-color: #b8c0cc; box-shadow: 0 4px 18px rgba(184, 192, 204, 0.14); }
+.lb-top-3 { border-color: #c98f3a; box-shadow: 0 4px 16px rgba(201, 143, 58, 0.14); }
+.lb-top-1 .lb-rank { color: #fff; background: linear-gradient(135deg, #f7c548, #e8a33d); }
+.lb-top-2 .lb-rank { color: #fff; background: linear-gradient(135deg, #d4dae2, #9aa3b0); }
+.lb-top-3 .lb-rank { color: #fff; background: linear-gradient(135deg, #d99a5b, #c98f3a); }
+.lb-top-1 img { border-color: #e8a33d; }
+.lb-top-2 img { border-color: #b8c0cc; }
+.lb-top-3 img { border-color: #c98f3a; }
+
 .lb-empty {
   text-align: center;
   color: var(--text-dim);
   padding: 60px 0;
   font-size: 20px;
+}
+
+/* ---- 跑马灯横幅 ---- */
+.marquee {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 35;
+  overflow: hidden;
+  background: var(--marquee-bg, color-mix(in srgb, var(--card) 82%, transparent));
+  border-bottom: 1px solid var(--card-border);
+  padding: 8px 0;
+  pointer-events: none;
+}
+.marquee[data-position="bottom"] {
+  top: auto;
+  bottom: 0;
+  border-bottom: none;
+  border-top: 1px solid var(--card-border);
+}
+.marquee span {
+  display: inline-block;
+  white-space: nowrap;
+  padding-left: 100%;
+  font-size: var(--marquee-font, clamp(16px, 2vw, 26px));
+  font-weight: 600;
+  color: var(--marquee-color, var(--accent));
+}
+.marquee[data-effect="scroll"] span {
+  animation: marquee-scroll var(--marquee-speed, 18s) linear infinite;
+}
+.marquee[data-effect="blink"] span {
+  padding-left: 0;
+  animation: marquee-blink 1.2s ease-in-out infinite;
+}
+.marquee[data-effect="none"] span {
+  padding-left: 0;
+}
+@keyframes marquee-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-200%); }
+}
+@keyframes marquee-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .marquee[data-effect="scroll"] span { animation: none; }
+  .marquee[data-effect="blink"] span { animation: none; }
+}
+
+/* ---- 欢迎幕布 ---- */
+.welcome {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.welcome-text {
+  padding: 0 8vw;
+  text-align: center;
+  font-size: clamp(40px, 8vw, 140px);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--text);
+  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+  word-break: break-word;
 }
 
 .card {
@@ -848,6 +963,64 @@ body[data-score-effect="shake"] .fx { animation: fx-shake var(--fx-duration, 700
   78% { opacity: 1; }
   100% { opacity: 0; }
 }
+
+/* 突显居中后的加分过程浮动数字 */
+.spot-delta {
+  position: absolute;
+  left: 50%;
+  top: -0.3em;
+  font-size: 0.55em;
+  font-weight: 800;
+  line-height: 1;
+  pointer-events: none;
+  white-space: nowrap;
+  opacity: 0;
+  animation: spot-delta-rise 0.9s ease-out 0.45s forwards;
+}
+@keyframes spot-delta-rise {
+  0% { opacity: 0; transform: translate(-50%, 10px) scale(0.8); }
+  25% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -46px) scale(1.14); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spot-delta { animation: none; display: none; }
+}
+
+/* 原位聚光灯：背景压暗 + 目标卡片光晕 */
+.highlight-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  background: rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  animation: highlight-fade 0.3s ease forwards;
+}
+.highlighting {
+  position: relative;
+  z-index: 46;
+  box-shadow: 0 0 40px 10px var(--hl-glow, var(--accent));
+}
+@keyframes highlight-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .highlight-scrim { display: none; }
+}
+
+/* 名次升降动画 */
+@keyframes rank-up {
+  0% { transform: translateY(0); }
+  40% { transform: translateY(-8px); }
+  100% { transform: translateY(0); }
+}
+@keyframes rank-down {
+  0% { transform: translateY(0); }
+  40% { transform: translateY(8px); }
+  100% { transform: translateY(0); }
+}
+.rank-up .rank { color: #3ddc84; animation: rank-up 0.6s ease; }
+.rank-down .rank { color: #ff5c6c; animation: rank-down 0.6s ease; }
 
 /* 从原位置飞入居中，再飞回原位 */
 .spotlight-return-overlay {

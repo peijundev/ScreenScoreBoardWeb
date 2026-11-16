@@ -3,6 +3,7 @@
 /* 显示端：全量状态驱动渲染；?edit=1 时可在自由布局下拖动/缩放卡片 */
 
 let prevScores = {};   // personId -> 上次分数
+let prevRanks = {};    // entityId -> 上次名次（用于升降动画）
 let pendingState = null;
 let interacting = false;
 let drag = null;
@@ -29,7 +30,14 @@ const countdownBigEl = document.getElementById('countdown-big');
 const countdownBigTimeEl = document.getElementById('countdown-big-time');
 const countdownBigCaptionEl = document.getElementById('countdown-big-caption');
 const leaderboardEl = document.getElementById('leaderboard');
+const welcomeEl = document.getElementById('welcome');
+const welcomeTextEl = document.getElementById('welcome-text');
+const marqueeEl = document.getElementById('marquee');
+const marqueeTextEl = document.getElementById('marquee-text');
+const bgmEl = document.getElementById('bgm');
 const viewParam = new URLSearchParams(location.search).get('view');
+let carouselIndex = 0;
+let carouselTimer = null;
 
 const MIN_W = 8;
 const MIN_H = 6;
@@ -141,8 +149,22 @@ function prefersReducedMotion() {
   return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
+// 给突显克隆卡片注入「加分过程」浮动数字（+N / −N）
+function injectSpotDelta(clone, delta, settings) {
+  if (delta == null || delta === 0) return;
+  if (settings.scoreEffectOnlyPositive && delta < 0) return;
+  const scoreEl = clone.querySelector('.person-score, .member-score, .team-total');
+  if (!scoreEl) return;
+  const color = settings.scoreEffectColor || (delta > 0 ? '#6fbf7b' : '#e06c75');
+  const badge = document.createElement('span');
+  badge.className = 'spot-delta';
+  badge.textContent = (delta > 0 ? '+' : '') + delta;
+  badge.style.color = color;
+  scoreEl.appendChild(badge);
+}
+
 // 从原位置飞入居中、停留、再飞回原位
-function spawnSpotlightReturn(els, settings) {
+function spawnSpotlightReturn(els, settings, delta) {
   const total = Math.min(Math.max(Number(settings.spotlightReturnDuration) || 1600, 600), 6000);
   const overlay = document.createElement('div');
   overlay.className = 'spotlight-return-overlay';
@@ -163,6 +185,7 @@ function spawnSpotlightReturn(els, settings) {
     clone.removeAttribute('data-person');
     clone.removeAttribute('data-kind');
     clone.removeAttribute('data-id');
+    injectSpotDelta(clone, delta, settings);
 
     const width = Math.min(Math.max(Number(settings.spotlightWidth) || 520, 200), 1600);
     let height = Number(settings.spotlightHeight) || 0;
@@ -208,17 +231,172 @@ function spawnSpotlightReturn(els, settings) {
   }
 
   setTimeout(() => {
-    overlay.remove();
+    // 先恢复原卡片可见，再移除克隆，避免中间出现一帧空白
     items.forEach((it) => {
       if (it.el.isConnected) it.el.style.visibility = '';
     });
+    overlay.remove();
   }, total + 150);
+  return total;
 }
 
-function spawnSpotlight(els, settings) {
-  if (settings.spotlightReturnToOrigin && !prefersReducedMotion()) {
-    spawnSpotlightReturn(els, settings);
-    return;
+// 神灯特效：卡片从原位置扭曲拉伸吸入屏幕中央，停留后吸回（类似 macOS 神灯）
+function spawnSpotlightGenie(els, settings, delta) {
+  const total = Math.min(Math.max(Number(settings.spotlightReturnDuration) || 1800, 600), 6000);
+  const overlay = document.createElement('div');
+  overlay.className = 'spotlight-return-overlay';
+  const scrim = document.createElement('div');
+  scrim.className = 'spotlight-return-scrim';
+  overlay.appendChild(scrim);
+
+  const items = [];
+  for (const el of els) {
+    const rect = el.getBoundingClientRect();
+    if (!rect.width || !rect.height) continue;
+    const clone = el.cloneNode(true);
+    clone.querySelectorAll('.resize-handle, .fx-delta, .confetti-layer').forEach((n) => n.remove());
+    ['position', 'left', 'top', 'right', 'bottom', 'width', 'height', 'transform', 'animation', 'zoom']
+      .forEach((p) => clone.style.removeProperty(p));
+    clone.classList.remove('dragging');
+    clone.removeAttribute('data-person');
+    clone.removeAttribute('data-kind');
+    clone.removeAttribute('data-id');
+    injectSpotDelta(clone, delta, settings);
+
+    const width = Math.min(Math.max(Number(settings.spotlightWidth) || 520, 200), 1600);
+    let height = Number(settings.spotlightHeight) || 0;
+    if (!height) height = rect.height * (width / rect.width);
+    height = Math.min(Math.max(height, 120), window.innerHeight * 0.8);
+
+    const box = document.createElement('div');
+    box.className = 'spotlight-return-box genie-box';
+    box.style.left = rect.left + 'px';
+    box.style.top = rect.top + 'px';
+    box.style.width = rect.width + 'px';
+    box.style.height = rect.height + 'px';
+    box.appendChild(clone);
+    overlay.appendChild(box);
+    items.push({ el, box, rect, width, height });
+  }
+  if (!items.length) return;
+
+  const gap = 20;
+  const totalW = items.reduce((s, it) => s + it.width, 0) + gap * (items.length - 1);
+  let x = (window.innerWidth - totalW) / 2;
+  for (const it of items) {
+    it.target = { left: x, top: (window.innerHeight - it.height) / 2, width: it.width, height: it.height };
+    x += it.width + gap;
+  }
+
+  document.body.appendChild(overlay);
+  items.forEach((it) => { it.el.style.visibility = 'hidden'; });
+  scrim.animate(
+    [{ opacity: 0 }, { opacity: 1, offset: 0.2 }, { opacity: 1, offset: 0.72 }, { opacity: 0 }],
+    { duration: total, easing: 'ease' }
+  );
+
+  for (const it of items) {
+    const { rect, target, box } = it;
+    const midX = (rect.left + target.left) / 2;
+    const midY = (rect.top + target.top) / 2;
+    const midW = (rect.width + target.width) / 2;
+    const midH = (rect.height + target.height) / 2;
+    box.animate([
+      { left: rect.left + 'px', top: rect.top + 'px', width: rect.width + 'px', height: rect.height + 'px',
+        transform: 'scale(1,1) skewX(0deg)', borderRadius: '0px', offset: 0 },
+      { left: midX + 'px', top: midY + 'px', width: midW + 'px', height: midH + 'px',
+        transform: 'scale(0.55,1.28) skewX(-10deg)', borderRadius: '26px', offset: 0.26 },
+      { left: target.left + 'px', top: target.top + 'px', width: target.width + 'px', height: target.height + 'px',
+        transform: 'scale(1.02,1.02) skewX(0deg)', borderRadius: '14px', offset: 0.4 },
+      { left: target.left + 'px', top: target.top + 'px', width: target.width + 'px', height: target.height + 'px',
+        transform: 'scale(1,1) skewX(0deg)', borderRadius: '12px', offset: 0.7 },
+      { left: midX + 'px', top: midY + 'px', width: midW + 'px', height: midH + 'px',
+        transform: 'scale(0.55,1.28) skewX(10deg)', borderRadius: '26px', offset: 0.82 },
+      { left: rect.left + 'px', top: rect.top + 'px', width: rect.width + 'px', height: rect.height + 'px',
+        transform: 'scale(1,1) skewX(0deg)', borderRadius: '0px', offset: 1 },
+    ], { duration: total, easing: 'cubic-bezier(0.2,0.8,0.2,1)' });
+  }
+
+  setTimeout(() => {
+    // 先恢复原卡片可见，再移除克隆，避免中间出现一帧空白
+    items.forEach((it) => {
+      if (it.el.isConnected) it.el.style.visibility = '';
+    });
+    overlay.remove();
+  }, total + 150);
+  return total;
+}
+
+// 联动避开：目标卡片飞入中间放大的同时，周围卡片虚化、缩小并向两侧缩走（苹果宣传片式）
+// 周围卡片用 Web Animations 关键帧，与目标卡片的飞入动画同时间轴同步运动
+function spawnSpotlightSqueeze(els, settings, delta) {
+  const total = Math.min(Math.max(Number(settings.spotlightReturnDuration) || 1600, 600), 6000);
+  const targetEl = els[0];
+  const boardRect = board.getBoundingClientRect();
+  const targetRect = targetEl.getBoundingClientRect();
+  const centerX = boardRect.left + boardRect.width / 2;
+
+  const siblings = [];
+  board.querySelectorAll('.card[data-kind], .member[data-person]').forEach((n) => {
+    if (els.includes(n)) return;
+    const r = n.getBoundingClientRect();
+    const dir = (r.left + r.width / 2) < centerX ? -1 : 1;
+    const dist = Math.min(260, Math.max(70, Math.abs(centerX - (r.left + r.width / 2)) * 0.35));
+    siblings.push({ n, dir, dist });
+  });
+
+  // 与目标卡片同步的 4 段关键帧：原位 → 让位(缩+虚+退) → 保持 → 原位
+  siblings.forEach(({ n, dir, dist }) => {
+    const away = 'translateX(' + Math.round(dir * dist) + 'px) scale(0.8)';
+    n.animate([
+      { transform: 'none', filter: 'blur(0px)', opacity: 1, offset: 0 },
+      { transform: away, filter: 'blur(5px)', opacity: 0.5, offset: 0.34 },
+      { transform: away, filter: 'blur(5px)', opacity: 0.5, offset: 0.72 },
+      { transform: 'none', filter: 'blur(0px)', opacity: 1, offset: 1 },
+    ], { duration: total, easing: 'cubic-bezier(0.22, 0.61, 0.36, 1)' });
+  });
+
+  // 目标卡片飞入飞回（同 total，同 offset 节奏）
+  spawnSpotlightReturn(els, settings, delta);
+}
+
+// 原位聚光灯：背景压暗 + 目标卡片在原位轻微放大并带光晕（不搬到中间）
+function spawnHighlight(els, settings) {
+  const total = Math.max(1000, settings.scoreEffectDuration + 400);
+  const scrim = document.createElement('div');
+  scrim.className = 'highlight-scrim';
+  document.body.appendChild(scrim);
+
+  for (const el of els) {
+    el.classList.add('highlighting');
+    const glow = settings.scoreEffectColor || settings.accent || '#e8a33d';
+    el.animate([
+      { transform: 'scale(1)', filter: 'brightness(1)' },
+      { transform: 'scale(1.07)', filter: 'brightness(1.35)', offset: 0.35 },
+      { transform: 'scale(1.02)', filter: 'brightness(1.1)', offset: 0.7 },
+      { transform: 'scale(1)', filter: 'brightness(1)' },
+    ], { duration: total, easing: 'ease' });
+    el.style.setProperty('--hl-glow', glow);
+  }
+
+  setTimeout(() => {
+    // 遮罩淡出后再移除，避免瞬间变亮
+    scrim.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300, easing: 'ease' }).onfinish = () => scrim.remove();
+    els.forEach((el) => {
+      el.style.transition = 'box-shadow 300ms ease, filter 300ms ease';
+      el.classList.remove('highlighting');
+      setTimeout(() => { el.style.transition = ''; }, 320);
+    });
+  }, total);
+}
+
+function spawnSpotlight(els, settings, delta) {
+  const theme = settings.spotlightTheme ||
+    (settings.spotlightReturnToOrigin ? 'fly' : 'pop');
+  if (!prefersReducedMotion()) {
+    if (theme === 'fly') { spawnSpotlightReturn(els, settings, delta); return; }
+    if (theme === 'genie') { spawnSpotlightGenie(els, settings, delta); return; }
+    if (theme === 'squeeze') { spawnSpotlightSqueeze(els, settings, delta); return; }
   }
   const total = Math.max(1200, settings.scoreEffectDuration + 600);
 
@@ -239,6 +417,7 @@ function spawnSpotlight(els, settings) {
     clone.removeAttribute('data-person');
     clone.removeAttribute('data-kind');
     clone.removeAttribute('data-id');
+    injectSpotDelta(clone, delta, settings);
 
     const width = Math.min(Math.max(Number(settings.spotlightWidth) || 520, 200), 1600);
     const height = Number(settings.spotlightHeight) || 0;
@@ -339,7 +518,9 @@ function memberHTML(m, settings, delta, layout, editable) {
       '<div class="m-body">' +
         '<div class="member-name">' + escapeHTML(m.name) + '</div>' +
         (settings.showMemberScore
-          ? '<div class="score member-score ' + scoreClass(m.score) + fx.cls + '">' + m.score + '</div>'
+          ? '<div class="score member-score ' + scoreClass(m.score) + fx.cls + '">' +
+            fx.badge +
+            '<span class="score-num" data-person-score="' + m.id + '">' + m.score + '</span></div>'
           : '') +
       '</div>' +
       resizeHandleHTML(editable) +
@@ -368,7 +549,7 @@ function personCardHTML(p, delta, layout, editable, settings, meta) {
       '<img src="' + avatarURL(p) + '" alt="">' +
       '<div class="person-name">' + escapeHTML(p.name) + '</div>' +
       '<div class="score person-score ' + scoreClass(p.score) + fx.cls + '">' +
-        fx.badge + p.score +
+        fx.badge + '<span class="score-num" data-person-score="' + p.id + '">' + p.score + '</span>' +
       '</div>' +
       barHTML(meta) +
       resizeHandleHTML(editable) +
@@ -399,7 +580,8 @@ function teamCardHTML(team, members, settings, deltas, layout, editable, meta) {
         '<img src="' + avatarURL(team, 64) + '" alt="">' +
         '<div class="team-name">' + escapeHTML(team.name) + '</div>' +
         (settings.showTeamTotal
-          ? '<div class="score team-total' + tfx.cls + '">' + tfx.badge + total + '</div>'
+          ? '<div class="score team-total' + tfx.cls + '">' + tfx.badge +
+            '<span class="score-num" data-team-score="' + team.id + '">' + total + '</span></div>'
           : '') +
       '</div>' +
       '<div class="team-members' + (freeMembers ? ' free' : '') + '">' +
@@ -774,27 +956,107 @@ function leaderboardEntries(project, settings) {
   return limited;
 }
 
+function renderWelcome(settings) {
+  board.classList.add('hidden');
+  leaderboardEl.classList.add('hidden');
+  emptyTip.classList.add('hidden');
+  welcomeEl.classList.remove('hidden');
+  welcomeTextEl.textContent = settings.welcomeText || settings.title;
+  if (settings.welcomeImage) {
+    welcomeEl.style.backgroundImage = 'url("/' + settings.welcomeImage + '")';
+    welcomeEl.style.backgroundColor = '';
+  } else {
+    welcomeEl.style.backgroundImage = '';
+    welcomeEl.style.backgroundColor = settings.welcomeBgColor ||
+      (settings.theme === 'light' ? '#ffffff' : '#12161c');
+  }
+}
+
+function applyMarquee(settings) {
+  if (settings.featureMarquee && settings.marqueeText) {
+    marqueeTextEl.textContent = settings.marqueeText;
+    marqueeEl.classList.remove('hidden');
+
+    // 位置（顶部 / 底部）
+    marqueeEl.dataset.position = settings.marqueePosition || 'top';
+    // 特效（滚动 / 闪烁 / 静止）
+    marqueeEl.dataset.effect = settings.marqueeEffect || 'scroll';
+    // 字号（0=自动）与速度倍率
+    marqueeEl.style.setProperty('--marquee-font', settings.marqueeFontSize
+      ? settings.marqueeFontSize + 'px' : '');
+    marqueeEl.style.setProperty('--marquee-speed', (settings.marqueeSpeed || 1) * 18 + 's');
+    // 文字颜色 / 背景色（留空跟随主题）
+    marqueeEl.style.setProperty('--marquee-color', settings.marqueeColor || '');
+    marqueeEl.style.setProperty('--marquee-bg', settings.marqueeBgColor || '');
+  } else {
+    marqueeEl.classList.add('hidden');
+  }
+}
+
+function applyBgm(settings) {
+  if (settings.bgmEnabled && settings.bgmFile) {
+    const src = '/' + settings.bgmFile;
+    if (bgmEl.getAttribute('src') !== src) bgmEl.src = src;
+    bgmEl.loop = settings.bgmLoop !== false;
+    bgmEl.volume = Math.max(0, Math.min(1, settings.bgmVolume));
+    bgmEl.play().catch(() => {});
+  } else {
+    bgmEl.pause();
+    bgmEl.removeAttribute('src');
+  }
+}
+
+// 浏览器自动播放限制：显示端被点击后尝试恢复背景音乐
+document.addEventListener('pointerdown', () => {
+  const s = currentSettings;
+  if (s && s.bgmEnabled && s.bgmFile) bgmEl.play().catch(() => {});
+}, { once: true });
+
+// 轮播定时器：featureCarousel 开启时按间隔切换视图
+function applyCarouselTimer(settings) {
+  const shouldRun = viewParam == null && settings.featureCarousel &&
+    settings.carouselViews && settings.carouselViews.length > 1;
+  if (shouldRun) {
+    if (!carouselTimer) {
+      const interval = (settings.carouselIntervalSec || 15) * 1000;
+      carouselTimer = setInterval(() => {
+        carouselIndex = (carouselIndex + 1) % (settings.carouselViews.length || 1);
+        renderState();
+      }, interval);
+    }
+  } else if (carouselTimer) {
+    clearInterval(carouselTimer);
+    carouselTimer = null;
+  }
+}
+
 function renderLeaderboard(project, settings) {
   const entries = leaderboardEntries(project, settings);
   const maxAbs = Math.max(1, ...entries.map((e) => Math.abs(e.score)));
   leaderboardEl.style.setProperty('--lb-scale', settings.leaderboardScale);
-  leaderboardEl.innerHTML = entries.map((e) => {
+
+  const header = '<header class="lb-header"><h2>' +
+    escapeHTML(settings.title || '排行榜') + '</h2></header>';
+
+  leaderboardEl.innerHTML = header + (entries.map((e) => {
     const pct = Math.min(100, Math.round((Math.abs(e.score) / maxAbs) * 100));
+    const medal = e.rank === 1 ? '1' : e.rank === 2 ? '2' : e.rank === 3 ? '3' : '';
     const rowClass = 'lb-row' + (e.score < 0 ? ' lb-neg' : '') +
       (e.rank === 1 ? ' lb-top-1' : e.rank === 2 ? ' lb-top-2' : e.rank === 3 ? ' lb-top-3' : '');
+    const kindTag = e.kind === 'team' ? '<span class="lb-kind">团队</span>' : '';
     return (
       '<div class="' + rowClass + '">' +
-        '<span class="lb-rank">' + e.rank + '</span>' +
+        '<span class="lb-rank">' + (medal || e.rank) + '</span>' +
         '<img src="' + avatarURL(e, 64) + '" alt="">' +
         '<div class="lb-main">' +
-          '<div class="lb-name">' + escapeHTML(e.name) + '</div>' +
+          '<div class="lb-name">' + escapeHTML(e.name) + kindTag + '</div>' +
           (e.teamName ? '<div class="lb-team">' + escapeHTML(e.teamName) + '</div>' : '') +
         '</div>' +
-        '<span class="score lb-score ' + scoreClass(e.score) + '">' + e.score + '</span>' +
+        '<span class="score lb-score ' + scoreClass(e.score) + '"><span class="score-num">' + e.score + '</span></span>' +
         '<span class="lb-bar" style="width:' + pct + '%"></span>' +
       '</div>'
     );
-  }).join('') || '<div class="lb-empty">暂无数据</div>';
+  }).join('') || '<div class="lb-empty">暂无数据</div>');
   leaderboardEl.classList.remove('hidden');
   board.classList.add('hidden');
   emptyTip.classList.add('hidden');
@@ -842,6 +1104,20 @@ function buildItems(project, settings) {
   return items;
 }
 
+function rollNumber(el, from, to) {
+  if (from === to || !el) return;
+  el.textContent = from; // 立即设回旧值，避免新值闪现一帧
+  const dur = 500;
+  const start = performance.now();
+  const step = (now) => {
+    const t = Math.min(1, (now - start) / dur);
+    const eased = 1 - Math.pow(1 - t, 3);
+    el.textContent = Math.round(from + (to - from) * eased);
+    if (t < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
 function render(project) {
   const settings = project.settings;
   currentSettings = settings;
@@ -879,6 +1155,15 @@ function render(project) {
   const free = settings.layoutMode === 'free';
   board.classList.toggle('free', free);
 
+  // FLIP 重排：grid 布局下记录旧卡片位置，重排后平滑归位
+  let flipOld = null;
+  if (settings.sortAnimation && !free && !prefersReducedMotion()) {
+    flipOld = new Map();
+    board.querySelectorAll('.card[data-kind]').forEach((el) => {
+      flipOld.set(el.dataset.kind + ':' + el.dataset.id, el.getBoundingClientRect());
+    });
+  }
+
   if (free) {
     const fallback = shelfLayouts(items);
     const editable = isEdit;
@@ -900,6 +1185,39 @@ function render(project) {
   }
 
   applyAutoAvatarSizes();
+
+  // FLIP 重排动画
+  if (flipOld) {
+    board.querySelectorAll('.card[data-kind]').forEach((el) => {
+      const key = el.dataset.kind + ':' + el.dataset.id;
+      const old = flipOld.get(key);
+      if (!old) return;
+      const now = el.getBoundingClientRect();
+      const dx = old.left - now.left;
+      const dy = old.top - now.top;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+      el.animate([
+        { transform: 'translate(' + Math.round(dx) + 'px,' + Math.round(dy) + 'px)' },
+        { transform: 'translate(0,0)' },
+      ], { duration: 420, easing: 'cubic-bezier(0.25,0.8,0.25,1)' });
+    });
+  }
+
+  // 名次升降动画
+  if (settings.rankChangeAnimation && ranked && !prefersReducedMotion()) {
+    items.forEach((it, i) => {
+      const id = it.kind === 'person' ? it.person.id : it.team.id;
+      const rank = ranks[i];
+      const prev = prevRanks[id];
+      if (prev != null && rank !== prev) {
+        const el = board.querySelector('.card[data-kind="' + it.kind + '"][data-id="' + id + '"]');
+        if (el) el.classList.add(rank < prev ? 'rank-up' : 'rank-down');
+      }
+      prevRanks[id] = rank;
+    });
+  } else {
+    prevRanks = {};
+  }
 
   // 音效与彩带（一次状态更新只播一次声音）
   const totalDelta = Array.from(deltas.values()).reduce((a, b) => a + b, 0);
@@ -943,19 +1261,59 @@ function render(project) {
         if (personEl) els.push(personEl);
         if (scope === 'person_team' && teamEl) els.push(teamEl);
       }
-      if (els.length) spawnSpotlight(els, settings);
+      if (els.length) spawnSpotlight(els, settings, deltas.get(p.id));
+    }
+  }
+  if (settings.scoreEffect === 'highlight') {
+    const changed = Object.values(project.people).filter((p) => {
+      const d = deltas.get(p.id);
+      return d && !(settings.scoreEffectOnlyPositive && d < 0);
+    });
+    const els = [];
+    for (const p of changed) {
+      const memberEl = board.querySelector('.member[data-person="' + p.id + '"]');
+      const el = memberEl ||
+        board.querySelector('.card[data-kind="person"][data-id="' + p.id + '"]');
+      if (el) els.push(el);
+    }
+    if (els.length && !prefersReducedMotion()) spawnHighlight(els, settings);
+  }
+
+  // 滚动数字：放在所有特效之后，保证突显克隆到的是「新值」而非被滚动改写的旧值
+  if (settings.scoreRolling && !prefersReducedMotion()) {
+    for (const [personId, delta] of deltas) {
+      if (!delta) continue;
+      const el = board.querySelector('.score-num[data-person-score="' + personId + '"]');
+      if (el) rollNumber(el, Number(el.textContent) - delta, Number(el.textContent));
     }
   }
 
+  // 轮播：featureCarousel 开启且无 URL view 参数时，按间隔循环切换视图
+  let effectiveView = settings.displayView;
+  if (viewParam == null && settings.featureCarousel &&
+    settings.carouselViews && settings.carouselViews.length) {
+    effectiveView = settings.carouselViews[carouselIndex % settings.carouselViews.length];
+  }
+  applyCarouselTimer(settings);
+
   const showLeaderboard = viewParam === 'leaderboard' ||
-    (viewParam !== 'board' && settings.featureLeaderboard && settings.displayView === 'leaderboard');
+    (viewParam == null && effectiveView === 'leaderboard' && settings.featureLeaderboard);
+  const showWelcome = viewParam === 'welcome' ||
+    (viewParam == null && effectiveView === 'welcome' && settings.featureWelcome);
+
   if (showLeaderboard) {
     renderLeaderboard(project, settings);
+    welcomeEl.classList.add('hidden');
+  } else if (showWelcome) {
+    renderWelcome(settings);
   } else {
     leaderboardEl.classList.add('hidden');
+    welcomeEl.classList.add('hidden');
     board.classList.remove('hidden');
     emptyTip.classList.toggle('hidden', items.length > 0);
   }
+  applyMarquee(settings);
+  applyBgm(settings);
   applyRuntimeUI();
 }
 
