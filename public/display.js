@@ -35,6 +35,13 @@ const welcomeTextEl = document.getElementById('welcome-text');
 const marqueeEl = document.getElementById('marquee');
 const marqueeTextEl = document.getElementById('marquee-text');
 const bgmEl = document.getElementById('bgm');
+const inkSceneEl = document.querySelector('.ink-scene');
+const inkArtEl = document.querySelector('.ink-art');
+const inkPetalsEl = document.querySelector('.ink-petals');
+const inkTimeEl = document.getElementById('countdown-ink-time');
+const countdownVideoEl = document.getElementById('countdown-video');
+const countdownVideoTimeEl = document.getElementById('countdown-video-time');
+let videoMode = null; // { rate, playing }
 const viewParam = new URLSearchParams(location.search).get('view');
 let carouselIndex = 0;
 let carouselTimer = null;
@@ -832,6 +839,11 @@ function updateCountdown() {
     countdownEl.classList.add('hidden');
     countdownBigEl.classList.add('hidden');
     document.body.classList.remove('countdown-fullscreen');
+    if (countdownVideoEl) {
+      if (!countdownVideoEl.paused) countdownVideoEl.pause();
+      if (countdownVideoEl.currentTime > 0) countdownVideoEl.currentTime = 0;
+    }
+    videoMode = null;
     return;
   }
   let remaining;
@@ -852,6 +864,7 @@ function updateCountdown() {
     applyCountdownPanelBg(countdownEl, settings);
     countdownBigEl.classList.add('hidden');
     document.body.classList.remove('countdown-fullscreen');
+    applyCountdownVideo(settings, mode, c, remaining, ended);
     return;
   }
 
@@ -865,6 +878,8 @@ function updateCountdown() {
     (settings.countdownShowBackdrop === false ? ' no-backdrop' : '');
   countdownBigEl.dataset.shape = settings.countdownShape || 'circle';
   countdownBigEl.dataset.position = settings.countdownPosition || 'center';
+  countdownBigEl.dataset.theme = settings.countdownTheme || 'classic';
+  applyInkPetals(settings);
   const shape = settings.countdownShape || 'circle';
   const cdWidth = Number(settings.countdownSize) || 520;
   const canResize = shape === 'rounded' || shape === 'rounded-rect' || shape === 'rect';
@@ -884,12 +899,21 @@ function updateCountdown() {
   } else {
     countdownBigEl.style.removeProperty('--cd-text');
   }
-  countdownBigTimeEl.textContent = formatDuration(remaining);
+  const text = ended ? '时间到' : formatDuration(remaining);
+  countdownBigTimeEl.textContent = text;
   countdownBigCaptionEl.textContent = ended ? '时间到' : '倒计时';
+  if (inkTimeEl) inkTimeEl.textContent = text;
   const duration = (c.durationMs || 1) / 1000;
   const progress = Math.max(0, Math.min(1, remaining / duration));
   countdownBigEl.style.setProperty('--cd-progress', String(progress));
+  // 水墨主题的数字大小可手动覆盖（0=按画面比例自动）
+  if (manualSize > 0) {
+    countdownBigEl.style.setProperty('--ink-num-size', manualSize + 'px');
+  } else {
+    countdownBigEl.style.removeProperty('--ink-num-size');
+  }
   document.body.classList.toggle('countdown-fullscreen', mode === 'fullscreen');
+  applyCountdownVideo(settings, mode, c, remaining, ended);
 }
 
 function applyRuntimeUI() {
@@ -990,6 +1014,87 @@ function applyMarquee(settings) {
     marqueeEl.style.setProperty('--marquee-bg', settings.marqueeBgColor || '');
   } else {
     marqueeEl.classList.add('hidden');
+  }
+}
+
+// 水墨主题：飘落花瓣粒子（使用从原视频提取的花瓣贴图）
+let inkPetalsGenerated = false;
+function applyInkPetals(settings) {
+  if (!inkPetalsEl) return;
+  const isInk = settings.countdownTheme === 'ink';
+  if (!isInk) {
+    inkPetalsEl.innerHTML = '';
+    inkPetalsGenerated = false;
+    return;
+  }
+  if (inkPetalsGenerated) return;
+  inkPetalsGenerated = true;
+  let html = '';
+  for (let i = 0; i < 22; i++) {
+    const sprite = 1 + (i % 3);
+    const left = Math.random() * 100;
+    const delay = Math.random() * 10;
+    const dur = 7 + Math.random() * 9;
+    const size = 14 + Math.random() * 26;
+    const sway = 30 + Math.random() * 90;
+    const rot = -40 + Math.random() * 80;
+    html += '<i style="left:' + left.toFixed(1) + '%;width:' + size.toFixed(0) +
+      'px;background-image:url(/img/petal' + sprite + '.png);animation-duration:' +
+      dur.toFixed(1) + 's;animation-delay:' + delay.toFixed(1) +
+      's;--sway:' + sway.toFixed(0) + 'px;--rot:' + rot.toFixed(0) + 'deg"></i>';
+  }
+  inkPetalsEl.innerHTML = html;
+}
+
+// 影片模式：直接播放原片，播放倍速随倒计时时长自适应，保证与倒计时同步结束
+function applyCountdownVideo(settings, mode, c, remaining, ended) {
+  const isVideo = mode !== 'corner' && settings.countdownTheme === 'video';
+  if (!countdownVideoEl) return;
+
+  if (!isVideo) {
+    if (videoMode) {
+      countdownVideoEl.pause();
+      videoMode = null;
+    }
+    countdownVideoEl.classList.add('hidden');
+    if (countdownVideoTimeEl) countdownVideoTimeEl.classList.add('hidden');
+    return;
+  }
+
+  countdownVideoEl.classList.remove('hidden');
+  const totalSec = Math.max(1, (c.durationMs || 10000) / 1000);
+  const videoDur = countdownVideoEl.duration || 10.1;
+  const rate = Math.min(4, Math.max(0.25, videoDur / totalSec));
+
+  if (!videoMode) {
+    countdownVideoEl.currentTime = 0;
+    videoMode = { rate };
+  }
+  // 新一轮倒计时（剩余时间≈总时长）时影片归零重播
+  if (remaining >= totalSec - 0.8 && countdownVideoEl.currentTime > 1) {
+    countdownVideoEl.currentTime = 0;
+  }
+  videoMode.rate = rate;
+  countdownVideoEl.playbackRate = rate;
+
+  const shouldPlay = c.state === 'running' && !ended && !prefersReducedMotion();
+  if (shouldPlay) {
+    if (countdownVideoEl.paused) {
+      // 按剩余比例跳转到影片对应位置，保证画面与剩余时间对应
+      const played = Math.max(0, Math.min(1, 1 - remaining / totalSec));
+      if (Math.abs(countdownVideoEl.currentTime / videoDur - played) > 0.08) {
+        countdownVideoEl.currentTime = played * videoDur;
+      }
+      countdownVideoEl.play().catch(() => {});
+    }
+  } else if (!countdownVideoEl.paused) {
+    countdownVideoEl.pause();
+  }
+
+  if (countdownVideoTimeEl) {
+    countdownVideoTimeEl.classList.remove('hidden');
+    countdownVideoTimeEl.textContent = ended ? '时间到' : formatDuration(remaining);
+    countdownVideoTimeEl.classList.toggle('ended', ended);
   }
 }
 
@@ -1448,15 +1553,16 @@ function onPointerMove(e) {
     const sy = findSnap([ty, ty + drag.h / 2, ty + drag.h], drag.linesY, drag.threshold);
     if (sx) tx += sx.diff;
     if (sy) ty += sy.diff;
-    x = clamp(tx, 0, 100 - w);
-    y = clamp(ty, 0, 100 - h);
+    // 不强制贴边：允许拖出画布
+    x = clamp(tx, -100, 200);
+    y = clamp(ty, -100, 200);
     setGuide(drag.guideV, 'left', sx ? sx.line : null);
     setGuide(drag.guideH, 'top', sy ? sy.line : null);
   } else {
     const sx = findSnap([drag.x + drag.w + dx], drag.linesX, drag.threshold);
     const sy = findSnap([drag.y + drag.h + dy], drag.linesY, drag.threshold);
-    w = clamp(drag.w + dx + (sx ? sx.diff : 0), MIN_W, 100 - drag.x);
-    h = clamp(drag.h + dy + (sy ? sy.diff : 0), MIN_H, 100 - drag.y);
+    w = clamp(drag.w + dx + (sx ? sx.diff : 0), MIN_W, 200);
+    h = clamp(drag.h + dy + (sy ? sy.diff : 0), MIN_H, 200);
     setGuide(drag.guideV, 'left', sx ? sx.line : null);
     setGuide(drag.guideH, 'top', sy ? sy.line : null);
   }

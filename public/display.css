@@ -343,6 +343,126 @@ body.countdown-fullscreen #leaderboard,
 body.countdown-fullscreen .empty-tip,
 body.countdown-fullscreen .overlay-clock { display: none !important; }
 
+/* ---- 倒计时水墨主题（素材取自原片，像素级还原） ---- */
+.countdown-big[data-theme="ink"] {
+  padding: 0;
+  background: #e9e9e9;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  align-items: center;
+  justify-content: center;
+}
+.countdown-big[data-theme="ink"] .countdown-stage { display: none; }
+.ink-scene { display: none; }
+.countdown-big[data-theme="ink"] .ink-scene {
+  display: block;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+/* 画布：保持 16:9 原始比例铺满视口，数字与墨盘永远对齐 */
+.ink-art {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100vw, calc(100vh * 16 / 9));
+  height: max(100vh, calc(100vw * 9 / 16));
+  transform: translate(-50%, -50%);
+  background: url('/img/ink-countdown.jpg') center / 100% 100% no-repeat;
+  container-type: size;
+  animation: ink-breathe 16s ease-in-out infinite;
+}
+.ink-number {
+  position: absolute;
+  left: 49.06%;
+  top: 50.5%;
+  transform: translate(-50%, -50%);
+  font-family: "Times New Roman", "Noto Serif CJK SC", "Songti SC", "STSong", serif;
+  font-weight: 400;
+  font-size: var(--ink-num-size, 11.5cqh);
+  line-height: 1;
+  color: #ffffff;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  text-shadow: 0 0 24px rgba(0, 0, 0, 0.5);
+}
+@keyframes ink-breathe {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50% { transform: translate(-50%, -50%) scale(1.022); }
+}
+.ink-petals {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 3;
+}
+.ink-petals i {
+  position: absolute;
+  top: -14%;
+  aspect-ratio: 1.15;
+  background-repeat: no-repeat;
+  background-size: contain;
+  background-position: center;
+  animation-name: petal-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+@keyframes petal-fall {
+  0% { transform: translate(0, -10vh) rotate(0deg); opacity: 0; }
+  7% { opacity: 0.95; }
+  86% { opacity: 0.9; }
+  100% { transform: translate(var(--sway, 60px), 116vh) rotate(var(--rot, 60deg)); opacity: 0; }
+}
+/* 时间到：数字转为暗红 */
+.countdown-big[data-theme="ink"].ended .ink-number {
+  color: #8a2626;
+  text-shadow: 0 0 24px rgba(120, 20, 20, 0.45);
+}
+.countdown-big[data-theme="ink"].ended .ink-art { animation: none; }
+
+/* ---- 倒计时影片模式（直接播放原片） ---- */
+.countdown-video { display: none; }
+.countdown-big[data-theme="video"] {
+  padding: 0;
+  background: #000;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  align-items: center;
+  justify-content: center;
+}
+.countdown-big[data-theme="video"] .countdown-stage,
+.countdown-big[data-theme="video"] .ink-scene { display: none; }
+.countdown-big[data-theme="video"] .countdown-video {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #000;
+}
+/* 影片模式下角标显示真实剩余时间 */
+.countdown-video-time {
+  position: absolute;
+  right: 2.2vw;
+  bottom: 2.2vh;
+  z-index: 3;
+  padding: 6px 18px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.42);
+  color: #fff;
+  font-family: "Times New Roman", "Noto Serif CJK SC", "Songti SC", serif;
+  font-size: clamp(20px, 2.4vw, 40px);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+}
+.countdown-video-time.ended { color: #ff8080; }
+
 /* ---- 大字排行榜 ---- */
 .leaderboard {
   max-width: 1400px;
@@ -1048,6 +1168,8 @@ body[data-score-effect="shake"] .fx { animation: fx-shake var(--fx-duration, 700
 
 @media (prefers-reduced-motion: reduce) {
   .fx, .dot.connecting, .countdown-big.ended .countdown-ring { animation: none !important; }
+  .ink-art { animation: none !important; }
+  .ink-petals { display: none !important; }
   .fx-delta, .confetti-layer, .spotlight-overlay, .spotlight-return-overlay { display: none; }
 }
 

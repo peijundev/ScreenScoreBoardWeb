@@ -109,6 +109,7 @@ const DEFAULT_SETTINGS = {
   clockShowDate: false,
   countdownDurationSec: 300,  // 1–3600
   countdownDisplayMode: 'corner', // corner | center | fullscreen
+  countdownTheme: 'classic',  // classic | ink（水墨）
   countdownShape: 'circle',   // circle | square | rounded | rounded-rect | rect
   countdownRadius: 28,        // 圆角 px（0–120）
   countdownSize: 520,         // 窗口宽度 px（200–900）
@@ -360,10 +361,11 @@ function needLayout(l) {
     return Math.round(n * 100) / 100;
   };
   let x = num(l.x), y = num(l.y), w = num(l.w), h = num(l.h);
-  w = Math.max(8, Math.min(100, w));
-  h = Math.max(6, Math.min(100, h));
-  x = Math.max(0, Math.min(100 - w, x));
-  y = Math.max(0, Math.min(100 - h, y));
+  // 不强制贴边：允许卡片拖出画布（负坐标或超出 100%），仅做极端值保护
+  w = Math.max(4, Math.min(200, w));
+  h = Math.max(3, Math.min(200, h));
+  x = Math.max(-100, Math.min(200, x));
+  y = Math.max(-100, Math.min(200, y));
   return { x, y, w, h };
 }
 function needEntity(project, kind, id) {
@@ -607,6 +609,10 @@ const SETTINGS_VALIDATORS = {
     (['corner', 'center', 'fullscreen'].includes(v)
       ? v
       : (() => { throw new OpError('倒计时显示模式非法'); })()),
+  countdownTheme: (v) =>
+    (['classic', 'ink', 'video'].includes(v)
+      ? v
+      : (() => { throw new OpError('倒计时主题非法'); })()),
   countdownShape: (v) =>
     (['circle', 'square', 'rounded', 'rounded-rect', 'rect'].includes(v)
       ? v

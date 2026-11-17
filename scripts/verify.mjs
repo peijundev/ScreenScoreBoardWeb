@@ -212,8 +212,13 @@ async function main() {
   s = await viewer.waitState((st) => P(st).people[pid] && P(st).people[pid].layout && P(st).people[pid].layout.x === 5);
   assert(s.projects[projectId].people[pid].layout.w === 24, '卡片位置/大小同步');
   await adminOp('setLayout', { kind: 'person', id: pid, layout: { x: -20, y: 200, w: 1, h: 1 } });
-  s = await viewer.waitState((st) => P(st).people[pid] && P(st).people[pid].layout && P(st).people[pid].layout.w === 8);
-  assert(P(s).people[pid].layout.x === 0 && P(s).people[pid].layout.y === 94, '越界坐标被收拢');
+  s = await viewer.waitState((st) => P(st).people[pid] && P(st).people[pid].layout && P(st).people[pid].layout.w === 4);
+  assert(P(s).people[pid].layout.x === -20 && P(s).people[pid].layout.y === 200,
+    '卡片可拖出画布（不强制贴边），仅尺寸取最小值');
+  await adminOp('setLayout', { kind: 'person', id: pid, layout: { x: 500, y: -500, w: 500, h: 500 } });
+  s = await viewer.waitState((st) => P(st).people[pid] && P(st).people[pid].layout && P(st).people[pid].layout.w === 200);
+  assert(P(s).people[pid].layout.x === 200 && P(s).people[pid].layout.y === -100,
+    '极端坐标被限制在安全范围');
 
   await adminOp('setMemberLayout', { personId: pid, layout: { x: 2, y: 3, w: 20, h: 21 } });
   s = await viewer.waitState((st) => P(st).people[pid] && P(st).people[pid].memberLayout);
@@ -455,6 +460,20 @@ async function main() {
   await adminOp('updateSettings', { patch: { countdownDisplayMode: 'weird' } }).catch((e) => {
     assert(/倒计时显示模式/.test(e.message), '非法倒计时显示模式被拒绝');
   });
+  await adminOp('updateSettings', { patch: { countdownTheme: 'ink' } });
+  s = await viewer.waitState((st) => P(st).settings.countdownTheme === 'ink');
+  assert(true, '倒计时水墨主题同步');
+  await adminOp('updateSettings', { patch: { countdownTheme: 'video' } });
+  s = await viewer.waitState((st) => P(st).settings.countdownTheme === 'video');
+  assert(true, '倒计时影片主题同步');
+  const videoRes = await fetch(BASE + '/media/ink-countdown.mp4');
+  const videoBuf = Buffer.from(await videoRes.arrayBuffer());
+  assert(videoRes.ok && (videoRes.headers.get('content-type') || '').includes('video/mp4') &&
+    videoBuf.length > 100000, '影片素材可通过 HTTP 访问');
+  await adminOp('updateSettings', { patch: { countdownTheme: 'ink' } });
+  await adminOp('updateSettings', { patch: { countdownTheme: 'oil' } }).catch((e) => {
+    assert(/倒计时主题/.test(e.message), '非法倒计时主题被拒绝');
+  });
   await adminOp('updateSettings', {
     patch: {
       countdownShape: 'rounded-rect', countdownRadius: 40, countdownSize: 600,
@@ -674,8 +693,8 @@ async function main() {
   const restored = await getState();
   const rp = restored.projects[projectId];
   assert(rp && rp.people[pid] && rp.people[pid].score === 7, '重启后人员与分数恢复');
-  assert(rp.people[pid].layout.x === 0 && rp.people[pid].layout.w === 8 &&
-    rp.people[pid].memberLayout.w === 20, '重启后卡片布局恢复');
+  assert(rp.people[pid].layout.x === 200 && rp.people[pid].layout.w === 200 &&
+    rp.people[pid].memberLayout.w === 20, '重启后卡片布局恢复（含画布外坐标）');
   assert(rp.settings.cardStyle === 'neon' && rp.settings.columns === 5 && rp.settings.avatarSize === 96, '重启后外观设置恢复');
   assert(rp.settings.displayStyle === 'seewo', '重启后显示风格恢复');
   assert(rp.settings.fontFamily === 'custom' && rp.settings.fontFamilyCustom === 'Noto Serif CJK SC' &&

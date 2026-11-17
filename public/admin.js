@@ -39,12 +39,20 @@ const quick = {
 
 let previewEdit = false;
 let previewZoom = 1;
-let previewResolutionValue = '1920x1080';
+let previewResolutionMode = '1920x1080';   // auto | custom | WxH
+let previewCustomW = 3840;
+let previewCustomH = 2160;
 try {
-  previewResolutionValue = localStorage.getItem('previewResolution') || '1920x1080';
+  previewResolutionMode = localStorage.getItem('previewResolution') || '1920x1080';
+  previewCustomW = Number(localStorage.getItem('previewCustomW')) || 3840;
+  previewCustomH = Number(localStorage.getItem('previewCustomH')) || 2160;
   previewZoom = Number(localStorage.getItem('previewZoom')) || 1;
 } catch (_) {}
-previewResolution.value = previewResolutionValue;
+previewResolution.value = previewResolutionMode;
+const previewCustomSizeEl = document.getElementById('preview-custom-size');
+const previewCustomWEl = document.getElementById('preview-custom-w');
+const previewCustomHEl = document.getElementById('preview-custom-h');
+const previewCustomApplyBtn = document.getElementById('preview-custom-apply');
 let toastTimer = null;
 
 function toast(msg) {
@@ -206,11 +214,9 @@ dialogHeader.addEventListener('pointerdown', (e) => {
 
 dialogHeader.addEventListener('pointermove', (e) => {
   if (!dialogDrag) return;
-  const width = settingsDialog.offsetWidth;
-  const left = clampNum(e.clientX - dialogDrag.dx, 4, Math.max(4, window.innerWidth - width - 4));
-  const top = clampNum(e.clientY - dialogDrag.dy, 4, Math.max(4, window.innerHeight - 44));
-  settingsDialog.style.left = left + 'px';
-  settingsDialog.style.top = top + 'px';
+  // 不强制边界：窗口可以拖到屏幕外，方便把预览让出来
+  settingsDialog.style.left = (e.clientX - dialogDrag.dx) + 'px';
+  settingsDialog.style.top = (e.clientY - dialogDrag.dy) + 'px';
 });
 
 function endDialogDrag() {
@@ -285,11 +291,9 @@ featuresHeader.addEventListener('pointerdown', (e) => {
 });
 featuresHeader.addEventListener('pointermove', (e) => {
   if (!featuresDrag) return;
-  const width = featuresDialog.offsetWidth;
-  const left = clampNum(e.clientX - featuresDrag.dx, 4, Math.max(4, window.innerWidth - width - 4));
-  const top = clampNum(e.clientY - featuresDrag.dy, 4, Math.max(4, window.innerHeight - 44));
-  featuresDialog.style.left = left + 'px';
-  featuresDialog.style.top = top + 'px';
+  // 不强制边界
+  featuresDialog.style.left = (e.clientX - featuresDrag.dx) + 'px';
+  featuresDialog.style.top = (e.clientY - featuresDrag.dy) + 'px';
 });
 function endFeaturesDrag() {
   if (!featuresDrag) return;
@@ -336,12 +340,21 @@ window.addEventListener('pointerup', () => {
 });
 
 // ============ 预览：固定分辨率复刻 + 缩放 ============
+function currentPreviewSize() {
+  if (previewResolutionMode === 'custom') {
+    return { w: Math.max(320, Math.min(15360, previewCustomW)), h: Math.max(240, Math.min(8640, previewCustomH)) };
+  }
+  const [w, h] = previewResolutionMode.split('x').map(Number);
+  return { w, h };
+}
+
 function applyPreviewLayout() {
-  previewZoom = Math.min(1.6, Math.max(0.5, Math.round(previewZoom * 100) / 100));
+  previewZoom = Math.min(3, Math.max(0.25, Math.round(previewZoom * 100) / 100));
   previewZoomLabel.textContent = Math.round(previewZoom * 100) + '%';
   try { localStorage.setItem('previewZoom', String(previewZoom)); } catch (_) {}
+  previewCustomSizeEl.classList.toggle('hidden', previewResolutionMode !== 'custom');
 
-  if (previewResolutionValue === 'auto') {
+  if (previewResolutionMode === 'auto') {
     previewStage.style.width = '100%';
     previewStage.style.height = '100%';
     previewFrame.style.width = '100%';
@@ -351,7 +364,7 @@ function applyPreviewLayout() {
     return;
   }
 
-  const [w, h] = previewResolutionValue.split('x').map(Number);
+  const { w, h } = currentPreviewSize();
   if (!w || !h) return;
   const fit = Math.min(previewWrap.clientWidth / w, previewWrap.clientHeight / h) * previewZoom;
   previewStage.style.width = w * fit + 'px';
@@ -367,10 +380,57 @@ previewOutBtn.addEventListener('click', () => { previewZoom -= 0.1; applyPreview
 previewInBtn.addEventListener('click', () => { previewZoom += 0.1; applyPreviewLayout(); });
 previewResetBtn.addEventListener('click', () => { previewZoom = 1; applyPreviewLayout(); });
 previewResolution.addEventListener('change', () => {
-  previewResolutionValue = previewResolution.value;
-  try { localStorage.setItem('previewResolution', previewResolutionValue); } catch (_) {}
+  previewResolutionMode = previewResolution.value;
+  if (previewResolutionMode === 'custom') {
+    previewCustomWEl.value = String(previewCustomW);
+    previewCustomHEl.value = String(previewCustomH);
+  }
+  try { localStorage.setItem('previewResolution', previewResolutionMode); } catch (_) {}
   applyPreviewLayout();
 });
+previewCustomApplyBtn.addEventListener('click', () => {
+  const w = Math.max(320, Math.min(15360, Math.round(Number(previewCustomWEl.value) || previewCustomW)));
+  const h = Math.max(240, Math.min(8640, Math.round(Number(previewCustomHEl.value) || previewCustomH)));
+  previewCustomW = w; previewCustomH = h;
+  previewCustomWEl.value = String(w); previewCustomHEl.value = String(h);
+  try {
+    localStorage.setItem('previewCustomW', String(w));
+    localStorage.setItem('previewCustomH', String(h));
+  } catch (_) {}
+  applyPreviewLayout();
+});
+
+// 按住 Alt 拖动可平移预览超出的部分（不受边界限制）
+let previewPan = null;
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Alt') previewWrap.classList.add('pan-ready');
+});
+document.addEventListener('keyup', (e) => {
+  if (e.key === 'Alt') previewWrap.classList.remove('pan-ready');
+});
+window.addEventListener('blur', () => previewWrap.classList.remove('pan-ready'));
+previewWrap.addEventListener('pointerdown', (e) => {
+  if (!previewWrap.classList.contains('pan-ready')) return;
+  e.preventDefault();
+  previewPan = {
+    x: e.clientX, y: e.clientY,
+    sl: previewWrap.scrollLeft, st: previewWrap.scrollTop,
+  };
+  previewWrap.setPointerCapture(e.pointerId);
+  previewWrap.classList.add('panning');
+});
+previewWrap.addEventListener('pointermove', (e) => {
+  if (!previewPan) return;
+  previewWrap.scrollLeft = previewPan.sl - (e.clientX - previewPan.x);
+  previewWrap.scrollTop = previewPan.st - (e.clientY - previewPan.y);
+});
+function endPreviewPan() {
+  if (!previewPan) return;
+  previewPan = null;
+  previewWrap.classList.remove('panning');
+}
+previewWrap.addEventListener('pointerup', endPreviewPan);
+previewWrap.addEventListener('pointercancel', endPreviewPan);
 let previewLayoutTimer = null;
 function schedulePreviewLayout() {
   clearTimeout(previewLayoutTimer);
@@ -793,6 +853,7 @@ const classEls = {
   clockDate: document.getElementById('set-clock-date'),
   countdownMin: document.getElementById('set-countdown-min'),
   countdownMode: document.getElementById('set-countdown-mode'),
+  countdownTheme: document.getElementById('set-countdown-theme'),
   cdShape: document.getElementById('set-cd-shape'),
   cdPosition: document.getElementById('set-cd-position'),
   cdSize: document.getElementById('set-cd-size'),
@@ -1521,6 +1582,8 @@ classEls.countdownMin.addEventListener('input', () => {
 });
 classEls.countdownMode.addEventListener('change', () =>
   pushSetting('countdownDisplayMode', classEls.countdownMode.value, true));
+classEls.countdownTheme.addEventListener('change', () =>
+  pushSetting('countdownTheme', classEls.countdownTheme.value, true));
 classEls.cdShape.addEventListener('change', () =>
   pushSetting('countdownShape', classEls.cdShape.value, true));
 classEls.cdPosition.addEventListener('change', () =>
@@ -1959,6 +2022,7 @@ function renderSettings(settings) {
     classEls.quickCdMin.value = String(Math.max(1, Math.round(settings.countdownDurationSec / 60)));
   }
   classEls.countdownMode.value = settings.countdownDisplayMode || 'corner';
+  classEls.countdownTheme.value = settings.countdownTheme || 'classic';
   classEls.cdShape.value = settings.countdownShape || 'circle';
   classEls.cdPosition.value = settings.countdownPosition || 'center';
   if (Number(classEls.cdSize.value) !== settings.countdownSize) {

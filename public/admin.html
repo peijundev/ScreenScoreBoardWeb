@@ -30,11 +30,23 @@
         <h2>显示端预览</h2>
         <div class="preview-tools">
           <select id="preview-resolution" class="preview-resolution" title="预览画布分辨率">
-            <option value="auto">自适应</option>
-            <option value="1920x1080">1920 × 1080</option>
-            <option value="2560x1440">2560 × 1440</option>
-            <option value="3840x2160">3840 × 2160</option>
+            <option value="auto">自适应（跟随窗口）</option>
+            <option value="1280x720">HD 1280 × 720</option>
+            <option value="1600x900">HD+ 1600 × 900</option>
+            <option value="1920x1080">FHD 1920 × 1080</option>
+            <option value="2560x1440">2K 2560 × 1440</option>
+            <option value="3840x2160">4K UHD 3840 × 2160</option>
+            <option value="4096x2160">DCI 4K 4096 × 2160</option>
+            <option value="5120x2880">5K 5120 × 2880</option>
+            <option value="7680x4320">8K 7680 × 4320</option>
+            <option value="custom">自定义…</option>
           </select>
+          <span id="preview-custom-size" class="preview-custom-size hidden">
+            <input id="preview-custom-w" type="number" min="320" max="15360" step="1" placeholder="宽" title="画布宽度 px">
+            ×
+            <input id="preview-custom-h" type="number" min="240" max="8640" step="1" placeholder="高" title="画布高度 px">
+            <button id="preview-custom-apply" class="btn small" type="button">应用</button>
+          </span>
           <button id="preview-out" class="btn small" type="button" title="缩小预览">−</button>
           <span id="preview-zoom-label">100%</span>
           <button id="preview-in" class="btn small" type="button" title="放大预览">+</button>
@@ -110,7 +122,7 @@
         <span id="quick-cd-status" class="hint cd-status">未开始</span>
       </div>
 
-      <p class="preview-hint">默认与显示端 1:1 复刻（不含编辑控件）；勾选「编辑布局」后可拖动卡片、拉右下角调整大小；开启「标题自由位置」后可直接在预览里拖动标题。预览窗口可拖动设置面板，边看边调。</p>
+      <p class="preview-hint">默认与显示端 1:1 复刻（不含编辑控件）；勾选「编辑布局」后可拖动卡片、拉右下角调整大小（卡片可拖出画布，不强制贴边）；开启「标题自由位置」后可直接在预览里拖动标题。预览画布可选 4K/8K 或自定义分辨率；按住 <b>Alt</b> 拖动可平移超出部分，缩放范围 25%–300%。</p>
       <div class="preview-frame-wrap" id="preview-wrap">
         <div class="preview-stage" id="preview-stage">
           <iframe id="display-preview" src="/display" title="显示端预览"></iframe>
@@ -240,6 +252,13 @@
                 <option value="corner">角落小窗</option>
                 <option value="center">居中大窗口</option>
                 <option value="fullscreen">全屏模式</option>
+              </select>
+            </label>
+            <label>倒计时主题
+              <select id="set-countdown-theme">
+                <option value="classic">经典</option>
+                <option value="ink">水墨（静态画面）</option>
+                <option value="video">水墨影片（原片）</option>
               </select>
             </label>
             <div class="countdown-style">
