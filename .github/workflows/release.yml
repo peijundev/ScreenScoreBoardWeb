@@ -37,18 +37,6 @@ jobs:
             files: |
               dist/*-setup.exe
               dist/*-portable.exe
-          - os: macos-latest
-            platform: macos
-            build_cmd: npm run dist:mac
-            files: |
-              dist/*-mac-arm64.dmg
-              dist/*-mac-arm64.zip
-          - os: macos-latest
-            platform: macos-intel
-            build_cmd: npm run dist:mac -- --x64
-            files: |
-              dist/*-mac-x64.dmg
-              dist/*-mac-x64.zip
 
     steps:
       - name: Checkout
