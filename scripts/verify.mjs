@@ -226,6 +226,20 @@ async function main() {
     .catch((e) => assert(/排序方式/.test(e.message), '非法排序方式被拒绝'));
   await adminOp('updateSettings', { patch: { sortBy: 'score' } });
 
+  console.log('人员/团队改名:');
+  await adminOp('renamePerson', { personId: pid, name: '张三丰' });
+  s = await viewer.waitState((st) => P(st).people[pid] && P(st).people[pid].name === '张三丰');
+  assert(true, '人员改名并实时同步');
+  await adminOp('renameTeam', { teamId: tid, name: '红队二号' });
+  s = await viewer.waitState((st) => P(st).teams[tid] && P(st).teams[tid].name === '红队二号');
+  assert(true, '团队改名并实时同步');
+  await adminOp('renamePerson', { personId: pid, name: '   ' })
+    .catch((e) => assert(/不能为空/.test(e.message), '空姓名被拒绝'));
+  await adminOp('renameTeam', { teamId: tid, name: '一'.repeat(21) })
+    .catch((e) => assert(/过长/.test(e.message), '超长团队名被拒绝'));
+  await adminOp('renamePerson', { personId: pid, name: '张三' });
+  await adminOp('renameTeam', { teamId: tid, name: '红队' });
+
   await adminOp('updateSettings', { patch: { columns: 6, theme: 'light', title: '决赛计分板' } });
   s = await viewer.waitState((st) => P(st).settings.columns === 6);
   assert(s.projects[projectId].settings.theme === 'light', 'viewer 实时收到排版变更');
@@ -235,6 +249,22 @@ async function main() {
   });
   s = await viewer.waitState((st) => P(st).settings.cardRadius === 18);
   assert(s.projects[projectId].settings.bgImage === up.path, 'viewer 实时收到背景图设置');
+
+  await adminOp('updateSettings', { patch: { bgImageBlur: true, bgImageBlurAmount: 18 } });
+  s = await viewer.waitState((st) => P(st).settings.bgImageBlur === true);
+  assert(P(s).settings.bgImageBlurAmount === 18, '背景图虚化开关与虚化度同步');
+  await adminOp('updateSettings', { patch: { bgImageBlurAmount: 99 } })
+    .catch((e) => assert(/虚化度/.test(e.message), '虚化度越界被拒绝'));
+  await adminOp('updateSettings', { patch: { bgImageBlur: 'yes' } })
+    .catch((e) => assert(/布尔/.test(e.message), '非法虚化开关被拒绝'));
+  await adminOp('updateSettings', { patch: { bgScrimEnabled: false } });
+  s = await viewer.waitState((st) => P(st).settings.bgScrimEnabled === false);
+  assert(true, '背景遮罩可关闭');
+  await adminOp('updateSettings', { patch: { bgScrimEnabled: 'no' } })
+    .catch((e) => assert(/布尔/.test(e.message), '非法背景遮罩开关被拒绝'));
+  await adminOp('updateSettings', { patch: { bgScrimEnabled: true } });
+  s = await viewer.waitState((st) => P(st).settings.bgScrimEnabled === true);
+  assert(true, '背景遮罩可重新开启');
 
   await adminOp('updateSettings', { patch: { layoutMode: 'free', memberScale: 1.4 } });
   s = await viewer.waitState((st) => P(st).settings.layoutMode === 'free');
@@ -340,7 +370,8 @@ async function main() {
     },
   });
   s = await viewer.waitState((st) => P(st).settings.titleSize === 72);
-  assert(P(s).settings.fontFamily === 'serif' && P(s).settings.cardShadow === 'strong' &&
+  assert(P(s).settings.fontFamily === 'serif' && P(s).settings.titleSize === 72 &&
+    P(s).settings.titleColor === '#ff0000' && P(s).settings.cardShadow === 'strong' &&
     P(s).settings.showRank === false && P(s).settings.scoreBarHeight === 9 &&
     P(s).settings.avatarShape === 'square' && P(s).settings.scrimOpacity === 0.3,
     '高级外观设置同步');
@@ -351,6 +382,35 @@ async function main() {
   await adminOp('updateSettings', { patch: { fontFamilyCustom: 'bad;font' } }).catch((e) => {
     assert(/非法字符/.test(e.message), '非法字体名称被拒绝');
   });
+  await adminOp('updateSettings', { patch: { titleFont: 'custom', titleFontCustom: 'LXGW WenKai' } });
+  s = await viewer.waitState((st) => P(st).settings.titleFont === 'custom');
+  assert(P(s).settings.titleFontCustom === 'LXGW WenKai', '标题自定义字体同步');
+  await adminOp('updateSettings', { patch: { titleFont: 'hologram' } }).catch((e) => {
+    assert(/标题字体/.test(e.message), '非法标题字体被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { titleFontCustom: 'bad;font' } })
+    .catch((e) => assert(/非法字符/.test(e.message), '标题字体名称非法字符被拒绝'));
+
+  await adminOp('updateSettings', {
+    patch: {
+      clockFont: 'serif', clockFontSize: 48, countdownFont: 'kai',
+      leaderboardFont: 'custom', leaderboardFontCustom: 'LXGW WenKai',
+      marqueeFont: 'serif', welcomeFont: 'kai', welcomeFontSize: 160, scoreFont: 'serif',
+    },
+  });
+  s = await viewer.waitState((st) => P(st).settings.clockFont === 'serif');
+  assert(P(s).settings.clockFontSize === 48 && P(s).settings.countdownFont === 'kai' &&
+    P(s).settings.leaderboardFont === 'custom' &&
+    P(s).settings.leaderboardFontCustom === 'LXGW WenKai' &&
+    P(s).settings.marqueeFont === 'serif' && P(s).settings.welcomeFont === 'kai' &&
+    P(s).settings.welcomeFontSize === 160 && P(s).settings.scoreFont === 'serif',
+    '时钟/倒计时/排行榜/跑马灯/欢迎幕布/分数数字字体同步');
+  await adminOp('updateSettings', { patch: { clockFont: 'hologram' } })
+    .catch((e) => assert(/时钟字体/.test(e.message), '非法时钟字体被拒绝'));
+  await adminOp('updateSettings', { patch: { welcomeFontSize: 999 } })
+    .catch((e) => assert(/欢迎幕布字号/.test(e.message), '欢迎幕布字号越界被拒绝'));
+  await adminOp('updateSettings', { patch: { scoreFont: 'hologram' } })
+    .catch((e) => assert(/分数字体/.test(e.message), '非法分数字体被拒绝'));
   await adminOp('updateSettings', { patch: { fontScale: 3 } }).catch((e) => {
     assert(/字号缩放/.test(e.message), '非法字号缩放被拒绝');
   });
@@ -364,7 +424,7 @@ async function main() {
     assert(/正分颜色/.test(e.message), '非法正分颜色被拒绝');
   });
   await adminOp('updateSettings', { patch: { scrimOpacity: 2 } }).catch((e) => {
-    assert(/压暗/.test(e.message), '非法压暗倍率被拒绝');
+    assert(/遮罩强度/.test(e.message), '非法遮罩强度被拒绝');
   });
 
   await adminOp('updateSettings', {
@@ -741,10 +801,16 @@ async function main() {
   assert(rp.people[pid].layout.x === 200 && rp.people[pid].layout.w === 200 &&
     rp.people[pid].memberLayout.w === 20, '重启后卡片布局恢复（含画布外坐标）');
   assert(rp.settings.cardStyle === 'neon' && rp.settings.columns === 5 && rp.settings.avatarSize === 96, '重启后外观设置恢复');
+  assert(rp.settings.bgImage === up.path && rp.settings.bgImageBlur === true &&
+    rp.settings.bgImageBlurAmount === 18, '重启后背景图与虚化设置恢复');
+  assert(rp.settings.bgScrimEnabled === true && rp.settings.scrimOpacity === 0.3,
+    '重启后背景遮罩开关与强度恢复');
   assert(rp.settings.displayStyle === 'seewo', '重启后显示风格恢复');
   assert(rp.settings.fontFamily === 'custom' && rp.settings.fontFamilyCustom === 'Noto Serif CJK SC' &&
     rp.settings.titleSize === 72 && rp.settings.cardBorderWidth === 3 && rp.settings.showRank === false,
     '重启后高级外观设置恢复');
+  assert(rp.settings.titleFont === 'custom' && rp.settings.titleFontCustom === 'LXGW WenKai',
+    '重启后标题字体设置恢复');
   assert(rp.settings.cardBgMode === 'acrylic' && rp.settings.cardOpacity === 0.4 &&
     rp.settings.showTeamAccent === false && rp.settings.teamAccentColor === '#00ff00',
     '重启后半透明/亚克力与团队色条设置恢复');
@@ -760,6 +826,10 @@ async function main() {
   assert(rp.settings.countdownDisplayMode === 'fullscreen' && rp.settings.countdownShape === 'rounded-rect' &&
     rp.settings.countdownSize === 600 && rp.settings.countdownHeight === 300 &&
     rp.settings.countdownFontSize === 96 && rp.settings.countdownPosition === 'bottom-right' &&
+    rp.settings.clockFont === 'serif' && rp.settings.clockFontSize === 48 &&
+    rp.settings.countdownFont === 'kai' && rp.settings.leaderboardFontCustom === 'LXGW WenKai' &&
+    rp.settings.marqueeFont === 'serif' && rp.settings.welcomeFontSize === 160 &&
+    rp.settings.scoreFont === 'serif' &&
     rp.settings.countdownBg === '#112233' && rp.settings.countdownBgMode === 'acrylic' &&
     rp.settings.countdownBlur === 18, '重启后倒计时显示模式/圆角矩形/字号/背景恢复');
   assert(Object.keys(restored.projects).length === 1, '重启后项目列表恢复');

@@ -595,7 +595,7 @@ function renderPeople(project) {
         '</span>' +
         '<img src="' + avatarURL(p, 48) + '" alt="">' +
         avatarEdit +
-        '<span class="p-name">' + escapeHTML(p.name) + '</span>' +
+        '<span class="p-name editable" title="点击改名">' + escapeHTML(p.name) + '</span>' +
         '<span class="p-score ' + scoreClass(p.score) + '">' + p.score + '</span>' +
         quickScores +
         '<span class="score-ctl">' +
@@ -670,6 +670,15 @@ function renderPeople(project) {
     }
     row.querySelector('.move-up').addEventListener('click', () => moveOp('person', id, 'up'));
     row.querySelector('.move-down').addEventListener('click', () => moveOp('person', id, 'down'));
+    row.querySelector('.p-name').addEventListener('click', () => {
+      const p = currentProject().people[id];
+      if (!p) return;
+      const name = prompt('修改姓名（最多 20 字）', p.name);
+      if (name == null) return;
+      const value = name.trim();
+      if (!value || value === p.name) return;
+      projectOp('renamePerson', { personId: id, name: value }).catch((e) => toast(e.message));
+    });
     row.querySelector('.person-del').addEventListener('click', () => {
       const p = currentProject().people[id];
       if (p && confirm('确定删除「' + p.name + '」？')) doOp('removePerson', { personId: id });
@@ -729,7 +738,7 @@ function renderTeams(project) {
           '</span>' +
           '<img src="' + avatarURL(t, 48) + '" alt="">' +
           avatarEdit +
-          '<span class="t-name">' + escapeHTML(t.name) + '</span>' +
+          '<span class="t-name editable" title="点击改名">' + escapeHTML(t.name) + '</span>' +
           '<span class="t-total">' + total + ' 分</span>' +
           quickScores +
           '<label class="btn small file-mini" title="团队卡片背景图">卡面<input type="file" class="card-img-input" accept="image/png,image/jpeg,image/webp,image/gif" hidden></label>' +
@@ -745,6 +754,15 @@ function renderTeams(project) {
     const id = block.dataset.id;
     block.querySelector('.move-up').addEventListener('click', () => moveOp('team', id, 'up'));
     block.querySelector('.move-down').addEventListener('click', () => moveOp('team', id, 'down'));
+    block.querySelector('.t-name').addEventListener('click', () => {
+      const t = currentProject().teams[id];
+      if (!t) return;
+      const name = prompt('修改团队名（最多 20 字）', t.name);
+      if (name == null) return;
+      const value = name.trim();
+      if (!value || value === t.name) return;
+      projectOp('renameTeam', { teamId: id, name: value }).catch((e) => toast(e.message));
+    });
     block.querySelector('.team-del').addEventListener('click', () => {
       const t = currentProject().teams[id];
       if (t && confirm('确定删除团队「' + t.name + '」？成员会被移出但不会删除。')) {
@@ -819,6 +837,12 @@ const settingEls = {
   bgImageInput: document.getElementById('set-bg-image'),
   bgImagePreview: document.getElementById('bg-image-preview'),
   bgImageClear: document.getElementById('set-bg-image-clear'),
+  bgImageBlur: document.getElementById('set-bg-image-blur'),
+  bgImageBlurAmount: document.getElementById('set-bg-image-blur-amount'),
+  bgImageBlurVal: document.getElementById('bg-image-blur-val'),
+  bgScrimEnabled: document.getElementById('set-bg-scrim-enabled'),
+  bgScrimOpacity: document.getElementById('set-bg-scrim-opacity'),
+  bgScrimOpacityVal: document.getElementById('bg-scrim-opacity-val'),
   cardBgMode: document.getElementById('set-card-bg-mode'),
   cardBg: document.getElementById('set-card-bg'),
   cardOpacity: document.getElementById('set-card-opacity'),
@@ -886,6 +910,10 @@ const classEls = {
   clockFormat: document.getElementById('set-clock-format'),
   clockSeconds: document.getElementById('set-clock-seconds'),
   clockDate: document.getElementById('set-clock-date'),
+  clockFont: document.getElementById('set-clock-font'),
+  clockFontCustom: document.getElementById('set-clock-font-custom'),
+  clockFontSize: document.getElementById('set-clock-font-size'),
+  clockFontSizeVal: document.getElementById('clock-font-size-val'),
   countdownMin: document.getElementById('set-countdown-min'),
   countdownMode: document.getElementById('set-countdown-mode'),
   countdownTheme: document.getElementById('set-countdown-theme'),
@@ -899,6 +927,8 @@ const classEls = {
   cdRadiusVal: document.getElementById('cd-radius-val'),
   cdFontSize: document.getElementById('set-cd-fontsize'),
   cdFontSizeVal: document.getElementById('cd-fontsize-val'),
+  cdFont: document.getElementById('set-cd-font'),
+  cdFontCustom: document.getElementById('set-cd-font-custom'),
   cdOpacity: document.getElementById('set-cd-opacity'),
   cdOpacityVal: document.getElementById('cd-opacity-val'),
   cdProgress: document.getElementById('set-cd-progress'),
@@ -924,6 +954,8 @@ const classEls = {
   lbLimit: document.getElementById('set-lb-limit'),
   lbScale: document.getElementById('set-lb-scale'),
   lbScaleVal: document.getElementById('lb-scale-val'),
+  lbFont: document.getElementById('set-lb-font'),
+  lbFontCustom: document.getElementById('set-lb-font-custom'),
   toggleLeaderboard: document.getElementById('toggle-leaderboard'),
   rankTieMode: document.getElementById('set-rank-tie-mode'),
   exportProject: document.getElementById('export-project'),
@@ -949,6 +981,8 @@ const classEls = {
   marqueeEffect: document.getElementById('set-marquee-effect'),
   marqueeFontSize: document.getElementById('set-marquee-font-size'),
   marqueeFontVal: document.getElementById('marquee-font-val'),
+  marqueeFont: document.getElementById('set-marquee-font'),
+  marqueeFontCustom: document.getElementById('set-marquee-font-custom'),
   marqueeSpeed: document.getElementById('set-marquee-speed'),
   marqueeSpeedVal: document.getElementById('marquee-speed-val'),
   marqueeColorEnabled: document.getElementById('set-marquee-color-enabled'),
@@ -963,6 +997,10 @@ const classEls = {
   bgmLoop: document.getElementById('set-bgm-loop'),
   featureWelcome: document.getElementById('set-feature-welcome'),
   welcomeText: document.getElementById('set-welcome-text'),
+  welcomeFont: document.getElementById('set-welcome-font'),
+  welcomeFontCustom: document.getElementById('set-welcome-font-custom'),
+  welcomeFontSize: document.getElementById('set-welcome-font-size'),
+  welcomeFontSizeVal: document.getElementById('welcome-font-size-val'),
   welcomeBgColorEnabled: document.getElementById('set-welcome-bg-color-enabled'),
   welcomeBgColor: document.getElementById('set-welcome-bg-color'),
   welcomeImage: document.getElementById('set-welcome-image'),
@@ -997,8 +1035,12 @@ const adv = {
   loadFonts: document.getElementById('load-system-fonts'),
   fontScale: document.getElementById('set-font-scale'),
   fontScaleVal: document.getElementById('font-scale-val'),
+  scoreFont: document.getElementById('set-score-font'),
+  scoreFontCustom: document.getElementById('set-score-font-custom'),
   titleSize: document.getElementById('set-title-size'),
   titleSizeVal: document.getElementById('title-size-val'),
+  titleFont: document.getElementById('set-title-font'),
+  titleFontCustom: document.getElementById('set-title-font-custom'),
   titleAlign: document.getElementById('set-title-align'),
   titleRule: document.getElementById('set-title-rule'),
   titleColorEnabled: document.getElementById('set-title-color-enabled'),
@@ -1028,8 +1070,6 @@ const adv = {
   negativeColor: document.getElementById('set-negative-color'),
   rankColorEnabled: document.getElementById('set-rank-color-enabled'),
   rankColor: document.getElementById('set-rank-color'),
-  scrimOpacity: document.getElementById('set-scrim-opacity'),
-  scrimOpacityVal: document.getElementById('scrim-opacity-val'),
   showRank: document.getElementById('set-show-rank'),
   rankSize: document.getElementById('set-rank-size'),
   rankSizeVal: document.getElementById('rank-size-val'),
@@ -1100,6 +1140,22 @@ settingEls.bgImageInput.addEventListener('change', async () => {
 });
 settingEls.bgImageClear.addEventListener('click', () => {
   projectOp('updateSettings', { patch: { bgImage: null, bgType: 'color' } }).catch((e) => toast(e.message));
+});
+settingEls.bgImageBlur.addEventListener('change', () => {
+  settingEls.bgImageBlurAmount.disabled = !settingEls.bgImageBlur.checked;
+  pushSetting('bgImageBlur', settingEls.bgImageBlur.checked, true);
+});
+settingEls.bgImageBlurAmount.addEventListener('input', () => {
+  settingEls.bgImageBlurVal.textContent = settingEls.bgImageBlurAmount.value;
+  pushSetting('bgImageBlurAmount', Number(settingEls.bgImageBlurAmount.value));
+});
+settingEls.bgScrimEnabled.addEventListener('change', () => {
+  settingEls.bgScrimOpacity.disabled = !settingEls.bgScrimEnabled.checked;
+  pushSetting('bgScrimEnabled', settingEls.bgScrimEnabled.checked, true);
+});
+settingEls.bgScrimOpacity.addEventListener('input', () => {
+  settingEls.bgScrimOpacityVal.textContent = String(Math.round(Number(settingEls.bgScrimOpacity.value) * 100));
+  pushSetting('scrimOpacity', Number(settingEls.bgScrimOpacity.value));
 });
 
 // ---- 卡片底色：跟随主题 / 纯色 / 半透明 / 亚克力 ----
@@ -1235,7 +1291,6 @@ const advRanges = [
   [adv.cardBorderWidth, adv.cardBorderWidthVal, 'cardBorderWidth', fmtNum],
   [adv.teamBarWidth, adv.teamBarVal, 'teamAccentWidth', fmtNum],
   [adv.avatarBorderWidth, adv.avatarBorderVal, 'avatarBorderWidth', fmtNum],
-  [adv.scrimOpacity, adv.scrimOpacityVal, 'scrimOpacity', fmtPercent],
   [adv.rankSize, adv.rankSizeVal, 'rankSize', fmtNum],
   [adv.scoreBarHeight, adv.scoreBarHeightVal, 'scoreBarHeight', fmtNum],
 ];
@@ -1252,11 +1307,16 @@ advRanges.forEach(([input, label, key, fmt]) => {
     input.addEventListener('change', () => pushSetting(key, input.value, true));
   });
 
-// 字体：预设 / 自定义系统字体
+// 字体：预设 / 自定义系统字体（正文字体与标题字体共用系统字体列表）
 function updateFontCustomState() {
-  const isCustom = adv.fontFamily.value === 'custom';
-  adv.fontCustom.disabled = !isCustom;
-  adv.loadFonts.disabled = !isCustom;
+  const bodyCustom = adv.fontFamily.value === 'custom';
+  const titleCustom = adv.titleFont.value === 'custom';
+  adv.fontCustom.disabled = !bodyCustom;
+  adv.titleFontCustom.disabled = !titleCustom;
+  const partSelects = [classEls.clockFont, classEls.cdFont, classEls.lbFont,
+    classEls.marqueeFont, classEls.welcomeFont, adv.scoreFont];
+  adv.loadFonts.disabled = !(bodyCustom || titleCustom ||
+    partSelects.some((sel) => sel && sel.value === 'custom'));
 }
 adv.fontFamily.addEventListener('change', () => {
   updateFontCustomState();
@@ -1264,6 +1324,13 @@ adv.fontFamily.addEventListener('change', () => {
 });
 adv.fontCustom.addEventListener('input', () => {
   pushSetting('fontFamilyCustom', adv.fontCustom.value);
+});
+adv.titleFont.addEventListener('change', () => {
+  updateFontCustomState();
+  pushSetting('titleFont', adv.titleFont.value, true);
+});
+adv.titleFontCustom.addEventListener('input', () => {
+  pushSetting('titleFontCustom', adv.titleFontCustom.value);
 });
 adv.loadFonts.addEventListener('click', async () => {
   if (typeof window.queryLocalFonts !== 'function') {
@@ -1601,6 +1668,30 @@ classEls.batchSubmit.addEventListener('click', async () => {
 });
 
 // ============ 时钟 / 倒计时 / 排行榜 ============
+// 部件字体：下拉 + 自定义字体名（共用系统字体列表）
+const partFontBindings = [];
+function bindPartFont(sel, custom, fontKey, customKey) {
+  const syncDisabled = () => { custom.disabled = sel.value !== 'custom'; };
+  sel.addEventListener('change', () => {
+    syncDisabled();
+    pushSetting(fontKey, sel.value, true);
+  });
+  custom.addEventListener('input', () => pushSetting(customKey, custom.value));
+  partFontBindings.push((settings) => {
+    sel.value = settings[fontKey] || 'auto';
+    if (document.activeElement !== custom && custom.value !== (settings[customKey] || '')) {
+      custom.value = settings[customKey] || '';
+    }
+    syncDisabled();
+  });
+}
+bindPartFont(classEls.clockFont, classEls.clockFontCustom, 'clockFont', 'clockFontCustom');
+bindPartFont(classEls.cdFont, classEls.cdFontCustom, 'countdownFont', 'countdownFontCustom');
+bindPartFont(classEls.lbFont, classEls.lbFontCustom, 'leaderboardFont', 'leaderboardFontCustom');
+bindPartFont(classEls.marqueeFont, classEls.marqueeFontCustom, 'marqueeFont', 'marqueeFontCustom');
+bindPartFont(classEls.welcomeFont, classEls.welcomeFontCustom, 'welcomeFont', 'welcomeFontCustom');
+bindPartFont(adv.scoreFont, adv.scoreFontCustom, 'scoreFont', 'scoreFontCustom');
+
 classEls.clockPosition.addEventListener('change', () =>
   pushSetting('clockPosition', classEls.clockPosition.value, true));
 classEls.clockFormat.addEventListener('change', () =>
@@ -1609,6 +1700,16 @@ classEls.clockSeconds.addEventListener('change', () =>
   pushSetting('clockShowSeconds', classEls.clockSeconds.checked, true));
 classEls.clockDate.addEventListener('change', () =>
   pushSetting('clockShowDate', classEls.clockDate.checked, true));
+classEls.clockFontSize.addEventListener('input', () => {
+  const v = Number(classEls.clockFontSize.value);
+  classEls.clockFontSizeVal.textContent = v === 0 ? '自动' : v + ' px';
+  pushSetting('clockFontSize', v);
+});
+classEls.welcomeFontSize.addEventListener('input', () => {
+  const v = Number(classEls.welcomeFontSize.value);
+  classEls.welcomeFontSizeVal.textContent = v === 0 ? '自动' : v + ' px';
+  pushSetting('welcomeFontSize', v);
+});
 classEls.countdownMin.addEventListener('input', () => {
   const secs = Number(classEls.countdownMin.value);
   if (Number.isFinite(secs) && secs >= 1 && secs <= 3600) {
@@ -1922,6 +2023,18 @@ function renderSettings(settings) {
   } else {
     settingEls.bgImagePreview.classList.add('hidden');
   }
+  settingEls.bgImageBlur.checked = Boolean(settings.bgImageBlur);
+  if (Number(settingEls.bgImageBlurAmount.value) !== settings.bgImageBlurAmount) {
+    settingEls.bgImageBlurAmount.value = settings.bgImageBlurAmount;
+  }
+  settingEls.bgImageBlurVal.textContent = String(settings.bgImageBlurAmount);
+  settingEls.bgImageBlurAmount.disabled = !settings.bgImageBlur;
+  settingEls.bgScrimEnabled.checked = settings.bgScrimEnabled !== false;
+  if (Number(settingEls.bgScrimOpacity.value) !== settings.scrimOpacity) {
+    settingEls.bgScrimOpacity.value = settings.scrimOpacity;
+  }
+  settingEls.bgScrimOpacityVal.textContent = String(Math.round(settings.scrimOpacity * 100));
+  settingEls.bgScrimOpacity.disabled = !settingEls.bgScrimEnabled.checked;
 
   // 卡片底色
   settingEls.cardBgMode.value = settings.cardBgMode || 'auto';
@@ -2011,6 +2124,11 @@ function renderSettings(settings) {
     adv.fontCustom.value !== (settings.fontFamilyCustom || '')) {
     adv.fontCustom.value = settings.fontFamilyCustom || '';
   }
+  adv.titleFont.value = settings.titleFont || 'auto';
+  if (document.activeElement !== adv.titleFontCustom &&
+    adv.titleFontCustom.value !== (settings.titleFontCustom || '')) {
+    adv.titleFontCustom.value = settings.titleFontCustom || '';
+  }
   updateFontCustomState();
   adv.titleAlign.value = settings.titleAlign || 'auto';
   adv.cardShadow.value = settings.cardShadow || 'auto';
@@ -2028,7 +2146,6 @@ function renderSettings(settings) {
   syncAdvRange(adv.cardBorderWidth, adv.cardBorderWidthVal, settings.cardBorderWidth, fmtNum);
   syncAdvRange(adv.teamBarWidth, adv.teamBarVal, settings.teamAccentWidth, fmtNum);
   syncAdvRange(adv.avatarBorderWidth, adv.avatarBorderVal, settings.avatarBorderWidth, fmtNum);
-  syncAdvRange(adv.scrimOpacity, adv.scrimOpacityVal, settings.scrimOpacity, fmtPercent);
   syncAdvRange(adv.rankSize, adv.rankSizeVal, settings.rankSize, fmtNum);
   syncAdvRange(adv.scoreBarHeight, adv.scoreBarHeightVal, settings.scoreBarHeight, fmtNum);
 
@@ -2145,6 +2262,19 @@ function renderSettings(settings) {
   }
   syncAdvColorToggle(classEls.welcomeBgColorEnabled, classEls.welcomeBgColor, settings.welcomeBgColor,
     settings.theme === 'light' ? '#ffffff' : '#12161c');
+
+  // 各部件字体与字号
+  partFontBindings.forEach((sync) => sync(settings));
+  if (Number(classEls.clockFontSize.value) !== settings.clockFontSize) {
+    classEls.clockFontSize.value = settings.clockFontSize;
+  }
+  classEls.clockFontSizeVal.textContent =
+    settings.clockFontSize === 0 ? '自动' : settings.clockFontSize + ' px';
+  if (Number(classEls.welcomeFontSize.value) !== settings.welcomeFontSize) {
+    classEls.welcomeFontSize.value = settings.welcomeFontSize;
+  }
+  classEls.welcomeFontSizeVal.textContent =
+    settings.welcomeFontSize === 0 ? '自动' : settings.welcomeFontSize + ' px';
 }
 
 // ============ 总渲染 ============

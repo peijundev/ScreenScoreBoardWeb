@@ -539,6 +539,10 @@ select:focus { border-color: var(--accent); }
   object-fit: cover;
 }
 .person-row .p-name { font-weight: 600; min-width: 56px; word-break: break-all; }
+.person-row .p-name.editable,
+.team-block .t-name.editable { cursor: pointer; }
+.person-row .p-name.editable:hover,
+.team-block .t-name.editable:hover { color: var(--accent); }
 .person-row .p-score {
   font-weight: 700;
   font-size: 15px;

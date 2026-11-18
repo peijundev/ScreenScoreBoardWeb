@@ -92,29 +92,37 @@ body[data-density="compact"] {
 
 body {
   background-color: var(--bg-fallback);
-  background-position: center;
-  background-size: cover;
-  background-repeat: no-repeat;
-  background-attachment: fixed;
   color: var(--text);
   font-family: "Noto Sans", "Noto Sans CJK SC", "Source Han Sans SC",
     "PingFang SC", "Microsoft YaHei", sans-serif;
   min-height: 100vh;
 }
 
-/* 背景图上的压暗/提亮层，保证文字可读 */
+/* 背景图单独成层，便于只对图片做虚化（不影响卡片和文字）；
+   虚化时稍微放大，避免视口边缘露出透明羽化边 */
 body.has-bg-image::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image: var(--bg-image, none);
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  filter: blur(var(--bg-blur, 0px));
+  transform: scale(var(--bg-blur-scale, 1));
+  pointer-events: none;
+  z-index: -2;
+}
+/* 背景图上的压暗/提亮层，保证文字可读 */
+body.has-bg-image::after {
   content: "";
   position: fixed;
   inset: 0;
   background: var(--scrim);
   opacity: var(--scrim-opacity, 1);
   pointer-events: none;
-  z-index: 0;
+  z-index: -1;
 }
-body.has-bg-image .topbar,
-body.has-bg-image .board,
-body.has-bg-image .empty-tip { position: relative; z-index: 1; }
 
 /* ---- 顶部：居中的大标题 + 短横线，像展板标题 ---- */
 .topbar {
@@ -200,13 +208,18 @@ body.has-bg-image .empty-tip { position: relative; z-index: 1; }
   letter-spacing: 0.04em;
   white-space: nowrap;
 }
+.overlay-clock {
+  font-family: var(--clock-font, inherit);
+  font-size: var(--clock-size, clamp(18px, 2vw, 30px));
+}
 .clock-pos-top-left { top: 18px; left: 22px; }
 .clock-pos-top-right { top: 34px; right: 20px; }
 .clock-pos-bottom-left { bottom: 18px; left: 22px; }
 .clock-pos-bottom-right { bottom: 18px; right: 22px; }
 .overlay-countdown {
   color: var(--accent);
-  font-size: clamp(22px, 2.4vw, 36px);
+  font-family: var(--cd-font, inherit);
+  font-size: var(--cd-corner-size, clamp(22px, 2.4vw, 36px));
   background: var(--cd-panel-bg, color-mix(in srgb, var(--card) 68%, transparent));
 }
 .overlay-countdown[data-bg-mode="acrylic"] {
@@ -230,6 +243,7 @@ body.has-bg-image .empty-tip { position: relative; z-index: 1; }
   position: fixed;
   inset: 0;
   z-index: 40;
+  font-family: var(--cd-font, inherit);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -310,8 +324,8 @@ body.has-bg-image .empty-tip { position: relative; z-index: 1; }
 .countdown-time {
   position: relative;
   z-index: 1;
-  font-family: "DIN Alternate", "Bahnschrift", "Roboto Condensed", ui-monospace,
-    "SF Mono", "Cascadia Mono", Consolas, monospace;
+  font-family: var(--cd-font, "DIN Alternate", "Bahnschrift", "Roboto Condensed", ui-monospace,
+    "SF Mono", "Cascadia Mono", Consolas, monospace);
   font-variant-numeric: tabular-nums;
   font-size: var(--cd-time-size, clamp(46px, 9vmin, 110px));
   font-weight: 800;
@@ -377,7 +391,7 @@ body.countdown-fullscreen .overlay-clock { display: none !important; }
   left: 49.06%;
   top: 50.5%;
   transform: translate(-50%, -50%);
-  font-family: "Times New Roman", "Noto Serif CJK SC", "Songti SC", "STSong", serif;
+  font-family: var(--cd-font, "Times New Roman", "Noto Serif CJK SC", "Songti SC", "STSong", serif);
   font-weight: 400;
   font-size: var(--ink-num-size, 11.5cqh);
   line-height: 1;
@@ -454,7 +468,7 @@ body.countdown-fullscreen .overlay-clock { display: none !important; }
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.42);
   color: #fff;
-  font-family: "Times New Roman", "Noto Serif CJK SC", "Songti SC", serif;
+  font-family: var(--cd-font, "Times New Roman", "Noto Serif CJK SC", "Songti SC", serif);
   font-size: clamp(20px, 2.4vw, 40px);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -468,6 +482,7 @@ body.countdown-fullscreen .overlay-clock { display: none !important; }
   max-width: 1400px;
   margin: 0 auto;
   padding: 8px 28px 48px;
+  font-family: var(--lb-font, inherit);
   display: flex;
   flex-direction: column;
   gap: calc(12px * var(--lb-scale, 1));
@@ -597,6 +612,7 @@ body.countdown-fullscreen .overlay-clock { display: none !important; }
   display: inline-block;
   white-space: nowrap;
   padding-left: 100%;
+  font-family: var(--marquee-font-family, inherit);
   font-size: var(--marquee-font, clamp(16px, 2vw, 26px));
   font-weight: 600;
   color: var(--marquee-color, var(--accent));
@@ -639,7 +655,8 @@ body.countdown-fullscreen .overlay-clock { display: none !important; }
 .welcome-text {
   padding: 0 8vw;
   text-align: center;
-  font-size: clamp(40px, 8vw, 140px);
+  font-family: var(--welcome-font, inherit);
+  font-size: var(--welcome-size, clamp(40px, 8vw, 140px));
   font-weight: 800;
   letter-spacing: 0.06em;
   color: var(--text);
@@ -738,10 +755,10 @@ body.edit-mode .edit-hint {
   font-size: 13px;
 }
 
-/* 分数用等宽数字字体，像真实记分牌 */
+/* 分数用等宽数字字体，像真实记分牌（可单独换字体） */
 .score {
-  font-family: "DIN Alternate", "Bahnschrift", "Roboto Condensed", ui-monospace,
-    "SF Mono", "Cascadia Mono", Consolas, monospace;
+  font-family: var(--score-font, "DIN Alternate", "Bahnschrift", "Roboto Condensed", ui-monospace,
+    "SF Mono", "Cascadia Mono", Consolas, monospace);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
 }
@@ -1512,6 +1529,7 @@ body[data-title-align="right"] .topbar { align-items: flex-end; text-align: righ
 body[data-title-align="right"] .topbar::after { margin-left: auto; margin-right: 0; }
 
 body[data-title-color="custom"] .topbar h1 { color: var(--title-color); }
+body[data-title-font="custom"] .topbar h1 { font-family: var(--title-font); }
 body[data-rank-color="custom"] .rank { color: var(--rank-color); }
 body[data-card-shadow="custom"] .card { box-shadow: var(--card-shadow); }
 

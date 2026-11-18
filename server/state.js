@@ -24,6 +24,9 @@ const DEFAULT_SETTINGS = {
   bgType: 'color',          // color | image
   bgColor: '',              // '' = 跟随主题
   bgImage: null,            // avatars/xxx.png
+  bgImageBlur: false,       // 背景图虚化
+  bgImageBlurAmount: 12,    // 背景图虚化度 px（0–40）
+  bgScrimEnabled: true,     // 背景图遮罩（防止图片干扰文字；浅色主题下即“发白”层）
   cardBg: '',               // '' = 跟随主题
   cardBgMode: 'auto',       // auto | custom | translucent | acrylic
   cardOpacity: 0.55,        // 半透明/亚克力不透明度 0.15–1
@@ -56,8 +59,12 @@ const DEFAULT_SETTINGS = {
   // ---- 高级外观 ----
   fontFamily: 'system',     // system | serif | kai | custom
   fontFamilyCustom: '',     // 自定义系统字体名称（fontFamily=custom 时生效）
+  scoreFont: 'auto',        // 分数数字字体：auto | system | serif | kai | custom
+  scoreFontCustom: '',      // 分数自定义系统字体名称
   fontScale: 1,             // 姓名/分数/成员字号缩放 0.7–1.5
   titleSize: 0,             // 标题字号 px；0 = 自动
+  titleFont: 'auto',        // 标题字体：auto（跟随全局）| system | serif | kai | custom
+  titleFontCustom: '',      // 标题自定义系统字体名称（titleFont=custom 时生效）
   titleAlign: 'auto',       // auto（跟随风格）| center | left | right
   titleDecor: 'auto',       // auto（跟随风格）| plain（纯标题，去掉胶囊/竖条）
   styleFreeConfig: false,   // true = 高级外观设置覆盖风格皮肤的固定排版
@@ -104,6 +111,9 @@ const DEFAULT_SETTINGS = {
 
   // ---- 大屏演示 ----
   clockPosition: 'top-right', // top-left | top-right | bottom-left | bottom-right
+  clockFont: 'auto',          // 时钟字体：auto | system | serif | kai | custom
+  clockFontCustom: '',        // 时钟自定义系统字体名称
+  clockFontSize: 0,           // 时钟字号 px；0=自动
   clockFormat: '24',          // '24' | '12'
   clockShowSeconds: true,
   clockShowDate: false,
@@ -115,6 +125,8 @@ const DEFAULT_SETTINGS = {
   countdownSize: 520,         // 窗口宽度 px（200–900）
   countdownHeight: 0,         // 窗口高度 px（0=与宽度相同，最大 900）
   countdownFontSize: 0,       // 数字字号 px；0=自动
+  countdownFont: 'auto',      // 倒计时字体：auto | system | serif | kai | custom
+  countdownFontCustom: '',    // 倒计时自定义系统字体名称
   countdownPosition: 'center', // center | top-left | top | top-right | left | right | bottom-left | bottom | bottom-right
   countdownShowProgress: true,
   countdownShowBackdrop: true,
@@ -127,6 +139,8 @@ const DEFAULT_SETTINGS = {
   leaderboardScope: 'auto',   // auto | people | teams
   leaderboardLimit: 0,        // 0 = 全部
   leaderboardScale: 1,        // 0.8–1.6
+  leaderboardFont: 'auto',    // 排行榜字体：auto | system | serif | kai | custom
+  leaderboardFontCustom: '',  // 排行榜自定义系统字体名称
   rankTieMode: 'competition', // competition | dense | none
 
   // ---- 记分效率与动效 ----
@@ -147,12 +161,17 @@ const DEFAULT_SETTINGS = {
   featureWelcome: false,      // 欢迎幕布
   marqueeText: '',            // 跑马灯文字
   marqueeFontSize: 0,         // 跑马灯字号 px；0=自动
+  marqueeFont: 'auto',        // 跑马灯字体：auto | system | serif | kai | custom
+  marqueeFontCustom: '',      // 跑马灯自定义系统字体名称
   marqueePosition: 'top',     // top | bottom
   marqueeEffect: 'scroll',    // scroll | blink | none
   marqueeColor: '',           // '' = 跟随强调色
   marqueeBgColor: '',         // '' = 跟随主题
   marqueeSpeed: 1,            // 滚动速度倍率 0.5–3
   welcomeText: '',            // 欢迎幕布文字
+  welcomeFont: 'auto',        // 欢迎幕布字体：auto | system | serif | kai | custom
+  welcomeFontCustom: '',      // 欢迎幕布自定义系统字体名称
+  welcomeFontSize: 0,         // 欢迎幕布字号 px；0=自动
   welcomeImage: '',           // 欢迎幕布背景图
   welcomeBgColor: '',         // 欢迎幕布纯色画板底色（图空时用）
 };
@@ -436,6 +455,22 @@ function boolStrict(v, label) {
   return v;
 }
 
+function fontNameOrEmpty(v) {
+  if (v == null || v === '') return '';
+  if (typeof v !== 'string') throw new OpError('字体名称非法');
+  const name = v.trim();
+  if (!name) return '';
+  if (name.length > 60) throw new OpError('字体名称过长（最多 60 字）');
+  if (!/^[\p{L}\p{N} ._-]+$/u.test(name)) throw new OpError('字体名称包含非法字符');
+  return name;
+}
+
+function fontChoice(label) {
+  return (v) => (['auto', 'system', 'serif', 'kai', 'custom'].includes(v)
+    ? v
+    : (() => { throw new OpError(label + '非法'); })());
+}
+
 const SETTINGS_VALIDATORS = {
   title: (v) => needString(v, '标题', 30),
   displayStyle: (v) =>
@@ -461,6 +496,9 @@ const SETTINGS_VALIDATORS = {
     return /^#[0-9a-fA-F]{6}$/.test(v) ? v : (() => { throw new OpError('背景色须为 #rrggbb 或留空'); })();
   },
   bgImage: (v) => needAvatar(v === '' ? null : v),
+  bgImageBlur: (v) => boolStrict(v, '背景图虚化开关'),
+  bgImageBlurAmount: (v) => intRange(v, 0, 40, '背景图虚化度须为 0–40 px'),
+  bgScrimEnabled: (v) => boolStrict(v, '背景遮罩开关'),
   cardBg: (v) => {
     if (v === '' || v == null) return '';
     return /^#[0-9a-fA-F]{6}$/.test(v) ? v : (() => { throw new OpError('卡片底色须为 #rrggbb 或留空'); })();
@@ -557,21 +595,20 @@ const SETTINGS_VALIDATORS = {
     (['system', 'serif', 'kai', 'custom'].includes(v)
       ? v
       : (() => { throw new OpError('字体选择非法'); })()),
-  fontFamilyCustom: (v) => {
-    if (v == null || v === '') return '';
-    if (typeof v !== 'string') throw new OpError('字体名称非法');
-    const name = v.trim();
-    if (!name) return '';
-    if (name.length > 60) throw new OpError('字体名称过长（最多 60 字）');
-    if (!/^[\p{L}\p{N} ._-]+$/u.test(name)) throw new OpError('字体名称包含非法字符');
-    return name;
-  },
+  fontFamilyCustom: fontNameOrEmpty,
+  scoreFont: fontChoice('分数字体'),
+  scoreFontCustom: fontNameOrEmpty,
   fontScale: (v) => {
     const n = Number(v);
     if (!Number.isFinite(n) || n < 0.7 || n > 1.5) throw new OpError('字号缩放须在 0.7–1.5 之间');
     return Math.round(n * 100) / 100;
   },
   titleSize: (v) => intRange(v, 0, 120, '标题字号须为 0–120 的整数（0=自动）'),
+  titleFont: (v) =>
+    (['auto', 'system', 'serif', 'kai', 'custom'].includes(v)
+      ? v
+      : (() => { throw new OpError('标题字体非法'); })()),
+  titleFontCustom: fontNameOrEmpty,
   titleAlign: (v) =>
     (['auto', 'center', 'left', 'right'].includes(v) ? v : (() => { throw new OpError('标题对齐非法'); })()),
   titleDecor: (v) =>
@@ -609,7 +646,7 @@ const SETTINGS_VALIDATORS = {
   rankColor: (v) => hexOrEmpty(v, '名次颜色须为 #rrggbb 或留空'),
   scrimOpacity: (v) => {
     const n = Number(v);
-    if (!Number.isFinite(n) || n < 0 || n > 1) throw new OpError('背景压暗倍率须在 0–1 之间');
+    if (!Number.isFinite(n) || n < 0 || n > 1) throw new OpError('背景遮罩强度须在 0–1 之间');
     return Math.round(n * 100) / 100;
   },
   showRank: (v) => Boolean(v),
@@ -643,6 +680,9 @@ const SETTINGS_VALIDATORS = {
     (['24', '12'].includes(v) ? v : (() => { throw new OpError('时钟制式非法'); })()),
   clockShowSeconds: (v) => boolStrict(v, '时钟秒数开关'),
   clockShowDate: (v) => boolStrict(v, '时钟日期开关'),
+  clockFont: fontChoice('时钟字体'),
+  clockFontCustom: fontNameOrEmpty,
+  clockFontSize: (v) => intRange(v, 0, 200, '时钟字号须为 0–200（0=自动）'),
   countdownDurationSec: (v) => intRange(v, 1, 3600, '倒计时时长须为 1–3600 秒'),
   countdownDisplayMode: (v) =>
     (['corner', 'center', 'fullscreen'].includes(v)
@@ -660,6 +700,8 @@ const SETTINGS_VALIDATORS = {
   countdownSize: (v) => intRange(v, 200, 900, '倒计时窗口尺寸须为 200–900'),
   countdownHeight: (v) => intRange(v, 0, 900, '倒计时窗口高度须为 0–900（0=与宽度相同）'),
   countdownFontSize: (v) => intRange(v, 0, 300, '倒计时数字字号须为 0–300（0=自动）'),
+  countdownFont: fontChoice('倒计时字体'),
+  countdownFontCustom: fontNameOrEmpty,
   countdownPosition: (v) =>
     (['center', 'top-left', 'top', 'top-right', 'left', 'right',
       'bottom-left', 'bottom', 'bottom-right'].includes(v)
@@ -691,6 +733,8 @@ const SETTINGS_VALIDATORS = {
     if (!Number.isFinite(n) || n < 0.8 || n > 1.6) throw new OpError('排行榜缩放须在 0.8–1.6 之间');
     return Math.round(n * 100) / 100;
   },
+  leaderboardFont: fontChoice('排行榜字体'),
+  leaderboardFontCustom: fontNameOrEmpty,
   rankTieMode: (v) =>
     (['competition', 'dense', 'none'].includes(v)
       ? v
@@ -738,6 +782,8 @@ const SETTINGS_VALIDATORS = {
   featureWelcome: (v) => boolStrict(v, '欢迎幕布开关'),
   marqueeText: (v) => (typeof v === 'string' ? v.slice(0, 200) : ''),
   marqueeFontSize: (v) => intRange(v, 0, 120, '跑马灯字号须为 0–120（0=自动）'),
+  marqueeFont: fontChoice('跑马灯字体'),
+  marqueeFontCustom: fontNameOrEmpty,
   marqueePosition: (v) =>
     (['top', 'bottom'].includes(v) ? v : (() => { throw new OpError('跑马灯位置非法'); })()),
   marqueeEffect: (v) =>
@@ -752,6 +798,9 @@ const SETTINGS_VALIDATORS = {
     return Math.round(n * 100) / 100;
   },
   welcomeText: (v) => (typeof v === 'string' ? v.slice(0, 200) : ''),
+  welcomeFont: fontChoice('欢迎幕布字体'),
+  welcomeFontCustom: fontNameOrEmpty,
+  welcomeFontSize: (v) => intRange(v, 0, 300, '欢迎幕布字号须为 0–300（0=自动）'),
   welcomeImage: (v) => needAvatar(v === '' ? null : v),
   welcomeBgColor: (v) => hexOrEmpty(v, '欢迎幕布底色须为 #rrggbb 或留空'),
 };
@@ -845,6 +894,11 @@ function applyOp(op, payload) {
       if (!personIds.length) throw new OpError('没有可添加的新人员');
       return { personIds, added: personIds.length, skipped };
     }
+    case 'renamePerson': {
+      const p = needPerson(project, payload.personId);
+      p.name = needString(payload.name, '姓名', 20);
+      return { name: p.name };
+    }
     case 'removePerson': {
       needPerson(project, payload.personId);
       delete project.people[payload.personId];
@@ -869,6 +923,11 @@ function applyOp(op, payload) {
         order: nextOrder(project),
       };
       return { teamId: id };
+    }
+    case 'renameTeam': {
+      const t = needTeam(project, payload.teamId);
+      t.name = needString(payload.name, '团队名', 20);
+      return { name: t.name };
     }
     case 'removeTeam': {
       needTeam(project, payload.teamId);

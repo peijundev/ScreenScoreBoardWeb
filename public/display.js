@@ -606,6 +606,16 @@ const FONT_STACKS = {
   kai: '"Kaiti SC", "KaiTi", "STKaiti", "Noto Serif CJK SC", serif',
 };
 
+// 部件字体：auto = 跟随默认/主题，其余映射到预设字体栈或自定义系统字体
+function fontStackOf(settings, fontKey, customKey) {
+  const choice = settings[fontKey] || 'auto';
+  if (choice === 'custom' && settings[customKey]) {
+    return '"' + settings[customKey].replace(/["\\]/g, '') + '", ' + FONT_STACKS.system;
+  }
+  if (choice !== 'auto') return FONT_STACKS[choice] || '';
+  return '';
+}
+
 const SHADOWS = {
   none: 'none',
   soft: '0 4px 14px rgba(0, 0, 0, 0.16)',
@@ -634,6 +644,21 @@ function applyAdvancedAppearance(settings) {
     body.style.fontFamily = FONT_STACKS[fontKey] || FONT_STACKS.system;
   }
 
+  // 标题字体独立于正文字体；auto = 跟随全局字体（含风格皮肤）
+  const titleFont = fontStackOf(settings, 'titleFont', 'titleFontCustom');
+  setVar(root.style, '--title-font', titleFont);
+  body.dataset.titleFont = titleFont ? 'custom' : 'auto';
+
+  // 各部件字体独立可调；auto = 跟随默认/主题
+  setVar(root.style, '--clock-font', fontStackOf(settings, 'clockFont', 'clockFontCustom'));
+  setVar(root.style, '--clock-size', settings.clockFontSize ? settings.clockFontSize + 'px' : '');
+  setVar(root.style, '--cd-font', fontStackOf(settings, 'countdownFont', 'countdownFontCustom'));
+  setVar(root.style, '--lb-font', fontStackOf(settings, 'leaderboardFont', 'leaderboardFontCustom'));
+  setVar(root.style, '--marquee-font-family', fontStackOf(settings, 'marqueeFont', 'marqueeFontCustom'));
+  setVar(root.style, '--welcome-font', fontStackOf(settings, 'welcomeFont', 'welcomeFontCustom'));
+  setVar(root.style, '--score-font', fontStackOf(settings, 'scoreFont', 'scoreFontCustom'));
+  setVar(root.style, '--welcome-size', settings.welcomeFontSize ? settings.welcomeFontSize + 'px' : '');
+
   setVar(root.style, '--font-scale', String(settings.fontScale));
   setVar(root.style, '--title-size', settings.titleSize ? settings.titleSize + 'px' : '');
   setVar(root.style, '--board-max', settings.boardMaxWidth + 'px');
@@ -647,7 +672,8 @@ function applyAdvancedAppearance(settings) {
   setVar(root.style, '--avatar-radius', settings.avatarShape === 'square' ? '0px' : '50%');
   setVar(root.style, '--rank-size', settings.rankSize + 'px');
   setVar(root.style, '--bar-height', settings.scoreBarHeight + 'px');
-  setVar(root.style, '--scrim-opacity', String(settings.scrimOpacity));
+  setVar(root.style, '--scrim-opacity',
+    settings.bgScrimEnabled === false ? '0' : String(settings.scrimOpacity));
   setVar(root.style, '--score-pos', settings.positiveColor);
   setVar(root.style, '--score-neg', settings.negativeColor);
   setVar(root.style, '--title-color', settings.titleColor || '');
@@ -734,7 +760,14 @@ function applyAppearance(settings) {
   document.body.style.backgroundColor = settings.bgColor;
   const useImage = settings.bgType === 'image' && settings.bgImage;
   document.body.classList.toggle('has-bg-image', Boolean(useImage));
-  document.body.style.backgroundImage = useImage ? 'url("/' + settings.bgImage + '")' : '';
+  // 背景图由 body::before 渲染，才能单独虚化而不影响卡片与文字
+  document.body.style.backgroundImage = '';
+  setVar(document.body.style, '--bg-image', useImage ? 'url("/' + settings.bgImage + '")' : '');
+  const bgBlur = useImage && settings.bgImageBlur
+    ? Math.max(0, Math.min(40, Number(settings.bgImageBlurAmount) || 0))
+    : 0;
+  setVar(document.body.style, '--bg-blur', bgBlur > 0 ? bgBlur + 'px' : '');
+  setVar(document.body.style, '--bg-blur-scale', bgBlur > 0 ? String(1 + bgBlur * 0.0025) : '');
 
   titleEl.textContent = settings.title;
   document.title = settings.title;
@@ -855,12 +888,14 @@ function updateCountdown() {
   }
   const ended = c.state === 'ended' || remaining <= 0;
   const mode = settings.countdownDisplayMode || 'corner';
+  const manualSize = Number(settings.countdownFontSize) || 0;
 
   if (mode === 'corner') {
     countdownEl.textContent = ended ? '时间到' : formatDuration(remaining);
     const both = settings.featureClock;
     countdownEl.className = 'overlay-countdown clock-pos-' + settings.clockPosition +
       (ended ? ' ended' : '') + (both ? ' shifted' : '');
+    countdownEl.style.setProperty('--cd-corner-size', manualSize > 0 ? manualSize + 'px' : '');
     applyCountdownPanelBg(countdownEl, settings);
     countdownBigEl.classList.add('hidden');
     document.body.classList.remove('countdown-fullscreen');
@@ -887,7 +922,6 @@ function updateCountdown() {
     ? Number(settings.countdownHeight) : cdWidth;
   countdownBigEl.style.setProperty('--cd-size', cdWidth + 'px');
   countdownBigEl.style.setProperty('--cd-height', cdHeight + 'px');
-  const manualSize = Number(settings.countdownFontSize) || 0;
   const timeSize = manualSize > 0
     ? manualSize
     : Math.min(180, Math.max(30, Math.round(Math.min(cdWidth, cdHeight) * 0.22)));

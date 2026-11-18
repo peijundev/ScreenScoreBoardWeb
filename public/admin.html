@@ -243,6 +243,22 @@
             </label>
             <label class="check"><input id="set-clock-seconds" type="checkbox"> 显示秒</label>
             <label class="check"><input id="set-clock-date" type="checkbox"> 显示日期</label>
+            <label>时钟字体
+              <select id="set-clock-font">
+                <option value="auto">跟随全局字体</option>
+                <option value="system">系统黑体</option>
+                <option value="serif">宋体 / 衬线</option>
+                <option value="kai">楷体</option>
+                <option value="custom">自定义系统字体</option>
+              </select>
+            </label>
+            <label>时钟字体名称
+              <input id="set-clock-font-custom" type="text" maxlength="60" list="system-font-list"
+                placeholder="例如：LXGW WenKai" disabled>
+            </label>
+            <label>时钟字号 <span id="clock-font-size-val">自动</span>
+              <input id="set-clock-font-size" type="range" min="0" max="200" step="2">
+            </label>
           </div>
           <div class="feature-block" data-feature="featureCountdown">
             <label>倒计时时长（秒）
@@ -294,8 +310,21 @@
               <label>窗口圆角 <span id="cd-radius-val">28</span> px
                 <input id="set-cd-radius" type="range" min="0" max="120" step="2">
               </label>
-              <label>数字字号 <span id="cd-fontsize-val">自动</span>
+              <label>倒计时字号 <span id="cd-fontsize-val">自动</span>
                 <input id="set-cd-fontsize" type="range" min="0" max="300" step="2">
+              </label>
+              <label>倒计时字体
+                <select id="set-cd-font">
+                  <option value="auto">跟随全局字体</option>
+                  <option value="system">系统黑体</option>
+                  <option value="serif">宋体 / 衬线</option>
+                  <option value="kai">楷体</option>
+                  <option value="custom">自定义系统字体</option>
+                </select>
+              </label>
+              <label>倒计时字体名称
+                <input id="set-cd-font-custom" type="text" maxlength="60" list="system-font-list"
+                  placeholder="例如：LXGW WenKai" disabled>
               </label>
               <label>窗口不透明度 <span id="cd-opacity-val">100</span>%
                 <input id="set-cd-opacity" type="range" min="0.2" max="1" step="0.05">
@@ -352,6 +381,19 @@
             </label>
             <label>排行榜缩放 <span id="lb-scale-val">1</span> 倍
               <input id="set-lb-scale" type="range" min="0.8" max="1.6" step="0.05">
+            </label>
+            <label>排行榜字体
+              <select id="set-lb-font">
+                <option value="auto">跟随全局字体</option>
+                <option value="system">系统黑体</option>
+                <option value="serif">宋体 / 衬线</option>
+                <option value="kai">楷体</option>
+                <option value="custom">自定义系统字体</option>
+              </select>
+            </label>
+            <label>排行榜字体名称
+              <input id="set-lb-font-custom" type="text" maxlength="60" list="system-font-list"
+                placeholder="例如：LXGW WenKai" disabled>
             </label>
             <button id="toggle-leaderboard" class="btn small" type="button">切换到排行榜</button>
           </div>
@@ -421,6 +463,19 @@
             <label>跑马灯字号 <span id="marquee-font-val">自动</span>
               <input id="set-marquee-font-size" type="range" min="0" max="120" step="2">
             </label>
+            <label>跑马灯字体
+              <select id="set-marquee-font">
+                <option value="auto">跟随全局字体</option>
+                <option value="system">系统黑体</option>
+                <option value="serif">宋体 / 衬线</option>
+                <option value="kai">楷体</option>
+                <option value="custom">自定义系统字体</option>
+              </select>
+            </label>
+            <label>跑马灯字体名称
+              <input id="set-marquee-font-custom" type="text" maxlength="60" list="system-font-list"
+                placeholder="例如：LXGW WenKai" disabled>
+            </label>
             <label>滚动速度 <span id="marquee-speed-val">1</span> 倍
               <input id="set-marquee-speed" type="range" min="0.5" max="3" step="0.1">
             </label>
@@ -452,6 +507,22 @@
           <label class="check"><input id="set-feature-welcome" type="checkbox"> 欢迎幕布</label>
           <label>欢迎文字
             <input id="set-welcome-text" type="text" maxlength="200" placeholder="欢迎光临">
+          </label>
+          <label>欢迎幕布字体
+            <select id="set-welcome-font">
+              <option value="auto">跟随全局字体</option>
+              <option value="system">系统黑体</option>
+              <option value="serif">宋体 / 衬线</option>
+              <option value="kai">楷体</option>
+              <option value="custom">自定义系统字体</option>
+            </select>
+          </label>
+          <label>欢迎幕布字体名称
+            <input id="set-welcome-font-custom" type="text" maxlength="60" list="system-font-list"
+              placeholder="例如：LXGW WenKai" disabled>
+          </label>
+          <label>欢迎文字字号 <span id="welcome-font-size-val">自动</span>
+            <input id="set-welcome-font-size" type="range" min="0" max="300" step="4">
           </label>
           <label class="check"><input id="set-welcome-bg-color-enabled" type="checkbox"> 自定义画板底色</label>
           <label>画板底色
@@ -591,6 +662,18 @@
             <button id="set-bg-image-clear" class="btn small" type="button">移除图片</button>
           </div>
           <img id="bg-image-preview" class="bg-image-preview hidden" alt="背景预览">
+          <label class="check">
+            <input id="set-bg-image-blur" type="checkbox"> 背景图虚化
+          </label>
+          <label>虚化度 <span id="bg-image-blur-val">12</span> px
+            <input id="set-bg-image-blur-amount" type="range" min="0" max="40" step="1" disabled>
+          </label>
+          <label class="check">
+            <input id="set-bg-scrim-enabled" type="checkbox"> 背景遮罩（浅色主题下会让图片「发白」）
+          </label>
+          <label>遮罩强度 <span id="bg-scrim-opacity-val">100</span>%
+            <input id="set-bg-scrim-opacity" type="range" min="0" max="1" step="0.05" disabled>
+          </label>
         </div>
 
         <div class="set-group">
@@ -677,8 +760,34 @@
           <label>字号缩放 <span id="font-scale-val">1</span> 倍
             <input id="set-font-scale" type="range" min="0.7" max="1.5" step="0.05">
           </label>
+          <label>分数数字字体
+            <select id="set-score-font">
+              <option value="auto">跟随内置记分牌字体</option>
+              <option value="system">系统黑体</option>
+              <option value="serif">宋体 / 衬线</option>
+              <option value="kai">楷体</option>
+              <option value="custom">自定义系统字体</option>
+            </select>
+          </label>
+          <label>分数字体名称
+            <input id="set-score-font-custom" type="text" maxlength="60" list="system-font-list"
+              placeholder="例如：LXGW WenKai" disabled>
+          </label>
           <label>标题字号 <span id="title-size-val">自动</span>
             <input id="set-title-size" type="range" min="0" max="120" step="2">
+          </label>
+          <label>标题字体
+            <select id="set-title-font">
+              <option value="auto">跟随全局字体</option>
+              <option value="system">系统黑体</option>
+              <option value="serif">宋体 / 衬线</option>
+              <option value="kai">楷体</option>
+              <option value="custom">自定义系统字体</option>
+            </select>
+          </label>
+          <label>标题字体名称
+            <input id="set-title-font-custom" type="text" maxlength="60" list="system-font-list"
+              placeholder="例如：LXGW WenKai / Noto Serif CJK SC" disabled>
           </label>
           <label>标题装饰
             <select id="set-title-decor">
@@ -760,9 +869,6 @@
           </label>
           <label>名次颜色
             <input id="set-rank-color" type="color" disabled>
-          </label>
-          <label>背景压暗 <span id="scrim-opacity-val">100</span>%
-            <input id="set-scrim-opacity" type="range" min="0" max="1" step="0.05">
           </label>
           <label class="check">
             <input id="set-show-rank" type="checkbox"> 显示名次角标
