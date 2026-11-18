@@ -138,6 +138,12 @@ async function main() {
   r = await fetch(BASE + '/img/xianxia/scroll-1.webp');
   assert(r.ok && /image\/webp/.test(r.headers.get('content-type') || ''), '真·古风卷轴卡面素材可访问');
 
+  console.log('版本信息:');
+  const verRes = await fetch(BASE + '/api/version');
+  const verData = await verRes.json();
+  assert(verRes.ok && verData.version === '1.4.0', '版本接口返回 1.4.0');
+  assert(verData.finalForTechStack === true, '1.4.0 标记为原技术栈最终版');
+
   console.log('头像上传:');
   r = await fetch(BASE + '/api/avatar', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: PNG });
   const up = await r.json();

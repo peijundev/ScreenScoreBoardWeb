@@ -1,6 +1,6 @@
 {
   "name": "@peijundev/screenscoreboard",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "实时计分板：显示端 + 管理端，多项目，WebSocket 实时同步，可切换存储后端（JSON/SQLite/PostgreSQL/MySQL）",
   "license": "MIT",
   "author": {

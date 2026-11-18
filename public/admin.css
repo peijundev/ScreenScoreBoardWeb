@@ -70,6 +70,16 @@ body {
   flex: 0 0 auto;
   margin-right: 4px;
 }
+.app-version {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--text-dim);
+  border: 1px solid var(--card-border);
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+.app-version.is-final { color: var(--accent); border-color: var(--accent); }
+
 .project-select {
   background: var(--input-bg);
   color: var(--text);

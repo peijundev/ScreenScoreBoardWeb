@@ -5,6 +5,8 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { serveStatic, send, PUBLIC_DIR } = require('./static');
+const APP_VERSION = require('../package.json').version;
+const FINAL_TECH_STACK_RELEASE = '1.4.0';
 const {
   state,
   init: initState,
@@ -281,6 +283,12 @@ const server = http.createServer((req, res) => {
       'Content-Type': 'application/json',
     });
   }
+  if (req.method === 'GET' && p === '/api/version') {
+    return send(res, 200, JSON.stringify({
+      version: APP_VERSION,
+      finalForTechStack: APP_VERSION === FINAL_TECH_STACK_RELEASE,
+    }), { 'Content-Type': 'application/json' });
+  }
   if (req.method === 'GET' && p === '/api/export') {
     const projectId = url.searchParams.get('project');
     try {
@@ -390,7 +398,10 @@ async function start(options = {}) {
       resolve(server.address().port);
     });
   });
-  console.log(`计分板服务已启动（存储: ${storageKind}）:`);
+  console.log(`计分板服务已启动 v${APP_VERSION}（存储: ${storageKind}）:`);
+  if (APP_VERSION === FINAL_TECH_STACK_RELEASE) {
+    console.log('  ※ 本版本是原技术栈（Node 原生 http + WebSocket，无构建）的最后一个版本');
+  }
   console.log(`  显示端  http://localhost:${actualPort}/display`);
   console.log(`  管理端  http://localhost:${actualPort}/admin`);
   return { server, port: actualPort };

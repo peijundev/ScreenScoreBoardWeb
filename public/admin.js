@@ -78,6 +78,22 @@ const conn = connectWS(
   }
 );
 
+// ============ 版本标识（1.4.0 为原技术栈最终版） ============
+fetch('/api/version')
+  .then((r) => (r.ok ? r.json() : null))
+  .then((info) => {
+    if (!info || !info.version) return;
+    const el = document.getElementById('app-version');
+    if (!el) return;
+    el.textContent = 'v' + info.version + (info.finalForTechStack ? ' · 最终版' : '');
+    el.title = info.finalForTechStack
+      ? '本版本是原技术栈（Node 原生 http + WebSocket，无构建）的最后一个版本'
+      : '当前版本';
+    el.classList.toggle('is-final', Boolean(info.finalForTechStack));
+    el.hidden = false;
+  })
+  .catch(() => {});
+
 // ============ 管理端浅色 / 深色切换 ============
 const themeToggleBtn = document.getElementById('theme-toggle');
 function applyAdminTheme(theme) {
