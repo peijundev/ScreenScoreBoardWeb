@@ -14,7 +14,6 @@ export const DISPLAY_STYLES: Array<[string, string]> = [
   ['kde', 'KDE 桌面'],
   ['guofeng', '古风雅集'],
   ['ink', '水墨'],
-  ['xianxia', '真·古风'],
   ['modern', '现代极简'],
   ['neon', '赛博霓虹'],
   ['poster', '海报展板'],
@@ -25,6 +24,7 @@ export const DISPLAY_STYLES: Array<[string, string]> = [
 export const SETTINGS_GROUPS: Group[] = [
   {
     title: '内容',
+    tab: 'layout',
     fields: [
       { t: 'text', k: 'title', label: '标题文字', max: 30 },
       { t: 'check', k: 'showMemberScore', label: '显示成员分数' },
@@ -33,6 +33,7 @@ export const SETTINGS_GROUPS: Group[] = [
   },
   {
     title: '版式',
+    tab: 'layout',
     fields: [
       { t: 'select', k: 'displayStyle', label: '显示风格', opts: DISPLAY_STYLES },
       {
@@ -75,6 +76,7 @@ export const SETTINGS_GROUPS: Group[] = [
   },
   {
     title: '背景',
+    tab: 'appearance',
     fields: [
       { t: 'custom', id: 'bgImage' },
       { t: 'colorToggle', k: 'bgColor', label: '自定义背景色', fallback: (s) => (s.theme === 'light' ? '#e9ebee' : '#12161c') },
@@ -106,6 +108,7 @@ export const SETTINGS_GROUPS: Group[] = [
   },
   {
     title: '卡片',
+    tab: 'appearance',
     fields: [
       {
         t: 'select',
@@ -178,20 +181,48 @@ export const SETTINGS_GROUPS: Group[] = [
     ],
   },
   {
-    title: '高级外观',
-    advanced: true,
+    title: '简介',
+    tab: 'font',
     fields: [
+      { t: 'check', k: 'featureBio', label: '在卡片上显示简介' },
+      { t: 'font', k: 'bioFont', ck: 'bioFontCustom', label: '简介字体', customLabel: '简介字体名称' },
+      { t: 'range', k: 'bioSize', label: '简介字号', min: 0, max: 64, step: 1, fmt: 'auto', unit: ' px' },
+      { t: 'colorToggle', k: 'bioColor', label: '自定义简介颜色' },
       {
-        t: 'select',
-        k: 'fontFamily',
-        label: '字体',
-        opts: FONT_OPTS,
+        t: 'range',
+        k: 'bioOpacity',
+        label: '简介不透明度',
+        min: 0.2,
+        max: 1,
+        step: 0.05,
+        fmt: 'pct',
+        unit: '%',
       },
-      { t: 'text', k: 'fontFamilyCustom', label: '字体名称', max: 60, placeholder: '例如：LXGW WenKai / Noto Serif CJK SC' },
+      { t: 'check', k: 'bioItalic', label: '简介斜体' },
+    ],
+  },
+  {
+    title: '字体',
+    tab: 'font',
+    fields: [
+      { t: 'select', k: 'fontFamily', label: '正文字体', opts: FONT_OPTS },
+      {
+        t: 'text',
+        k: 'fontFamilyCustom',
+        label: '正文字体名称',
+        max: 60,
+        placeholder: '例如：LXGW WenKai / Noto Serif CJK SC',
+      },
       { t: 'custom', id: 'loadFonts' },
       { t: 'range', k: 'fontScale', label: '字号缩放', min: 0.7, max: 1.5, step: 0.05, fmt: 'x', unit: ' 倍' },
       { t: 'select', k: 'scoreFont', label: '分数数字字体', opts: [['auto', '跟随内置记分牌字体'], ...FONT_OPTS] },
       { t: 'text', k: 'scoreFontCustom', label: '分数字体名称', max: 60 },
+    ],
+  },
+  {
+    title: '标题',
+    tab: 'font',
+    fields: [
       { t: 'range', k: 'titleSize', label: '标题字号', min: 0, max: 120, step: 2, fmt: 'auto', unit: ' px' },
       { t: 'font', k: 'titleFont', ck: 'titleFontCustom', label: '标题字体', customLabel: '标题字体名称' },
       {
@@ -202,6 +233,12 @@ export const SETTINGS_GROUPS: Group[] = [
       },
       { t: 'check', k: 'showTitleRule', label: '显示标题横线' },
       { t: 'colorToggle', k: 'titleColor', label: '自定义标题颜色' },
+    ],
+  },
+  {
+    title: '尺寸与细节',
+    tab: 'appearance',
+    fields: [
       { t: 'range', k: 'boardMaxWidth', label: '页面最大宽度', min: 900, max: 2600, step: 20, fmt: 'num', unit: ' px' },
       { t: 'range', k: 'cardGap', label: '卡片间距', min: 0, max: 60, step: 1, fmt: 'auto', unit: ' px' },
       { t: 'range', k: 'cardPad', label: '卡片内边距', min: 0, max: 60, step: 1, fmt: 'auto', unit: ' px' },
@@ -217,12 +254,7 @@ export const SETTINGS_GROUPS: Group[] = [
       { t: 'check', k: 'showTeamAccent', label: '显示团队色条' },
       { t: 'colorToggle', k: 'teamAccentColor', label: '自定义团队色条颜色' },
       { t: 'range', k: 'avatarBorderWidth', label: '头像边框宽度', min: 0, max: 6, step: 1, fmt: 'num', unit: ' px' },
-      {
-        t: 'select',
-        k: 'avatarShape',
-        label: '头像形状',
-        opts: [['circle', '圆形'], ['square', '方形']],
-      },
+      { t: 'select', k: 'avatarShape', label: '头像形状', opts: [['circle', '圆形'], ['square', '方形']] },
       { t: 'colorToggle', k: 'textColor', label: '自定义文字颜色' },
       { t: 'color', k: 'positiveColor', label: '正分颜色' },
       { t: 'color', k: 'negativeColor', label: '负分颜色' },
@@ -235,6 +267,7 @@ export const SETTINGS_GROUPS: Group[] = [
   },
   {
     title: '特效',
+    tab: 'effect',
     advanced: true,
     fields: [
       { t: 'range', k: 'glassBlur', label: '毛玻璃模糊', min: 0, max: 40, step: 1, fmt: 'num', unit: ' px' },

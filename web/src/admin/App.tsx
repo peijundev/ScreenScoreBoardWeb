@@ -5,10 +5,11 @@ import PeoplePanel from './components/PeoplePanel';
 import TeamsPanel from './components/TeamsPanel';
 import SettingsDialog from './components/SettingsDialog';
 import FeaturesDialog from './components/FeaturesDialog';
+import ThemeEditorDialog from './components/ThemeEditorDialog';
 import Toasts from './components/Toasts';
 import { projectOf, projectsOf, useAppStore } from '../shared/store';
 
-type DialogKind = 'settings' | 'features' | null;
+type DialogKind = 'settings' | 'features' | 'theme' | null;
 
 export default function App(): JSX.Element {
   const snapshot = useAppStore((s) => s.snapshot);
@@ -39,6 +40,7 @@ export default function App(): JSX.Element {
         onSelectProject={setProjectId}
         onOpenSettings={() => setDialog('settings')}
         onOpenFeatures={() => setDialog('features')}
+        onOpenTheme={() => setDialog('theme')}
       />
       <Toasts />
 
@@ -57,6 +59,9 @@ export default function App(): JSX.Element {
       )}
       {project && dialog === 'features' && (
         <FeaturesDialog project={project} onClose={() => setDialog(null)} />
+      )}
+      {project && dialog === 'theme' && (
+        <ThemeEditorDialog project={project} onClose={() => setDialog(null)} />
       )}
     </>
   );

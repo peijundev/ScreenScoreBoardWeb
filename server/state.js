@@ -92,6 +92,15 @@ const DEFAULT_SETTINGS = {
   showScoreBar: true,       // 显示分数比例条
   scoreBarHeight: 5,        // 比例条高度 px（0–16）
 
+  // ---- 简介 ----
+  featureBio: true,       // 在人员/团队卡片上显示简介
+  bioFont: 'auto',        // auto | system | serif | kai | custom
+  bioFontCustom: '',      // 简介自定义系统字体名称
+  bioSize: 0,             // 简介字号 px；0=自动
+  bioColor: '',           // '' = 跟随主题次要文字色
+  bioOpacity: 1,          // 简介不透明度 0.2–1
+  bioItalic: false,       // 简介斜体
+
   // ---- 功能开关 ----
   featureAvatarEdit: true,
   featureSettingsResize: true,
@@ -257,6 +266,27 @@ function normalizeProject(raw) {
   }
   delete settings.glassEnabled;
 
+  // 已移除的内置主题「真·古风」→ 回落到大屏讲演
+  if (settings.displayStyle === 'xianxia') settings.displayStyle = 'lecture';
+
+  // 旧版本：座右铭字段/设置改名为简介（bio）
+  const rawSettings = p.settings && typeof p.settings === 'object' ? p.settings : {};
+  const bioRename = {
+    featureMotto: 'featureBio',
+    mottoFont: 'bioFont',
+    mottoFontCustom: 'bioFontCustom',
+    mottoSize: 'bioSize',
+    mottoColor: 'bioColor',
+    mottoOpacity: 'bioOpacity',
+    mottoItalic: 'bioItalic',
+  };
+  for (const [oldKey, newKey] of Object.entries(bioRename)) {
+    if (rawSettings[oldKey] !== undefined && rawSettings[newKey] === undefined) {
+      settings[newKey] = rawSettings[oldKey];
+    }
+    delete settings[oldKey];
+  }
+
   const people = {};
   for (const [id, person] of Object.entries(p.people || {})) {
     if (!person || typeof person !== 'object') continue;
@@ -266,7 +296,9 @@ function normalizeProject(raw) {
       cardImage: person.cardImage === undefined ? null : person.cardImage,
       layout: person.layout === undefined ? null : person.layout,
       memberLayout: person.memberLayout === undefined ? null : person.memberLayout,
+      bio: typeof person.bio === 'string' ? person.bio : (typeof person.motto === 'string' ? person.motto : ''),
     };
+    delete people[id].motto;
   }
   const teams = {};
   for (const [id, team] of Object.entries(p.teams || {})) {
@@ -276,7 +308,9 @@ function normalizeProject(raw) {
       id: team.id || id,
       cardImage: team.cardImage === undefined ? null : team.cardImage,
       layout: team.layout === undefined ? null : team.layout,
+      bio: typeof team.bio === 'string' ? team.bio : (typeof team.motto === 'string' ? team.motto : ''),
     };
+    delete teams[id].motto;
   }
   const project = {
     id: typeof p.id === 'string' && p.id ? p.id : genId('pr'),
@@ -406,6 +440,13 @@ function needAvatar(v) {
   if (typeof v !== 'string' || !/^avatars\/[\w.-]+$/.test(v)) throw new OpError('头像路径非法');
   return v;
 }
+function needBio(v) {
+  if (v == null || v === '') return '';
+  if (typeof v !== 'string') throw new OpError('简介必须是字符串');
+  const text = v.trim();
+  if (text.length > 60) throw new OpError('简介过长（最多 60 字）');
+  return text;
+}
 function needScore(v, field) {
   const n = Number(v);
   if (!Number.isFinite(n)) throw new OpError(`${field}必须是数字`);
@@ -471,11 +512,40 @@ function fontChoice(label) {
     : (() => { throw new OpError(label + '非法'); })());
 }
 
+// 主题文件允许携带的设置项（视觉相关；不含行为开关、布局坐标、上传资产与人员/团队数据）
+const THEME_SETTING_KEYS = new Set([
+  // 基调与颜色
+  'theme', 'accent', 'textColor', 'positiveColor', 'negativeColor', 'rankColor',
+  'cardBorderColor', 'teamAccentColor',
+  // 标题
+  'titleAlign', 'titleDecor', 'titleFont', 'titleFontCustom', 'titleSize', 'titleColor', 'showTitleRule',
+  // 字体
+  'fontFamily', 'fontFamilyCustom', 'fontScale', 'scoreFont', 'scoreFontCustom',
+  'clockFont', 'clockFontCustom', 'clockFontSize',
+  'countdownFont', 'countdownFontCustom', 'countdownFontSize',
+  'leaderboardFont', 'leaderboardFontCustom',
+  'marqueeFont', 'marqueeFontCustom',
+  'welcomeFont', 'welcomeFontCustom', 'welcomeFontSize',
+  'bioFont', 'bioFontCustom', 'bioSize', 'bioColor', 'bioOpacity', 'bioItalic',
+  // 卡片与间距
+  'cardStyle', 'cardBgMode', 'cardBg', 'cardOpacity', 'cardAcrylicBlur', 'cardRadius',
+  'glassBlur', 'glassOpacity', 'cardBorderWidth', 'cardShadow',
+  'teamAccentWidth', 'showTeamAccent', 'avatarBorderWidth', 'avatarShape',
+  'boardMaxWidth', 'cardGap', 'cardPad', 'memberScale', 'rankSize', 'scoreBarHeight',
+  // 背景（不含上传的背景图本身）
+  'bgColor', 'bgScrimEnabled', 'scrimOpacity', 'bgImageBlur', 'bgImageBlurAmount',
+  // 倒计时窗口外观
+  'countdownTheme', 'countdownShape', 'countdownSize', 'countdownHeight', 'countdownRadius',
+  'countdownBg', 'countdownBgMode', 'countdownOpacity', 'countdownBlur', 'countdownTextColor',
+  // 排行榜 / 跑马灯 / 欢迎幕布
+  'leaderboardScale', 'marqueeFontSize', 'marqueeColor', 'marqueeBgColor', 'welcomeBgColor',
+]);
+
 const SETTINGS_VALIDATORS = {
   title: (v) => needString(v, '标题', 30),
   displayStyle: (v) =>
     (['lecture', 'ppt', 'seewo', 'kde', 'custom',
-      'guofeng', 'ink', 'xianxia', 'modern', 'neon', 'poster'].includes(v)
+      'guofeng', 'ink', 'modern', 'neon', 'poster'].includes(v)
       ? v
       : (() => { throw new OpError('显示风格非法'); })()),
   columns: (v) => {
@@ -653,6 +723,19 @@ const SETTINGS_VALIDATORS = {
   rankSize: (v) => intRange(v, 10, 40, '名次字号须为 10–40'),
   showScoreBar: (v) => Boolean(v),
   scoreBarHeight: (v) => intRange(v, 0, 16, '比例条高度须为 0–16'),
+
+  // ---- 简介 ----
+  featureBio: (v) => boolStrict(v, '简介开关'),
+  bioFont: fontChoice('简介字体'),
+  bioFontCustom: fontNameOrEmpty,
+  bioSize: (v) => intRange(v, 0, 64, '简介字号须为 0–64（0=自动）'),
+  bioColor: (v) => hexOrEmpty(v, '简介颜色须为 #rrggbb 或留空'),
+  bioOpacity: (v) => {
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0.2 || n > 1) throw new OpError('简介不透明度须在 0.2–1 之间');
+    return Math.round(n * 100) / 100;
+  },
+  bioItalic: (v) => boolStrict(v, '简介斜体开关'),
 
   // ---- 功能开关 ----
   featureAvatarEdit: (v) => boolStrict(v, '头像修改开关'),
@@ -899,6 +982,11 @@ function applyOp(op, payload) {
       p.name = needString(payload.name, '姓名', 20);
       return { name: p.name };
     }
+    case 'setBio': {
+      const entity = needEntity(project, payload.kind, payload.id);
+      entity.bio = needBio(payload.bio);
+      return { bio: entity.bio };
+    }
     case 'removePerson': {
       needPerson(project, payload.personId);
       delete project.people[payload.personId];
@@ -1080,6 +1168,26 @@ function applyOp(op, payload) {
       for (const t of Object.values(project.teams)) t.layout = null;
       return {};
     }
+    case 'applyTheme': {
+      const patch = payload.settings;
+      if (patch !== undefined && (!patch || typeof patch !== 'object' || Array.isArray(patch))) {
+        throw new OpError('主题设置非法');
+      }
+      const validated = {};
+      for (const [k, v] of Object.entries(patch || {})) {
+        if (!THEME_SETTING_KEYS.has(k)) throw new OpError('主题包含不支持的设置项: ' + k);
+        const validator = SETTINGS_VALIDATORS[k];
+        if (!validator) throw new OpError('主题包含不支持的设置项: ' + k);
+        validated[k] = validator(v);
+      }
+      let baseStyle = null;
+      if (payload.baseStyle !== undefined) {
+        baseStyle = SETTINGS_VALIDATORS.displayStyle(payload.baseStyle);
+      }
+      if (baseStyle) project.settings.displayStyle = baseStyle;
+      Object.assign(project.settings, validated);
+      return { applied: Object.keys(validated).length, baseStyle: project.settings.displayStyle };
+    }
     case 'updateSettings': {
       const patch = payload.patch;
       if (!patch || typeof patch !== 'object') throw new OpError('patch 非法');
@@ -1128,6 +1236,8 @@ function sanitizeImportedProject(raw) {
   if (!src || typeof src !== 'object') throw new OpError('导入数据格式非法');
   const settings = { ...DEFAULT_SETTINGS };
   if (src.settings && typeof src.settings === 'object') {
+    // 兼容已删除的内置主题「真·古风」
+    if (src.settings.displayStyle === 'xianxia') src.settings.displayStyle = 'lecture';
     for (const [key, value] of Object.entries(src.settings)) {
       const validator = SETTINGS_VALIDATORS[key];
       if (!validator) continue;
@@ -1156,6 +1266,7 @@ function sanitizeImportedProject(raw) {
       avatar: rawTeam.avatar ? needAvatar(rawTeam.avatar) : null,
       cardImage: rawTeam.cardImage ? needAvatar(rawTeam.cardImage) : null,
       layout: rawTeam.layout ? needLayout(rawTeam.layout) : null,
+      bio: rawTeam.bio ? needBio(rawTeam.bio) : (rawTeam.motto ? needBio(rawTeam.motto) : ''),
       createdAt: Number.isFinite(rawTeam.createdAt) ? rawTeam.createdAt : Date.now(),
       order: Number.isFinite(rawTeam.order) ? rawTeam.order : undefined,
     };
@@ -1179,6 +1290,7 @@ function sanitizeImportedProject(raw) {
       teamId: rawPerson.teamId && teams[rawPerson.teamId] ? rawPerson.teamId : null,
       layout: rawPerson.layout ? needLayout(rawPerson.layout) : null,
       memberLayout: rawPerson.memberLayout ? needLayout(rawPerson.memberLayout) : null,
+      bio: rawPerson.bio ? needBio(rawPerson.bio) : (rawPerson.motto ? needBio(rawPerson.motto) : ''),
       createdAt: Number.isFinite(rawPerson.createdAt) ? rawPerson.createdAt : Date.now(),
       order: Number.isFinite(rawPerson.order) ? rawPerson.order : undefined,
     };

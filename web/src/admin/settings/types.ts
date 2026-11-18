@@ -34,8 +34,11 @@ export type Field =
   | { t: 'font'; k: string; ck: string; label: string; customLabel: string }
   | { t: 'custom'; id: string };
 
+export type SettingsTab = 'layout' | 'appearance' | 'font' | 'effect';
+
 export interface Group {
   title: string;
+  tab: SettingsTab;
   advanced?: boolean;
   fields: Field[];
 }

@@ -135,7 +135,12 @@ function PersonCard({
     >
       {rankHTML(rank)}
       <img src={avatarURL(person)} alt="" />
-      <div className="person-name">{person.name}</div>
+      <div className="p-body">
+        <div className="person-name">{person.name}</div>
+        {settings.featureBio && person.bio && (
+          <div className="person-bio">{person.bio}</div>
+        )}
+      </div>
       <div className={'score person-score ' + scoreClass(person.score) + fx.cls}>
         {fx.badge && (
           <span className="fx-delta" style={{ color: fx.badge.color }}>
@@ -206,6 +211,9 @@ function TeamCard({
           </div>
         )}
       </div>
+      {settings.featureBio && team.bio && (
+        <div className="team-bio">{team.bio}</div>
+      )}
       <div className={'team-members' + (free ? ' free' : '')}>
         {members.length === 0 && <div className="member-empty">暂无成员</div>}
         {members.map((m, i) => (
@@ -256,6 +264,9 @@ function MemberChip({
       <img src={avatarURL(member, 48)} alt="" />
       <div className="m-body">
         <div className="member-name">{member.name}</div>
+        {settings.featureBio && member.bio && (
+          <div className="member-bio">{member.bio}</div>
+        )}
         {settings.showMemberScore && (
           <div className={'score member-score ' + scoreClass(member.score) + fx.cls}>
             {fx.badge && (

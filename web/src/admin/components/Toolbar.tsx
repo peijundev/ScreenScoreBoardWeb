@@ -10,6 +10,7 @@ interface Props {
   onSelectProject: (id: string) => void;
   onOpenSettings: () => void;
   onOpenFeatures: () => void;
+  onOpenTheme: () => void;
 }
 
 interface VersionInfo {
@@ -25,6 +26,7 @@ export default function Toolbar({
   onSelectProject,
   onOpenSettings,
   onOpenFeatures,
+  onOpenTheme,
 }: Props): JSX.Element {
   const sendOp = useAppStore((s) => s.sendOp);
   const undoCount = useAppStore((s) =>
@@ -111,6 +113,9 @@ export default function Toolbar({
       </button>
       <button className="btn small" type="button" onClick={onOpenSettings} disabled={!project}>
         排版设置
+      </button>
+      <button className="btn small" type="button" onClick={onOpenTheme} disabled={!project}>
+        主题编辑器
       </button>
       <button className="btn small" type="button" onClick={onOpenFeatures} disabled={!project}>
         功能

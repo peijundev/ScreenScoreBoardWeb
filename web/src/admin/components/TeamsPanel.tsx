@@ -153,6 +153,14 @@ function TeamBlock({
     );
   }
 
+  function editBio(): void {
+    const text = window.prompt('团队简介（最多 60 字，留空清除）', team.bio || '');
+    if (text == null) return;
+    projectOp(project.id, 'setBio', { kind: 'team', id: team.id, bio: text }).catch((err: Error) =>
+      toast(err.message),
+    );
+  }
+
   function uploadCardImage(file: File): void {
     uploadAvatar(file)
       .then((path) => projectOp(project.id, 'setCardImage', { kind: 'team', id: team.id, image: path }))
@@ -222,6 +230,14 @@ function TeamBlock({
         <span className="t-name editable" title="点击改名" onClick={rename}>
           {team.name}
         </span>
+        <button
+          className="btn small bio-btn"
+          type="button"
+          title={team.bio ? '简介：' + team.bio : '设置简介'}
+          onClick={editBio}
+        >
+          简介
+        </button>
         <span className="t-total">{total} 分</span>
 
         {teamScore && (

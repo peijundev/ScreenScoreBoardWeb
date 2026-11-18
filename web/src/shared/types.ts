@@ -16,6 +16,7 @@ export interface Person {
   teamId: string | null;
   layout: Layout | null;
   memberLayout: Layout | null;
+  bio?: string;
   createdAt: number;
   order?: number;
 }
@@ -26,6 +27,7 @@ export interface Team {
   avatar: string | null;
   cardImage: string | null;
   layout: Layout | null;
+  bio?: string;
   createdAt: number;
   order?: number;
 }
@@ -50,6 +52,13 @@ export type Settings = Record<string, any> & {
   bgImageBlurAmount: number;
   scrimOpacity: number;
   bgScrimEnabled: boolean;
+  featureBio: boolean;
+  bioFont: string;
+  bioFontCustom: string;
+  bioSize: number;
+  bioColor: string;
+  bioOpacity: number;
+  bioItalic: boolean;
 };
 
 export interface Project {

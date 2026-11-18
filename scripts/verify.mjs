@@ -135,14 +135,11 @@ async function main() {
   assert(r.status === 400 || r.status === 404, '路径穿越被拒绝');
   r = await fetch(BASE + '/admin.css');
   assert(r.ok && (await r.text()).includes('--card'), '静态资源可访问');
-  r = await fetch(BASE + '/img/xianxia/scroll-1.webp');
-  assert(r.ok && /image\/webp/.test(r.headers.get('content-type') || ''), '真·古风卷轴卡面素材可访问');
-
   console.log('版本信息:');
   const verRes = await fetch(BASE + '/api/version');
   const verData = await verRes.json();
-  assert(verRes.ok && verData.version === '1.4.0', '版本接口返回 1.4.0');
-  assert(verData.finalForTechStack === true, '1.4.0 标记为原技术栈最终版');
+  assert(verRes.ok && verData.version === '1.5.0', '版本接口返回 1.5.0');
+  assert(verData.finalForTechStack === false, '1.5.0 不再标记为原技术栈最终版');
   assert(verData.frontend === 'react' || verData.frontend === 'missing', '版本接口返回当前前端类型');
 
   console.log('头像上传:');
@@ -249,6 +246,48 @@ async function main() {
   await adminOp('renamePerson', { personId: pid, name: '张三' });
   await adminOp('renameTeam', { teamId: tid, name: '红队' });
 
+  console.log('简介:');
+  await adminOp('setBio', { kind: 'person', id: pid, bio: '千里之行，始于足下' });
+  s = await viewer.waitState((st) => P(st).people[pid] && P(st).people[pid].bio === '千里之行，始于足下');
+  assert(true, '人员简介同步');
+  await adminOp('setBio', { kind: 'team', id: tid, bio: '同心者胜' });
+  s = await viewer.waitState((st) => P(st).teams[tid] && P(st).teams[tid].bio === '同心者胜');
+  assert(true, '团队简介同步');
+  await adminOp('setBio', { kind: 'person', id: pid, bio: '一'.repeat(61) })
+    .catch((e) => assert(/过长/.test(e.message), '超长简介被拒绝'));
+  await adminOp('setBio', { kind: 'person', id: 'p_nope', bio: 'x' })
+    .catch((e) => assert(/人员不存在/.test(e.message), '简介校验目标存在'));
+  await adminOp('updateSettings', {
+    patch: {
+      featureBio: true, bioFont: 'kai', bioFontCustom: '',
+      bioSize: 20, bioColor: '#ff8800', bioOpacity: 0.6, bioItalic: true,
+    },
+  });
+  s = await viewer.waitState((st) => P(st).settings.bioSize === 20);
+  assert(P(s).settings.featureBio === true && P(s).settings.bioFont === 'kai' &&
+    P(s).settings.bioColor === '#ff8800' && P(s).settings.bioOpacity === 0.6 &&
+    P(s).settings.bioItalic === true, '简介外观设置同步');
+  await adminOp('updateSettings', { patch: { bioSize: 99 } })
+    .catch((e) => assert(/简介字号/.test(e.message), '简介字号越界被拒绝'));
+  await adminOp('updateSettings', { patch: { bioOpacity: 0.1 } })
+    .catch((e) => assert(/简介不透明度/.test(e.message), '简介不透明度越界被拒绝'));
+
+  console.log('主题导入:');
+  await adminOp('applyTheme', {
+    baseStyle: 'ppt',
+    settings: { accent: '#112233', cardStyle: 'glass', cardRadius: 20, bioFont: 'kai' },
+  });
+  s = await viewer.waitState((st) => P(st).settings.cardRadius === 20);
+  assert(P(s).settings.displayStyle === 'ppt' && P(s).settings.accent === '#112233' &&
+    P(s).settings.cardStyle === 'glass' && P(s).settings.bioFont === 'kai',
+    '主题应用：基础风格与视觉设置同步');
+  await adminOp('applyTheme', { settings: { title: '不支持的键' } })
+    .catch((e) => assert(/不支持的设置项/.test(e.message), '主题拒绝非视觉设置项'));
+  await adminOp('applyTheme', { baseStyle: 'xianxia' })
+    .catch((e) => assert(/显示风格/.test(e.message), '主题拒绝已删除的风格'));
+  await adminOp('applyTheme', { settings: { accent: 'red' } })
+    .catch((e) => assert(/强调色/.test(e.message), '主题拒绝非法值'));
+
   await adminOp('updateSettings', { patch: { columns: 6, theme: 'light', title: '决赛计分板' } });
   s = await viewer.waitState((st) => P(st).settings.columns === 6);
   assert(s.projects[projectId].settings.theme === 'light', 'viewer 实时收到排版变更');
@@ -322,7 +361,7 @@ async function main() {
   await adminOp('updateSettings', { patch: { displayStyle: 'hologram' } }).catch((e) => {
     assert(/显示风格/.test(e.message), '非法显示风格被拒绝');
   });
-  for (const style of ['guofeng', 'ink', 'xianxia', 'modern', 'neon', 'poster']) {
+  for (const style of ['guofeng', 'ink', 'modern', 'neon', 'poster']) {
     await adminOp('updateSettings', { patch: { displayStyle: style } });
     await viewer.waitState((st) => P(st).settings.displayStyle === style);
   }
@@ -807,6 +846,10 @@ async function main() {
   assert(rp.people[ordC] && rp.people[ordC].order === 0 && rp.people[ordA].order === 3 &&
     rp.people[ordB].order === 4 && rp.teams[tid2] && rp.teams[tid2].order === 1 &&
     rp.teams[tid].order === 5, '重启后人员/团队自定义顺序恢复');
+  assert(rp.people[pid].bio === '千里之行，始于足下' && rp.teams[tid].bio === '同心者胜' &&
+    rp.settings.featureBio === true && rp.settings.bioFont === 'kai' && rp.settings.bioSize === 20 &&
+    rp.settings.bioColor === '#ff8800' && rp.settings.bioOpacity === 0.6 &&
+    rp.settings.bioItalic === true, '重启后简介与外观设置恢复');
   assert(rp.people[pid].layout.x === 200 && rp.people[pid].layout.w === 200 &&
     rp.people[pid].memberLayout.w === 20, '重启后卡片布局恢复（含画布外坐标）');
   assert(rp.settings.cardStyle === 'neon' && rp.settings.columns === 5 && rp.settings.avatarSize === 96, '重启后外观设置恢复');
@@ -876,7 +919,7 @@ async function main() {
     version: 1,
     people: { p_legacy: { id: 'p_legacy', name: '旧成员', score: 3, teamId: null, createdAt: 1, avatar: null } },
     teams: {},
-    settings: { title: '旧积分榜' },
+    settings: { title: '旧积分榜', displayStyle: 'xianxia' },
   }));
   server = startServer({ DATA_DIR: legacyDir });
   await waitServer();
@@ -886,6 +929,7 @@ async function main() {
   assert(legacyProjects[0].people.p_legacy && legacyProjects[0].people.p_legacy.score === 3, '旧人员数据保留');
   assert(legacyProjects[0].people.p_legacy.order === 0, '旧数据补齐排序序号');
   assert(legacyProjects[0].settings.title === '旧积分榜' && legacyProjects[0].settings.scoreEffect, '旧设置保留并补全新字段');
+  assert(legacyProjects[0].settings.displayStyle === 'lecture', '已删除的真·古风自动回落为 lecture');
   await stopServer(server);
 
   rmSync(DATA_DIR, { recursive: true, force: true });

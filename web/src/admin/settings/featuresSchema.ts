@@ -24,6 +24,7 @@ const featureField = (k: string, label: string): Field => ({ t: 'check', k, labe
 export const FEATURE_GROUPS: Group[] = [
   {
     title: '功能开关',
+    tab: 'layout',
     fields: [
       ...FEATURES.map(([k, label]) => featureField(k, label)),
       featureField('featureMarquee', '跑马灯横幅'),
@@ -32,6 +33,7 @@ export const FEATURE_GROUPS: Group[] = [
   },
   {
     title: '时钟',
+    tab: 'appearance',
     fields: [
       {
         t: 'select',
@@ -48,6 +50,7 @@ export const FEATURE_GROUPS: Group[] = [
   },
   {
     title: '倒计时',
+    tab: 'appearance',
     fields: [
       { t: 'num', k: 'countdownDurationSec', label: '倒计时时长（秒）', min: 1, max: 3600 },
       {
@@ -109,6 +112,7 @@ export const FEATURE_GROUPS: Group[] = [
   },
   {
     title: '排行榜',
+    tab: 'appearance',
     fields: [
       {
         t: 'select',
@@ -130,10 +134,12 @@ export const FEATURE_GROUPS: Group[] = [
   },
   {
     title: '记分效率',
+    tab: 'layout',
     fields: [{ t: 'custom', id: 'quickPresets' }],
   },
   {
     title: '课堂玩法',
+    tab: 'effect',
     fields: [
       { t: 'check', k: 'featureMarquee', label: '跑马灯横幅' },
       { t: 'text', k: 'marqueeText', label: '跑马灯文字', max: 200, placeholder: '欢迎来到比赛现场' },
@@ -163,10 +169,12 @@ export const FEATURE_GROUPS: Group[] = [
   },
   {
     title: '数据',
+    tab: 'layout',
     fields: [{ t: 'custom', id: 'dataTools' }],
   },
   {
     title: '日志',
+    tab: 'layout',
     fields: [{ t: 'custom', id: 'logTools' }],
   },
 ];

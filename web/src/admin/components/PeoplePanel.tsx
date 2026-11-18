@@ -203,6 +203,14 @@ function PersonRow({
     );
   }
 
+  function editBio(): void {
+    const text = window.prompt('简介（最多 60 字，留空清除）', person.bio || '');
+    if (text == null) return;
+    projectOp(project.id, 'setBio', { kind: 'person', id: person.id, bio: text }).catch((err: Error) =>
+      toast(err.message),
+    );
+  }
+
   function uploadCardImage(file: File): void {
     uploadAvatar(file)
       .then((path) => projectOp(project.id, 'setCardImage', { kind: 'person', id: person.id, image: path }))
@@ -271,6 +279,14 @@ function PersonRow({
       <span className="p-name editable" title="点击改名" onClick={rename}>
         {person.name}
       </span>
+      <button
+        className="btn small bio-btn"
+        type="button"
+        title={person.bio ? '简介：' + person.bio : '设置简介'}
+        onClick={editBio}
+      >
+        简介
+      </button>
       <span className={'p-score ' + scoreClass(person.score)}>{person.score}</span>
 
       {quickScore && (

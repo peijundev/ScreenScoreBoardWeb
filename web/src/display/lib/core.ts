@@ -67,7 +67,7 @@ export function applyAppearance(s: Settings): void {
   const body = document.body;
 
   // 字体
-  const serifStyles = ['guofeng', 'ink', 'xianxia'];
+  const serifStyles = ['guofeng', 'ink'];
   if (s.fontFamily === 'custom' && s.fontFamilyCustom) {
     const name = String(s.fontFamilyCustom).replace(/["\\]/g, '');
     body.style.fontFamily = '"' + name + '", ' + FONT_STACKS.system;
@@ -88,6 +88,11 @@ export function applyAppearance(s: Settings): void {
   setVar(root.style, '--welcome-font', fontStackOf(s, 'welcomeFont', 'welcomeFontCustom'));
   setVar(root.style, '--welcome-size', s.welcomeFontSize ? s.welcomeFontSize + 'px' : '');
   setVar(root.style, '--score-font', fontStackOf(s, 'scoreFont', 'scoreFontCustom'));
+  setVar(root.style, '--bio-font', fontStackOf(s, 'bioFont', 'bioFontCustom'));
+  setVar(root.style, '--bio-size', s.bioSize ? s.bioSize + 'px' : '');
+  setVar(root.style, '--bio-color', s.bioColor || '');
+  setVar(root.style, '--bio-opacity', String(s.bioOpacity ?? 1));
+  body.dataset.bioItalic = s.bioItalic ? 'on' : 'off';
 
   setVar(root.style, '--font-scale', String(s.fontScale));
   setVar(root.style, '--title-size', s.titleSize ? s.titleSize + 'px' : '');
@@ -373,7 +378,6 @@ export interface FxInfo {
 }
 
 export function fxInfo(s: Settings, delta: number | null | undefined): FxInfo {
-  if (s.displayStyle === 'xianxia') return { cls: '', badge: null };
   if (delta == null || delta === 0 || s.scoreEffect === 'none') return { cls: '', badge: null };
   if (s.scoreEffectOnlyPositive && delta < 0) return { cls: '', badge: null };
   const color = s.scoreEffectColor || (delta > 0 ? '#6fbf7b' : '#e06c75');
