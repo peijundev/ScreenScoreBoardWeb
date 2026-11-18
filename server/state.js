@@ -15,7 +15,7 @@ const DEFAULT_SETTINGS = {
   displayStyle: 'lecture',  // lecture | ppt | seewo | kde | custom
   columns: 4,
   density: 'comfortable',   // comfortable | compact
-  sortBy: 'score',          // score | created
+  sortBy: 'score',          // score | created | manual
   sortOrder: 'desc',        // desc | asc
   theme: 'dark',            // dark | light
   accent: '#e8a33d',
@@ -180,6 +180,43 @@ function defaultProject(name) {
   };
 }
 
+// 人员和团队共用一个项目内序号空间；手动调序只与同类相邻项交换，
+// 大屏上人员与团队的相对穿插保持不变。
+function orderOf(entity) {
+  return Number.isFinite(entity.order) ? entity.order : Number.POSITIVE_INFINITY;
+}
+
+function nextOrder(project) {
+  let max = -1;
+  for (const entity of [...Object.values(project.people), ...Object.values(project.teams)]) {
+    if (Number.isFinite(entity.order) && entity.order > max) max = entity.order;
+  }
+  return max + 1;
+}
+
+function normalizeOrders(project) {
+  const entities = [...Object.values(project.people), ...Object.values(project.teams)];
+  entities.sort((a, b) => {
+    const ao = orderOf(a);
+    const bo = orderOf(b);
+    if (ao !== bo) return ao < bo ? -1 : 1;
+    return (a.createdAt || 0) - (b.createdAt || 0);
+  });
+  entities.forEach((entity, index) => { entity.order = index; });
+}
+
+function moveEntityByOrder(collection, entity, direction) {
+  if (direction !== 'up' && direction !== 'down') throw new OpError('移动方向非法');
+  const list = Object.values(collection).sort((a, b) => orderOf(a) - orderOf(b));
+  const index = list.indexOf(entity);
+  const target = direction === 'up' ? index - 1 : index + 1;
+  if (index < 0 || target < 0 || target >= list.length) return;
+  const other = list[target];
+  const tmp = entity.order;
+  entity.order = other.order;
+  other.order = tmp;
+}
+
 function normalizeProject(raw) {
   const p = raw && typeof raw === 'object' ? raw : {};
   const settings = { ...DEFAULT_SETTINGS, ...(p.settings || {}) };
@@ -222,7 +259,7 @@ function normalizeProject(raw) {
       layout: team.layout === undefined ? null : team.layout,
     };
   }
-  return {
+  const project = {
     id: typeof p.id === 'string' && p.id ? p.id : genId('pr'),
     name: typeof p.name === 'string' && p.name.trim() ? p.name.trim().slice(0, 30) : '未命名项目',
     createdAt: p.createdAt || Date.now(),
@@ -230,6 +267,8 @@ function normalizeProject(raw) {
     teams,
     settings,
   };
+  normalizeOrders(project);
+  return project;
 }
 
 function normalizeState(raw) {
@@ -410,7 +449,7 @@ const SETTINGS_VALIDATORS = {
     return n;
   },
   density: (v) => (['comfortable', 'compact'].includes(v) ? v : (() => { throw new OpError('密度取值非法'); })()),
-  sortBy: (v) => (['score', 'created'].includes(v) ? v : (() => { throw new OpError('排序方式非法'); })()),
+  sortBy: (v) => (['score', 'created', 'manual'].includes(v) ? v : (() => { throw new OpError('排序方式非法'); })()),
   sortOrder: (v) => (['desc', 'asc'].includes(v) ? v : (() => { throw new OpError('排序方向非法'); })()),
   theme: (v) => (['dark', 'light'].includes(v) ? v : (() => { throw new OpError('主题取值非法'); })()),
   accent: (v) => (/^#[0-9a-fA-F]{6}$/.test(v) ? v : (() => { throw new OpError('强调色须为 #rrggbb'); })()),
@@ -758,6 +797,7 @@ function applyOp(op, payload) {
         layout: null,
         memberLayout: null,
         createdAt: Date.now(),
+        order: nextOrder(project),
       };
       return { personId: id };
     }
@@ -776,6 +816,7 @@ function applyOp(op, payload) {
       const personIds = [];
       const skipped = [];
       const now = Date.now();
+      const baseOrder = nextOrder(project);
       rawNames.forEach((raw, index) => {
         if (typeof raw !== 'string') throw new OpError(`第 ${index + 1} 个姓名非法`);
         const name = raw.trim();
@@ -797,6 +838,7 @@ function applyOp(op, payload) {
           layout: null,
           memberLayout: null,
           createdAt: now + personIds.length,
+          order: baseOrder + personIds.length,
         };
         personIds.push(id);
       });
@@ -809,6 +851,12 @@ function applyOp(op, payload) {
       runtime.clearUndo(project.id);
       return {};
     }
+    case 'movePerson': {
+      const p = needPerson(project, payload.personId);
+      moveEntityByOrder(project.people, p, payload.direction);
+      project.settings.sortBy = 'manual'; // 调序即启用，避免大屏仍按分数排序造成“没反应”
+      return { order: p.order };
+    }
     case 'addTeam': {
       const id = genId('t');
       project.teams[id] = {
@@ -818,6 +866,7 @@ function applyOp(op, payload) {
         cardImage: needAvatar(payload.cardImage),
         layout: null,
         createdAt: Date.now(),
+        order: nextOrder(project),
       };
       return { teamId: id };
     }
@@ -828,6 +877,12 @@ function applyOp(op, payload) {
         if (p.teamId === payload.teamId) p.teamId = null;
       }
       return {};
+    }
+    case 'moveTeam': {
+      const t = needTeam(project, payload.teamId);
+      moveEntityByOrder(project.teams, t, payload.direction);
+      project.settings.sortBy = 'manual'; // 调序即启用，避免大屏仍按分数排序造成“没反应”
+      return { order: t.order };
     }
     case 'assignTeam': {
       const p = needPerson(project, payload.personId);
@@ -1043,6 +1098,7 @@ function sanitizeImportedProject(raw) {
       cardImage: rawTeam.cardImage ? needAvatar(rawTeam.cardImage) : null,
       layout: rawTeam.layout ? needLayout(rawTeam.layout) : null,
       createdAt: Number.isFinite(rawTeam.createdAt) ? rawTeam.createdAt : Date.now(),
+      order: Number.isFinite(rawTeam.order) ? rawTeam.order : undefined,
     };
   }
 
@@ -1065,6 +1121,7 @@ function sanitizeImportedProject(raw) {
       layout: rawPerson.layout ? needLayout(rawPerson.layout) : null,
       memberLayout: rawPerson.memberLayout ? needLayout(rawPerson.memberLayout) : null,
       createdAt: Number.isFinite(rawPerson.createdAt) ? rawPerson.createdAt : Date.now(),
+      order: Number.isFinite(rawPerson.order) ? rawPerson.order : undefined,
     };
   }
 
@@ -1078,7 +1135,7 @@ function sanitizeImportedProject(raw) {
     index += 1;
   }
 
-  return {
+  const project = {
     id: genId('pr'),
     name,
     createdAt: Date.now(),
@@ -1086,6 +1143,8 @@ function sanitizeImportedProject(raw) {
     teams,
     settings,
   };
+  normalizeOrders(project);
+  return project;
 }
 
 module.exports = {

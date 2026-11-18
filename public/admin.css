@@ -489,6 +489,12 @@ select:focus { border-color: var(--accent); }
 .btn.danger { color: var(--danger); }
 .btn.danger:hover { border-color: var(--danger); }
 .btn.small { padding: 2px 8px; font-size: 12px; }
+.btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn:disabled:hover { background: #2a2e32; border-color: var(--card-border); }
+
+/* ---- 顺序调整 ---- */
+.move-btns { display: inline-flex; flex-direction: column; gap: 2px; }
+.move-btns .btn.small { padding: 0 5px; line-height: 14px; font-size: 11px; }
 
 /* ---- 添加表单 ---- */
 .add-form {

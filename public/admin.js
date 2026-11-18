@@ -96,6 +96,19 @@ function doOp(op, payload) {
   projectOp(op, payload).catch((e) => toast(e.message));
 }
 
+// 手动调序：首次使用时会自动切到「自定义顺序」，给出一次提示
+function moveOp(kind, id, direction) {
+  const project = currentProject();
+  const wasManual = Boolean(project && project.settings.sortBy === 'manual');
+  const op = kind === 'person' ? 'movePerson' : 'moveTeam';
+  const payload = kind === 'person'
+    ? { personId: id, direction }
+    : { teamId: id, direction };
+  projectOp(op, payload).then(() => {
+    if (!wasManual) toast('已切换为自定义顺序');
+  }).catch((e) => toast(e.message));
+}
+
 function syncProjectUI(state) {
   const projects = Object.values(state.projects).sort((a, b) => a.createdAt - b.createdAt);
   projectSelect.innerHTML = projects.map((p) =>
@@ -456,6 +469,7 @@ quick.sort.addEventListener('change', () => {
     score_asc: ['score', 'asc'],
     created_asc: ['created', 'asc'],
     created_desc: ['created', 'desc'],
+    manual_asc: ['manual', 'asc'],
   };
   const [sortBy, sortOrder] = map[quick.sort.value] || ['score', 'desc'];
   projectOp('updateSettings', { patch: { sortBy, sortOrder } }).catch((e) => toast(e.message));
@@ -530,7 +544,7 @@ function scoreClass(n) {
 
 function renderPeople(project) {
   const list = document.getElementById('people-list');
-  const allPeople = Object.values(project.people).sort((a, b) => a.createdAt - b.createdAt);
+  const allPeople = Object.values(project.people).sort((a, b) => a.order - b.order);
   const q = peopleQuery.trim().toLowerCase();
   const people = q ? allPeople.filter((p) => {
     const team = p.teamId ? project.teams[p.teamId] : null;
@@ -554,7 +568,11 @@ function renderPeople(project) {
   }
 
   list.innerHTML = people.map((p) => {
-    const teamOptions = '<option value="">无团队</option>' + Object.values(project.teams).map((t) =>
+    const index = allPeople.indexOf(p);
+    const canUp = index > 0;
+    const canDown = index < allPeople.length - 1;
+    const teamOptions = '<option value="">无团队</option>' + Object.values(project.teams)
+      .sort((a, b) => a.order - b.order).map((t) =>
       '<option value="' + t.id + '"' + (p.teamId === t.id ? ' selected' : '') + '>' + escapeHTML(t.name) + '</option>'
     ).join('');
     const presets = Array.isArray(project.settings.quickScorePresets)
@@ -571,6 +589,10 @@ function renderPeople(project) {
       : '';
     return (
       '<div class="person-row" data-id="' + p.id + '">' +
+        '<span class="move-btns">' +
+          '<button class="btn small move-up" title="上移"' + (canUp ? '' : ' disabled') + '>↑</button>' +
+          '<button class="btn small move-down" title="下移"' + (canDown ? '' : ' disabled') + '>↓</button>' +
+        '</span>' +
         '<img src="' + avatarURL(p, 48) + '" alt="">' +
         avatarEdit +
         '<span class="p-name">' + escapeHTML(p.name) + '</span>' +
@@ -646,6 +668,8 @@ function renderPeople(project) {
         projectOp('setCardImage', { kind: 'person', id, image: null }).catch((e) => toast(e.message));
       });
     }
+    row.querySelector('.move-up').addEventListener('click', () => moveOp('person', id, 'up'));
+    row.querySelector('.move-down').addEventListener('click', () => moveOp('person', id, 'down'));
     row.querySelector('.person-del').addEventListener('click', () => {
       const p = currentProject().people[id];
       if (p && confirm('确定删除「' + p.name + '」？')) doOp('removePerson', { personId: id });
@@ -656,7 +680,7 @@ function renderPeople(project) {
 // ============ 团队面板 ============
 function renderTeams(project) {
   const list = document.getElementById('teams-list');
-  const allTeams = Object.values(project.teams).sort((a, b) => a.createdAt - b.createdAt);
+  const allTeams = Object.values(project.teams).sort((a, b) => a.order - b.order);
   const q = teamsQuery.trim().toLowerCase();
   const teams = q ? allTeams.filter((t) => t.name.toLowerCase().includes(q)) : allTeams;
 
@@ -670,7 +694,12 @@ function renderTeams(project) {
   }
 
   list.innerHTML = teams.map((t) => {
-    const members = Object.values(project.people).filter((p) => p.teamId === t.id);
+    const index = allTeams.indexOf(t);
+    const canUp = index > 0;
+    const canDown = index < allTeams.length - 1;
+    const members = Object.values(project.people)
+      .filter((p) => p.teamId === t.id)
+      .sort((a, b) => a.order - b.order);
     const total = members.reduce((s, m) => s + m.score, 0);
     const chips = members.map((m) =>
       '<span class="chip"><img src="' + avatarURL(m, 24) + '" alt="">' +
@@ -694,6 +723,10 @@ function renderTeams(project) {
     return (
       '<div class="team-block" data-id="' + t.id + '">' +
         '<div class="team-top">' +
+          '<span class="move-btns">' +
+            '<button class="btn small move-up" title="上移"' + (canUp ? '' : ' disabled') + '>↑</button>' +
+            '<button class="btn small move-down" title="下移"' + (canDown ? '' : ' disabled') + '>↓</button>' +
+          '</span>' +
           '<img src="' + avatarURL(t, 48) + '" alt="">' +
           avatarEdit +
           '<span class="t-name">' + escapeHTML(t.name) + '</span>' +
@@ -710,6 +743,8 @@ function renderTeams(project) {
 
   list.querySelectorAll('.team-block').forEach((block) => {
     const id = block.dataset.id;
+    block.querySelector('.move-up').addEventListener('click', () => moveOp('team', id, 'up'));
+    block.querySelector('.move-down').addEventListener('click', () => moveOp('team', id, 'down'));
     block.querySelector('.team-del').addEventListener('click', () => {
       const t = currentProject().teams[id];
       if (t && confirm('确定删除团队「' + t.name + '」？成员会被移出但不会删除。')) {
@@ -1541,7 +1576,7 @@ function openBatchDialog() {
   const project = currentProject();
   if (!project) return;
   classEls.batchTeam.innerHTML = '<option value="">无团队</option>' +
-    Object.values(project.teams).sort((a, b) => a.createdAt - b.createdAt)
+    Object.values(project.teams).sort((a, b) => a.order - b.order)
       .map((t) => '<option value="' + t.id + '">' + escapeHTML(t.name) + '</option>').join('');
   classEls.batchNames.value = '';
   updateBatchPreview();
@@ -1849,8 +1884,8 @@ function renderSettings(settings) {
     quick.columns.value = settings.columns;
     quick.columnsVal.textContent = settings.columns;
   }
-  const sortKey = settings.sortBy + '_' + settings.sortOrder;
-  if (['score_desc', 'score_asc', 'created_asc', 'created_desc'].includes(sortKey)) {
+  const sortKey = settings.sortBy === 'manual' ? 'manual_asc' : settings.sortBy + '_' + settings.sortOrder;
+  if (['score_desc', 'score_asc', 'created_asc', 'created_desc', 'manual_asc'].includes(sortKey)) {
     quick.sort.value = sortKey;
   }
   if (document.activeElement !== quick.accent && quick.accent.value !== settings.accent) {
@@ -1860,6 +1895,10 @@ function renderSettings(settings) {
   settingEls.density.value = settings.density;
   settingEls.sortBy.value = settings.sortBy;
   settingEls.sortOrder.value = settings.sortOrder;
+  settingEls.sortOrder.disabled = settings.sortBy === 'manual';
+  settingEls.sortOrder.title = settings.sortBy === 'manual'
+    ? '自定义顺序由人员/团队列表中的 ↑↓ 调整'
+    : '';
   settingEls.theme.value = settings.theme;
   if (settingEls.accent.value !== settings.accent) settingEls.accent.value = settings.accent;
   settingEls.showMemberScore.checked = settings.showMemberScore;

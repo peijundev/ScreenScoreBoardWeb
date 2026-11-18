@@ -946,13 +946,14 @@ function leaderboardEntries(project, settings) {
         score: p.score,
         teamName: p.teamId && project.teams[p.teamId] ? project.teams[p.teamId].name : '',
         createdAt: p.createdAt,
+        order: p.order,
       });
     }
   } else if (scope === 'teams') {
     for (const t of teams) {
       entries.push({
         kind: 'team', id: t.id, name: t.name, avatar: t.avatar,
-        score: teamScore(t), teamName: '', createdAt: t.createdAt,
+        score: teamScore(t), teamName: '', createdAt: t.createdAt, order: t.order,
       });
     }
   } else {
@@ -960,18 +961,21 @@ function leaderboardEntries(project, settings) {
       if (p.teamId && project.teams[p.teamId]) continue;
       entries.push({
         kind: 'person', id: p.id, name: p.name, avatar: p.avatar,
-        score: p.score, teamName: '', createdAt: p.createdAt,
+        score: p.score, teamName: '', createdAt: p.createdAt, order: p.order,
       });
     }
     for (const t of teams) {
       entries.push({
         kind: 'team', id: t.id, name: t.name, avatar: t.avatar,
-        score: teamScore(t), teamName: '', createdAt: t.createdAt,
+        score: teamScore(t), teamName: '', createdAt: t.createdAt, order: t.order,
       });
     }
   }
 
-  entries.sort((a, b) => (b.score - a.score) || (a.createdAt - b.createdAt));
+  const tieBreak = settings.sortBy === 'manual'
+    ? (a, b) => orderOf(a) - orderOf(b)
+    : (a, b) => a.createdAt - b.createdAt;
+  entries.sort((a, b) => (b.score - a.score) || tieBreak(a, b));
   const limit = Number(settings.leaderboardLimit) || 0;
   const limited = limit > 0 ? entries.slice(0, limit) : entries;
   const tieMode = settings.featureRankTies ? settings.rankTieMode : 'none';
@@ -1183,24 +1187,46 @@ function shelfLayouts(items) {
   return out;
 }
 
+function orderOf(entity) {
+  return Number.isFinite(entity.order) ? entity.order : Number.POSITIVE_INFINITY;
+}
+
 function buildItems(project, settings) {
   const people = Object.values(project.people);
   const teams = Object.values(project.teams);
   const items = [];
+  const manual = settings.sortBy === 'manual';
+  const byOrder = (a, b) => {
+    const ao = orderOf(a);
+    const bo = orderOf(b);
+    return ao === bo ? 0 : (ao < bo ? -1 : 1);
+  };
 
   for (const p of people) {
     if (!p.teamId || !project.teams[p.teamId]) {
-      items.push({ kind: 'person', person: p, sortKey: settings.sortBy === 'score' ? p.score : p.createdAt });
+      items.push({
+        kind: 'person',
+        person: p,
+        sortKey: settings.sortBy === 'score' ? p.score : p.createdAt,
+      });
     }
   }
   for (const t of teams) {
-    const members = people
-      .filter((p) => p.teamId === t.id)
-      .sort((a, b) => (settings.sortBy === 'score'
-        ? (settings.sortOrder === 'asc' ? a.score - b.score : b.score - a.score)
-        : a.createdAt - b.createdAt));
-    const total = members.reduce((s, m) => s + m.score, 0);
-    items.push({ kind: 'team', team: t, members, sortKey: settings.sortBy === 'score' ? total : t.createdAt });
+    const memberList = people.filter((p) => p.teamId === t.id);
+    memberList.sort(manual ? byOrder : (a, b) => (settings.sortBy === 'score'
+      ? (settings.sortOrder === 'asc' ? a.score - b.score : b.score - a.score)
+      : a.createdAt - b.createdAt));
+    const total = memberList.reduce((s, m) => s + m.score, 0);
+    items.push({
+      kind: 'team',
+      team: t,
+      members: memberList,
+      sortKey: settings.sortBy === 'score' ? total : t.createdAt,
+    });
+  }
+  if (manual) {
+    items.sort((a, b) => byOrder(a.kind === 'person' ? a.person : a.team, b.kind === 'person' ? b.person : b.team));
+    return items;
   }
   const dir = settings.sortOrder === 'asc' ? 1 : -1;
   items.sort(settings.sortBy === 'score'

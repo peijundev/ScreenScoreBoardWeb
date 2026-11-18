@@ -187,6 +187,45 @@ async function main() {
   s = await viewer.waitState((st) => P(st).people[pid] && P(st).people[pid].teamId === tid);
   assert(P(s).teams[tid].name === '红队', 'viewer 实时收到建队与移入');
 
+  console.log('人员/团队自定义顺序:');
+  const ordA = (await adminOp('addPerson', { name: '排序甲' })).result.personId;
+  const ordB = (await adminOp('addPerson', { name: '排序乙' })).result.personId;
+  const ordC = (await adminOp('addPerson', { name: '排序丙' })).result.personId;
+  let ordState = await getState();
+  const orderOfPerson = (st, id) => st.projects[projectId].people[id].order;
+  const orderOfTeam = (st, id) => st.projects[projectId].teams[id].order;
+  assert(orderOfPerson(ordState, ordB) > orderOfPerson(ordState, ordA) &&
+    orderOfPerson(ordState, ordC) > orderOfPerson(ordState, ordB),
+    '新人员按添加顺序获得递增序号');
+  await adminOp('movePerson', { personId: ordC, direction: 'up' });
+  await adminOp('movePerson', { personId: ordC, direction: 'up' });
+  ordState = await getState();
+  assert(orderOfPerson(ordState, ordC) < orderOfPerson(ordState, ordA), '人员可上移调整顺序');
+  assert(ordState.projects[projectId].settings.sortBy === 'manual', '调序后自动切换为自定义顺序');
+  await adminOp('movePerson', { personId: ordC, direction: 'up' });
+  await adminOp('movePerson', { personId: ordC, direction: 'up' });
+  ordState = await getState();
+  assert(orderOfPerson(ordState, ordC) === 0, '列表顶部继续上移为无操作');
+  await adminOp('movePerson', { personId: 'p_nope', direction: 'up' })
+    .catch((e) => assert(/人员不存在/.test(e.message), '调序校验人员存在'));
+
+  const tid2 = (await adminOp('addTeam', { name: '蓝队' })).result.teamId;
+  ordState = await getState();
+  assert(orderOfTeam(ordState, tid2) > orderOfTeam(ordState, tid), '新团队追加到末尾');
+  await adminOp('moveTeam', { teamId: tid2, direction: 'up' });
+  ordState = await getState();
+  assert(orderOfTeam(ordState, tid2) < orderOfTeam(ordState, tid), '团队可上移调整顺序');
+  await adminOp('moveTeam', { teamId: tid2, direction: 'left' })
+    .catch((e) => assert(/移动方向/.test(e.message), '非法移动方向被拒绝'));
+
+  await adminOp('updateSettings', { patch: { sortBy: 'score' } });
+  await adminOp('updateSettings', { patch: { sortBy: 'manual' } });
+  ordState = await getState();
+  assert(ordState.projects[projectId].settings.sortBy === 'manual', '可切换为自定义顺序');
+  await adminOp('updateSettings', { patch: { sortBy: 'random' } })
+    .catch((e) => assert(/排序方式/.test(e.message), '非法排序方式被拒绝'));
+  await adminOp('updateSettings', { patch: { sortBy: 'score' } });
+
   await adminOp('updateSettings', { patch: { columns: 6, theme: 'light', title: '决赛计分板' } });
   s = await viewer.waitState((st) => P(st).settings.columns === 6);
   assert(s.projects[projectId].settings.theme === 'light', 'viewer 实时收到排版变更');
@@ -616,6 +655,9 @@ async function main() {
   const afterImport = await getState();
   const imported = afterImport.projects[importData.projectId];
   assert(imported && imported.people[pid] && imported.people[pid].score === 10, '导入后人员与分数一致');
+  const importedOrders = [...Object.values(imported.people), ...Object.values(imported.teams)]
+    .map((e) => e.order).sort((a, b) => a - b);
+  assert(importedOrders.every((n, i) => Number.isInteger(n) && n === i), '导入项目补齐并压缩排序序号');
   const importedAvatar = imported.people[pid].avatar;
   assert(importedAvatar && importedAvatar !== up.path, '导入资产被重写路径');
   const avatarRes = await fetch(BASE + '/' + importedAvatar);
@@ -693,6 +735,9 @@ async function main() {
   const restored = await getState();
   const rp = restored.projects[projectId];
   assert(rp && rp.people[pid] && rp.people[pid].score === 7, '重启后人员与分数恢复');
+  assert(rp.people[ordC] && rp.people[ordC].order === 0 && rp.people[ordA].order === 3 &&
+    rp.people[ordB].order === 4 && rp.teams[tid2] && rp.teams[tid2].order === 1 &&
+    rp.teams[tid].order === 5, '重启后人员/团队自定义顺序恢复');
   assert(rp.people[pid].layout.x === 200 && rp.people[pid].layout.w === 200 &&
     rp.people[pid].memberLayout.w === 20, '重启后卡片布局恢复（含画布外坐标）');
   assert(rp.settings.cardStyle === 'neon' && rp.settings.columns === 5 && rp.settings.avatarSize === 96, '重启后外观设置恢复');
@@ -760,6 +805,7 @@ async function main() {
   const legacyProjects = Object.values(legacyState.projects);
   assert(legacyProjects.length === 1 && legacyProjects[0].name === '默认项目', '旧数据包装为默认项目');
   assert(legacyProjects[0].people.p_legacy && legacyProjects[0].people.p_legacy.score === 3, '旧人员数据保留');
+  assert(legacyProjects[0].people.p_legacy.order === 0, '旧数据补齐排序序号');
   assert(legacyProjects[0].settings.title === '旧积分榜' && legacyProjects[0].settings.scoreEffect, '旧设置保留并补全新字段');
   await stopServer(server);
 
