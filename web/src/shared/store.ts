@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { connectWS, type SendOp } from './ws';
+import type { OpName } from './ops.generated';
 import type { Project, RuntimeSnapshot, Snapshot } from './types';
 
 interface AppState {
@@ -47,7 +48,7 @@ export function projectOf(snapshot: Snapshot | null, projectId: string | null): 
 /** 项目级 op：自动带上 projectId */
 export function projectOp(
   projectId: string,
-  op: string,
+  op: OpName,
   payload?: Record<string, unknown>,
 ): Promise<unknown> {
   return useAppStore.getState().sendOp(op, { projectId, ...(payload ?? {}) });

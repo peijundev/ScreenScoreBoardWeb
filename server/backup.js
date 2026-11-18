@@ -1,8 +1,10 @@
 'use strict';
 // 自动备份：定时把完整 state 快照写入备份目录（默认 data/backups）
 const fs = require('fs');
+const fsp = require('fs/promises');
 const path = require('path');
 const { state, DATA_DIR } = require('./state');
+const { logger } = require('./logger');
 
 function envNumber(name, fallback) {
   const n = Number(process.env[name]);
@@ -23,36 +25,62 @@ function timestampName(now = new Date()) {
     '-' + p(now.getHours()) + p(now.getMinutes()) + p(now.getSeconds()) + '.json';
 }
 
-function prune(dir, keep) {
+async function prune(dir, keep) {
   let files = [];
   try {
-    files = fs.readdirSync(dir).filter((f) => /^state-.*\.json$/.test(f))
-      .map((f) => ({ f, t: fs.statSync(path.join(dir, f)).mtimeMs }))
-      .sort((a, b) => b.t - a.t);
+    const names = await fsp.readdir(dir);
+    files = await Promise.all(
+      names
+        .filter((f) => /^state-.*\.json$/.test(f))
+        .map(async (f) => {
+          const st = await fsp.stat(path.join(dir, f));
+          return { f, t: st.mtimeMs };
+        }),
+    );
+    files.sort((a, b) => b.t - a.t);
   } catch (_) {
     return;
   }
   for (const item of files.slice(keep)) {
-    try { fs.unlinkSync(path.join(dir, item.f)); } catch (_) {}
+    try { await fsp.unlink(path.join(dir, item.f)); } catch (_) {}
   }
 }
 
-function runBackup() {
-  const cfg = config();
-  fs.mkdirSync(cfg.dir, { recursive: true });
-  let name = timestampName();
-  let full = path.join(cfg.dir, name);
-  let i = 1;
-  while (fs.existsSync(full)) {
-    name = timestampName().replace(/\.json$/, '-' + i + '.json');
-    full = path.join(cfg.dir, name);
-    i += 1;
+async function exists(file) {
+  try {
+    await fsp.access(file);
+    return true;
+  } catch (_) {
+    return false;
   }
-  const tmp = full + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(state, null, 2));
-  fs.renameSync(tmp, full);
-  prune(cfg.dir, cfg.keep);
-  return { file: name, size: fs.statSync(full).size, dir: cfg.dir };
+}
+
+let running = null;
+
+function runBackup() {
+  // 同一时间只跑一个备份，避免重叠写
+  if (running) return running;
+  running = (async () => {
+    const cfg = config();
+    await fsp.mkdir(cfg.dir, { recursive: true });
+    let name = timestampName();
+    let full = path.join(cfg.dir, name);
+    let i = 1;
+    while (await exists(full)) {
+      name = timestampName().replace(/\.json$/, '-' + i + '.json');
+      full = path.join(cfg.dir, name);
+      i += 1;
+    }
+    const tmp = full + '.tmp';
+    await fsp.writeFile(tmp, JSON.stringify(state, null, 2), 'utf8');
+    await fsp.rename(tmp, full);
+    await prune(cfg.dir, cfg.keep);
+    const st = await fsp.stat(full);
+    return { file: name, size: st.size, dir: cfg.dir };
+  })().finally(() => {
+    running = null;
+  });
+  return running;
 }
 
 function listBackups() {
@@ -74,13 +102,12 @@ function startBackupScheduler() {
   const cfg = config();
   if (!cfg.enabled || cfg.intervalMinutes <= 0 || timer) return;
   const intervalMs = cfg.intervalMinutes * 60 * 1000;
-  const initial = setTimeout(() => {
-    try { runBackup(); } catch (e) { console.error('[backup] 备份失败:', e.message); }
-  }, 30 * 1000);
+  const run = () => {
+    runBackup().catch((e) => logger.error('备份失败', { error: e.message }));
+  };
+  const initial = setTimeout(run, 30 * 1000);
   if (initial.unref) initial.unref();
-  timer = setInterval(() => {
-    try { runBackup(); } catch (e) { console.error('[backup] 备份失败:', e.message); }
-  }, intervalMs);
+  timer = setInterval(run, intervalMs);
   if (timer.unref) timer.unref();
 }
 

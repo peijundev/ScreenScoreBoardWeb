@@ -79,6 +79,33 @@ STORAGE=mysql MYSQL_URL=mysql://user:pass@localhost:3306/scoreboard npm start
 
 数据库后端把整份状态作为一个 JSON 快照存入一行（`id='state'`），启动时自动建表；上传的头像文件仍保存在本地 `data/avatars/`。
 
+## 后端运行配置
+
+除存储相关变量（见上一节）外，后端支持以下环境变量：
+
+| 变量 | 默认 | 说明 |
+|---|---|---|
+| `HOST` | `0.0.0.0` | 监听地址；Electron 内部固定使用 `127.0.0.1` |
+| `LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
+| `LOG_FORMAT` | `text` | `text` 或 `json`（便于日志采集） |
+| `SLOW_OP_MS` | `100` | 慢 op 告警阈值 |
+| `BROADCAST_COALESCE_MS` | `50` | WebSocket 广播合并窗口，`0` 关闭合并 |
+| `WS_MAX_CONNECTIONS` | `200` | 最大 WebSocket 连接数 |
+| `WS_MAX_BUFFERED_BYTES` | `1048576` | 单连接发送积压上限（背压） |
+| `WS_PERMESSAGE_DEFLATE` | `1` | 是否启用 WebSocket 压缩 |
+| `WS_DEFLATE_THRESHOLD` | `1024` | 小于该字节数的消息不压缩 |
+| `STATE_FILE_PRETTY` | `0` | JSON 存盘是否使用缩进（默认 compact） |
+| `SHUTDOWN_FLUSH_TIMEOUT_MS` | `10000` | 退出时落盘超时 |
+| `MAX_IMPORT_BYTES` | `67108864` | 项目导入请求体上限 |
+| `ALLOWED_ORIGINS` | 空 | 额外允许的 WebSocket Origin（逗号分隔；同源始终允许） |
+| `ALLOW_MULTI_INSTANCE` | `0` | `1` 时跳过单实例锁（可能导致数据覆盖，仅调试用） |
+
+- 健康检查：`GET /api/health` 返回版本、运行时长、存储类型与 WS 连接数，不返回全量状态
+- 单实例锁：默认拒绝两个进程同时使用同一 `DATA_DIR`；陈旧锁（进程已退出）会自动清理
+- WebSocket 默认校验 Origin（同源放行，跨站拒绝）
+- 基础安全响应头：`X-Content-Type-Options: nosniff`、`X-Frame-Options: SAMEORIGIN`、`Referrer-Policy: no-referrer`
+- 优化路线与实测数据见 [docs/backend-optimization.md](docs/backend-optimization.md)
+
 ## 功能
 
 **管理端**

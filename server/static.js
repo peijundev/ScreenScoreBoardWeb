@@ -30,16 +30,28 @@ const MIME = {
   '.map': 'application/json; charset=utf-8',
 };
 
-// 从 baseDir 中安全地取文件；越界返回 null
+// 基础安全响应头（同源前端与 Electron 均不受影响）
+const SECURITY_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'SAMEORIGIN',
+  'Referrer-Policy': 'no-referrer',
+};
+
+// 从 baseDir 中安全地取文件；越界或非法编码返回 null
 function resolveSafe(baseDir, urlPath) {
-  const rel = decodeURIComponent(urlPath).replace(/^\/+/, '');
+  let rel;
+  try {
+    rel = decodeURIComponent(urlPath).replace(/^\/+/, '');
+  } catch (_) {
+    return null; // 非法百分号编码 → 400，而不是抛异常导致进程崩溃
+  }
   const full = path.normalize(path.join(baseDir, rel));
   if (!full.startsWith(baseDir + path.sep) && full !== baseDir) return null;
   return full;
 }
 
 function send(res, code, body, headers = {}) {
-  res.writeHead(code, headers);
+  res.writeHead(code, { ...SECURITY_HEADERS, ...headers });
   res.end(body);
 }
 
@@ -51,7 +63,12 @@ function serveStatic(res, baseDir, urlPath) {
   try { stat = fs.statSync(full); } catch (_) { return false; }
   if (!stat.isFile()) return false;
   const mime = MIME[path.extname(full).toLowerCase()] || 'application/octet-stream';
-  res.writeHead(200, { 'Content-Type': mime, 'Content-Length': stat.size, 'Cache-Control': 'no-cache' });
+  res.writeHead(200, {
+    ...SECURITY_HEADERS,
+    'Content-Type': mime,
+    'Content-Length': stat.size,
+    'Cache-Control': 'no-cache',
+  });
   fs.createReadStream(full).pipe(res);
   return true;
 }

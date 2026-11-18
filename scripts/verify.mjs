@@ -1,9 +1,9 @@
 // 端到端验证：HTTP / 上传 / WS 同步 / 多项目 / 持久化 / SQLite 存储 / 旧数据迁移
 // 运行: npm run verify
 import { spawn } from 'node:child_process';
+import http from 'node:http';
 import {
-  mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync,
-  readdirSync, utimesSync,
+  mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync, utimesSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -116,6 +116,18 @@ async function getState() {
   return (await fetch(BASE + '/api/state')).json();
 }
 
+function rawGet(pathname) {
+  return new Promise((resolve) => {
+    const req = http.request({ host: '127.0.0.1', port: PORT, path: pathname, method: 'GET' }, (res) => {
+      let body = '';
+      res.on('data', (d) => { body += d; });
+      res.on('end', () => resolve({ status: res.statusCode, body }));
+    });
+    req.on('error', (e) => resolve({ status: 0, error: e.message }));
+    req.end();
+  });
+}
+
 async function main() {
   let server = startServer();
   await waitServer();
@@ -135,6 +147,36 @@ async function main() {
   assert(r.status === 400 || r.status === 404, '路径穿越被拒绝');
   r = await fetch(BASE + '/admin.css');
   assert(r.ok && (await r.text()).includes('--card'), '静态资源可访问');
+  console.log('P1 后端健壮性:');
+  r = await fetch(BASE + '/api/health');
+  const health = await r.json();
+  const healthText = JSON.stringify(health);
+  assert(r.ok && health.ok === true && Number.isFinite(health.uptimeSec) &&
+    typeof health.wsClients === 'number' && healthText.length < 1024,
+    '健康检查返回轻量状态');
+  r = await fetch(BASE + '/api/state');
+  assert(r.headers.get('x-content-type-options') === 'nosniff', '响应包含 nosniff 安全头');
+  assert(r.headers.get('x-frame-options') === 'SAMEORIGIN', '响应包含 X-Frame-Options');
+  const badUrl = await rawGet('/%zz');
+  assert(badUrl.status === 400 || badUrl.status === 404, '非法 URL 编码被安全处理（400/404）');
+  assert((await fetch(BASE + '/api/health')).ok, '非法 URL 后服务仍存活');
+
+  console.log('单实例锁:');
+  const second = spawn(process.execPath, ['server/index.js'], {
+    env: { ...process.env, PORT: String(PORT + 1), DATA_DIR },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let secondErr = '';
+  second.stderr.on('data', (d) => { secondErr += d; });
+  const secondCode = await new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      try { second.kill('SIGKILL'); } catch (_) {}
+      resolve(-1);
+    }, 5000);
+    second.once('exit', (code) => { clearTimeout(timer); resolve(code); });
+  });
+  assert(secondCode === 1 && /占用|进程/.test(secondErr), '同一数据目录拒绝第二个实例');
+
   console.log('版本信息:');
   const verRes = await fetch(BASE + '/api/version');
   const verData = await verRes.json();
@@ -173,6 +215,25 @@ async function main() {
   await Promise.all([viewer.ready, admin.ready]);
   await viewer.waitState((s) => s.projects && s.projects[projectId]);
   assert(viewer.states.length >= 1, 'viewer 连接即收到初始状态');
+
+  const evil = new WebSocket(`ws://127.0.0.1:${PORT}/ws`, { headers: { Origin: 'http://evil.example' } });
+  const evilCode = await new Promise((resolve) => {
+    evil.on('close', (code) => resolve(code));
+    evil.on('error', () => resolve(-1));
+    setTimeout(() => resolve(-2), 2000);
+  });
+  assert(evilCode === 1008, '跨站 Origin 的 WebSocket 被拒绝');
+
+  const oversized = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
+  await new Promise((resolve) => oversized.on('open', resolve));
+  const oversizeCode = await new Promise((resolve) => {
+    oversized.on('close', (code) => resolve(code));
+    oversized.on('error', () => {});
+    oversized.send('x'.repeat(100 * 1024));
+    setTimeout(() => resolve(-1), 2000);
+  });
+  assert(oversizeCode === 1009, '超过 maxPayload 的连接被关闭');
+  assert((await fetch(BASE + '/api/health')).ok, '超大消息后服务仍存活');
   const P = (st) => st.projects[projectId];
   const adminOp = (op, payload) => admin.sendOp(op, Object.assign({ projectId }, payload || {}));
 
@@ -288,6 +349,10 @@ async function main() {
   await adminOp('applyTheme', { settings: { accent: 'red' } })
     .catch((e) => assert(/强调色/.test(e.message), '主题拒绝非法值'));
 
+  await new Promise((r) => setTimeout(r, 250));
+  const rawState = readFileSync(path.join(DATA_DIR, 'state.json'), 'utf8');
+  assert(!rawState.includes('\n  '), 'JSON 存盘默认使用 compact 格式');
+
   await adminOp('updateSettings', { patch: { columns: 6, theme: 'light', title: '决赛计分板' } });
   s = await viewer.waitState((st) => P(st).settings.columns === 6);
   assert(s.projects[projectId].settings.theme === 'light', 'viewer 实时收到排版变更');
@@ -340,6 +405,14 @@ async function main() {
   await adminOp('setMemberLayout', { personId: pid, layout: { x: 2, y: 3, w: 20, h: 21 } });
   s = await viewer.waitState((st) => P(st).people[pid] && P(st).people[pid].memberLayout);
   assert(P(s).people[pid].memberLayout.w === 20, '成员小卡片布局同步');
+
+  await adminOp('resetLayout');
+  s = await viewer.waitState((st) => P(st).people[pid] && P(st).people[pid].layout === null);
+  assert(P(s).people[pid].memberLayout === null, 'resetLayout 清空卡片与成员布局');
+  // 恢复到后续持久化断言所需的位置
+  await adminOp('setLayout', { kind: 'person', id: pid, layout: { x: 200, y: -100, w: 200, h: 200 } });
+  await adminOp('setMemberLayout', { personId: pid, layout: { x: 2, y: 3, w: 20, h: 21 } });
+  await viewer.waitState((st) => P(st).people[pid] && P(st).people[pid].layout && P(st).people[pid].layout.w === 200);
 
   await adminOp('updateSettings', { patch: { avatarPosition: 'top', avatarSizeMode: 'manual', avatarSize: 96 } });
   s = await viewer.waitState((st) => P(st).settings.avatarPosition === 'top');
@@ -795,7 +868,7 @@ async function main() {
   const cleanupRes = await fetch(BASE + '/api/orphans/cleanup', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
   });
-  const cleanupData = await cleanupRes.json();
+  await cleanupRes.json();
   assert(cleanupRes.ok && !existsSync(orphanPath), '清理孤儿头像');
   assert(existsSync(path.join(DATA_DIR, up.path)), '引用的头像未被清理');
 
@@ -810,12 +883,21 @@ async function main() {
   await adminOp('updateSettings', { patch: { scoreEffect: 'sparkle' } }).catch((e) => assert(/特效类型/.test(e.message), '非法特效类型被拒绝'));
   await adminOp('updateSettings', { patch: { soundVolume: 2 } }).catch((e) => assert(/音量/.test(e.message), '音效音量越界被拒绝'));
 
-  // 广播收敛
+  // 广播收敛（先等上一轮合并广播落地）
+  await new Promise((r) => setTimeout(r, 150));
   const countBefore = viewer.states.length;
   await adminOp('addScore', { personId: 'p_nope', delta: 1 }).catch((e) => assert(e.message === '人员不存在', '非法 op 返回错误'));
   await new Promise((r) => setTimeout(r, 300));
   assert(viewer.states.length === countBefore, '非法 op 不触发广播');
   await admin.sendOp('addPerson', { name: '无项目' }).catch((e) => assert(/项目不存在/.test(e.message), '缺少 projectId 被拒绝'));
+
+  await new Promise((r) => setTimeout(r, 150));
+  const statesBeforeBurst = viewer.states.length;
+  for (let i = 0; i < 5; i += 1) await adminOp('addScore', { personId: pid, delta: 1 });
+  await new Promise((r) => setTimeout(r, 250));
+  const burstStates = viewer.states.length - statesBeforeBurst;
+  assert(burstStates > 0 && burstStates < 5, '连续记分合并广播（少于操作次数）');
+  await adminOp('setScore', { personId: pid, score: 7 });
 
   console.log('多项目:');
   const ackP2 = await admin.sendOp('addProject', { name: '第二项目' });
@@ -931,6 +1013,40 @@ async function main() {
   assert(legacyProjects[0].settings.title === '旧积分榜' && legacyProjects[0].settings.scoreEffect, '旧设置保留并补全新字段');
   assert(legacyProjects[0].settings.displayStyle === 'lecture', '已删除的真·古风自动回落为 lecture');
   await stopServer(server);
+
+  async function backendRoundtrip(label, env) {
+    const dir = mkdtempSync(path.join(tmpdir(), 'sb-' + label + '-'));
+    let srv = startServer({ ...env, DATA_DIR: dir });
+    await waitServer();
+    let st = await getState();
+    const pid = Object.keys(st.projects)[0];
+    const client = wsClient(label + '-admin');
+    await client.ready;
+    await client.waitState((x) => x.projects && x.projects[pid]);
+    const ack = await client.sendOp('addPerson', { projectId: pid, name: label + '测试' });
+    await new Promise((r) => setTimeout(r, 400));
+    client.ws.close();
+    await stopServer(srv);
+    srv = startServer({ ...env, DATA_DIR: dir });
+    await waitServer();
+    st = await getState();
+    assert(st.projects[pid] && st.projects[pid].people[ack.result.personId], label + ' 重启后数据恢复');
+    await stopServer(srv);
+    rmSync(dir, { recursive: true, force: true });
+  }
+
+  if (process.env.TEST_PG_URL) {
+    console.log('存储后端（PostgreSQL）:');
+    await backendRoundtrip('PostgreSQL', { STORAGE: 'postgres', DATABASE_URL: process.env.TEST_PG_URL });
+  } else {
+    console.log('存储后端（PostgreSQL）: 跳过（未设置 TEST_PG_URL）');
+  }
+  if (process.env.TEST_MYSQL_URL) {
+    console.log('存储后端（MySQL）:');
+    await backendRoundtrip('MySQL', { STORAGE: 'mysql', MYSQL_URL: process.env.TEST_MYSQL_URL });
+  } else {
+    console.log('存储后端（MySQL）: 跳过（未设置 TEST_MYSQL_URL）');
+  }
 
   rmSync(DATA_DIR, { recursive: true, force: true });
   rmSync(legacyDir, { recursive: true, force: true });

@@ -1,5 +1,6 @@
 import type { JSX } from 'react';
 import type { Project, Settings } from '../../shared/types';
+import type { OpName } from '../../shared/ops.generated';
 
 export interface Ctx {
   project: Project;
@@ -7,7 +8,7 @@ export interface Ctx {
   /** 单键 patch（默认 300ms 合并防抖，immediate 立即发送） */
   set: (key: string, value: unknown, immediate?: boolean) => void;
   /** 项目级 op */
-  op: (op: string, payload?: Record<string, unknown>) => Promise<unknown>;
+  op: (op: OpName, payload?: Record<string, unknown>) => Promise<unknown>;
 }
 
 type Disabled = (s: Settings) => boolean;

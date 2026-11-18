@@ -2,6 +2,21 @@
 
 本项目遵循语义化版本。1.4.0 起，版本号在管理端顶栏与启动日志中显示。
 
+## 未发布
+
+### 后端
+
+- 合并 WebSocket 广播（默认 50ms）、背压与连接数上限；显式启用 permessage-deflate
+- JSON 存盘改为异步原子写并默认 compact；上传/备份异步化
+- `nextOrder` 缓存、`movePerson/moveTeam` 改为 O(n) 邻接查找
+- 未捕获异常保护、优雅退出（关闭 WS/HTTP 后落盘）、非法 URL 编码安全处理
+- 新增 `GET /api/health`；Docker HEALTHCHECK 切换；基础安全响应头；`HOST` 可配置（Electron 绑 127.0.0.1）
+- WebSocket Origin 校验
+- 单实例锁（同 `DATA_DIR` 拒绝第二实例）与 SQLite `busy_timeout`
+- 拆分 `state.js`（settings / validation / 核心状态），缩小单文件体量
+- 设置/op 契约生成（`npm run gen:contracts`）；`npm run typecheck:server` 覆盖全部后端；ESLint/Prettier；CI 增加 lint/typecheck/verify（含 Postgres/MySQL）
+- 文档：`docs/backend-optimization.md`
+
 ## 1.5.0 — React UI 技术栈
 
 > **1.4.0 已封存。** 自 1.5.0 起前端全面切换到 React；后端（Node 原生 http + WebSocket）、WS 协议与 `data/` 数据格式保持不变。

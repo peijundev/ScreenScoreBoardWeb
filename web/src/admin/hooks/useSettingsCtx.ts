@@ -3,6 +3,7 @@ import type { Project } from '../../shared/types';
 import { projectOp } from '../../shared/store';
 import { toast } from '../../shared/ui';
 import type { Ctx } from '../settings/types';
+import type { OpName } from '../../shared/ops.generated';
 
 /** 设置面板的单键 patch 上下文：300ms 合并防抖，immediate 立即发送 */
 export function useSettingsCtx(project: Project): Ctx {
@@ -37,7 +38,7 @@ export function useSettingsCtx(project: Project): Ctx {
   );
 
   const op = useCallback(
-    (name: string, payload?: Record<string, unknown>): Promise<unknown> =>
+    (name: OpName, payload?: Record<string, unknown>): Promise<unknown> =>
       projectOp(project.id, name, payload),
     [project.id],
   );

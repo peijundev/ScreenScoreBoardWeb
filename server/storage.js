@@ -2,16 +2,22 @@
 // 存储后端：json（默认）/ sqlite / postgres / mysql
 // 每种后端都把整份状态快照存为一行数据，接口统一为 init / load / save / close
 const fs = require('fs');
+const fsp = require('fs/promises');
 const path = require('path');
+const { config } = require('./config');
+const { logger } = require('./logger');
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
 
 function jsonStorage() {
   const file = process.env.STATE_FILE || path.join(DATA_DIR, 'state.json');
+  const pretty = config.stateFilePretty;
   return {
     kind: 'json',
     async init() {
       fs.mkdirSync(path.dirname(file), { recursive: true });
+      // 上次崩溃遗留的临时文件（rename 原子，.tmp 必然是不完整数据）
+      try { await fsp.unlink(file + '.tmp'); } catch (_) {}
     },
     async load() {
       if (!fs.existsSync(file)) return null;
@@ -20,14 +26,15 @@ function jsonStorage() {
       } catch (e) {
         const backup = file + '.corrupt-' + Date.now();
         try { fs.renameSync(file, backup); } catch (_) {}
-        console.error(`[storage] 状态文件损坏，已备份为 ${path.basename(backup)}`);
+        logger.error('状态文件损坏，已备份', { backup: path.basename(backup), error: e.message });
         return null;
       }
     },
     async save(state) {
       const tmp = file + '.tmp';
-      fs.writeFileSync(tmp, JSON.stringify(state, null, 2));
-      fs.renameSync(tmp, file);
+      // 异步原子写，避免阻塞事件循环；默认 compact，可用 STATE_FILE_PRETTY=1 恢复缩进
+      await fsp.writeFile(tmp, pretty ? JSON.stringify(state, null, 2) : JSON.stringify(state), 'utf8');
+      await fsp.rename(tmp, file);
     },
     async close() {},
   };
@@ -48,6 +55,7 @@ function sqliteStorage() {
       }
       db = new Database(file);
       db.pragma('journal_mode = WAL');
+      db.pragma('busy_timeout = 5000');
       db.exec('CREATE TABLE IF NOT EXISTS scoreboard_state (id TEXT PRIMARY KEY, data TEXT NOT NULL, updated_at INTEGER NOT NULL)');
     },
     async load() {

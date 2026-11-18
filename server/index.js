@@ -2,9 +2,12 @@
 // 入口：http server、路由表、头像上传、挂载 WebSocket
 const http = require('http');
 const fs = require('fs');
+const fsp = require('fs/promises');
 const path = require('path');
 const crypto = require('crypto');
 const { serveStatic, send, PUBLIC_DIR } = require('./static');
+const { config } = require('./config');
+const { logger } = require('./logger');
 const APP_VERSION = require('../package.json').version;
 // 1.4.0 是原技术栈（原生 JS 前端）的最后一个发布版本；此后前端迁移到 React
 const FINAL_TECH_STACK_RELEASE = '1.4.0';
@@ -20,6 +23,7 @@ const {
   walkAssetRefs,
   save: saveState,
   flushSave,
+  onShutdown,
   OpError,
 } = require('./state');
 const { attachWSS, broadcastState } = require('./wss');
@@ -28,6 +32,8 @@ const { runBackup, listBackups, startBackupScheduler } = require('./backup');
 const { scanOrphans, cleanupOrphans, startCleanupScheduler } = require('./cleanup');
 
 const PORT = Number(process.env.PORT) || 3000;
+const cfg = config;
+let wssInstance = null;
 const MAX_IMAGE = 2 * 1024 * 1024; // 2 MB
 const MAX_SOUND = 5 * 1024 * 1024; // 5 MB
 
@@ -75,10 +81,16 @@ function handleUpload(req, res, opts) {
       return send(res, 415, JSON.stringify({ error: opts.unsupported }), { 'Content-Type': 'application/json' });
     }
     const name = crypto.randomBytes(8).toString('hex') + '.' + ext;
-    fs.writeFileSync(path.join(opts.dir, name), buf);
-    send(res, 200, JSON.stringify({ path: opts.prefix + '/' + name }), { 'Content-Type': 'application/json' });
+    fsp.writeFile(path.join(opts.dir, name), buf)
+      .then(() => {
+        send(res, 200, JSON.stringify({ path: opts.prefix + '/' + name }), { 'Content-Type': 'application/json' });
+      })
+      .catch((e) => {
+        logger.error('上传写盘失败', { error: e.message });
+        send(res, 500, JSON.stringify({ error: '保存文件失败' }), { 'Content-Type': 'application/json' });
+      });
   });
-  req.on('error', () => {});
+  req.on('error', (e) => { logger.warn('上传请求中断', { error: e.message }); });
 }
 
 // ---------- 数据导出 / 导入 / CSV / 备份 / 清理 ----------
@@ -221,7 +233,7 @@ function scoresCsv(project, scope) {
 
 async function handleImport(req, res) {
   try {
-    const body = await readBody(req, 64 * 1024 * 1024);
+    const body = await readBody(req, cfg.maxImportBytes);
     let parsed;
     try {
       parsed = JSON.parse(body.toString('utf8'));
@@ -274,20 +286,29 @@ const server = http.createServer((req, res) => {
   const p = url.pathname;
 
   if (req.method === 'GET' && p === '/') {
-    res.writeHead(302, { Location: '/display' });
-    return res.end();
+    return send(res, 302, '', { Location: '/display' });
   }
   // React 前端入口（构建产物在 public/v2/）；未构建时返回明确提示，不再回退旧版页面
   if (req.method === 'GET' && (p === '/admin' || p === '/admin-v2' || p === '/display' || p === '/display-v2')) {
     const isAdmin = p === '/admin' || p === '/admin-v2';
     if (serveStatic(res, PUBLIC_DIR, isAdmin ? '/v2/admin.html' : '/v2/display.html')) return;
-    res.writeHead(503, { 'Content-Type': 'text/html; charset=utf-8' });
-    return res.end(
+    return send(res, 503, (
       '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>前端未构建</title></head>' +
         '<body style="font-family:sans-serif;padding:40px;line-height:1.8">' +
         '<h1>前端尚未构建</h1><p>请先执行 <code>npm run build:web</code>，或直接运行 <code>npm run start:build</code>。</p>' +
-        '</body></html>',
-    );
+        '</body></html>'
+    ), { 'Content-Type': 'text/html; charset=utf-8' });
+  }
+  if (req.method === 'GET' && p === '/api/health') {
+    return sendJSON(res, 200, {
+      ok: true,
+      version: APP_VERSION,
+      uptimeSec: Math.round(process.uptime()),
+      storage: storageKind,
+      wsClients: wssInstance ? wssInstance.clients.size : 0,
+      projects: Object.keys(state.projects).length,
+      ts: Date.now(),
+    });
   }
   if (req.method === 'GET' && p === '/api/state') {
     return send(res, 200, JSON.stringify({ ...state, runtime: runtime.getRuntimeSnapshot() }), {
@@ -357,11 +378,10 @@ const server = http.createServer((req, res) => {
     return sendJSON(res, 200, listBackups());
   }
   if (req.method === 'POST' && p === '/api/backups/run') {
-    try {
-      return sendJSON(res, 200, runBackup());
-    } catch (e) {
-      return sendJSON(res, 500, { error: e.message });
-    }
+    runBackup()
+      .then((result) => sendJSON(res, 200, result))
+      .catch((e) => sendJSON(res, 500, { error: e.message }));
+    return;
   }
   if (req.method === 'GET' && p === '/api/orphans') {
     return sendJSON(res, 200, scanOrphans());
@@ -400,32 +420,65 @@ const server = http.createServer((req, res) => {
 // 启动服务；Electron 主进程也复用它（port 传 0 时由系统分配空闲端口）
 async function start(options = {}) {
   await initState();
-  attachWSS(server);
+  wssInstance = attachWSS(server, { log: logger.child({ scope: 'wss' }) });
   startBackupScheduler();
   startCleanupScheduler();
+
+  // 优雅退出：先断开 WS、停止接受 HTTP 连接，再由 state 层落盘
+  onShutdown(async () => {
+    if (wssInstance) {
+      for (const client of wssInstance.clients) {
+        try { client.terminate(); } catch (_) {}
+      }
+      await new Promise((resolve) => wssInstance.close(() => resolve(undefined)));
+    }
+    const closed = new Promise((resolve) => server.close(() => resolve(undefined)));
+    if (typeof server.closeAllConnections === 'function') server.closeAllConnections();
+    await Promise.race([closed, new Promise((resolve) => setTimeout(resolve, 3000))]);
+  });
+
   const listenPort = options.port != null ? options.port : PORT;
+  const listenHost = options.host || cfg.host;
   const actualPort = await new Promise((resolve, reject) => {
     const onError = (e) => reject(e);
     server.once('error', onError);
-    server.listen(listenPort, '0.0.0.0', () => {
+    server.listen(listenPort, listenHost, () => {
       server.removeListener('error', onError);
-      resolve(server.address().port);
+      const addr = server.address();
+      resolve(addr && typeof addr === 'object' ? addr.port : listenPort);
     });
   });
-  console.log(
-    `计分板服务已启动 v${APP_VERSION}（存储: ${storageKind}，前端: ${REACT_BUILT ? 'React' : '未构建'}）:`,
-  );
+  logger.info('计分板服务已启动', {
+    version: APP_VERSION,
+    storage: storageKind,
+    frontend: REACT_BUILT ? 'React' : '未构建',
+    host: listenHost,
+    port: actualPort,
+  });
   console.log(`  显示端  http://localhost:${actualPort}/display`);
   console.log(`  管理端  http://localhost:${actualPort}/admin`);
   if (!REACT_BUILT) {
-    console.log('  ※ 未检测到 React 构建产物，当前回退到旧版页面；如需 React 版请先执行 npm run build:web');
+    console.log('  ※ 未检测到 React 构建产物，请先执行 npm run build:web');
   }
   return { server, port: actualPort };
 }
 
+process.on('uncaughtException', (err) => {
+  logger.error('未捕获异常', { error: err.message, stack: err.stack });
+  process.exitCode = 1;
+  // 尽量落盘后退出；shutdown 内部有超时保护
+  void require('./state').shutdown(1);
+});
+process.on('unhandledRejection', (reason) => {
+  const err = /** @type {any} */ (reason);
+  logger.error('未处理的 Promise 拒绝', {
+    error: err && err.message ? err.message : String(reason),
+  });
+});
+
 if (require.main === module) {
   start().catch((e) => {
-    console.error('[启动失败]', e.message);
+    logger.error('启动失败', { error: e.message });
     process.exit(1);
   });
 }

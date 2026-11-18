@@ -39,7 +39,11 @@
     "dist:mac": "npm run build:web && electron-builder --mac --publish never",
     "prepublishOnly": "npm run build:web",
     "preelectron": "npm run build:web",
-    "prestart": "npm run build:web"
+    "prestart": "npm run build:web",
+    "gen:contracts": "node scripts/gen-contracts.mjs",
+    "typecheck:server": "tsc -p tsconfig.server.json",
+    "lint": "eslint .",
+    "format": "prettier --write \"server/**/*.js\" \"scripts/**/*.mjs\" \"web/src/**/*.{ts,tsx}\""
   },
   "engines": {
     "node": ">=20.19"
@@ -61,11 +65,17 @@
     "electron-winstaller@5.4.0": true
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@types/ws": "^8.18.2",
     "@vitejs/plugin-react": "^6.3.0",
     "electron": "^45.3.2",
     "electron-builder": "^26.18.0",
+    "eslint": "^10.15.0",
+    "globals": "^17.14.0",
+    "prettier": "^3.10.1",
     "typescript": "^7.0.2",
     "vite": "^8.3.8"
   },

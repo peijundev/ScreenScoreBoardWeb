@@ -1,0 +1,37 @@
+'use strict';
+// 全部后端操作名（前后端契约的单一来源）
+const OPS = Object.freeze({
+  addProject: 'addProject',
+  renameProject: 'renameProject',
+  deleteProject: 'deleteProject',
+  addPerson: 'addPerson',
+  addPeopleBatch: 'addPeopleBatch',
+  renamePerson: 'renamePerson',
+  setBio: 'setBio',
+  removePerson: 'removePerson',
+  movePerson: 'movePerson',
+  addTeam: 'addTeam',
+  renameTeam: 'renameTeam',
+  removeTeam: 'removeTeam',
+  moveTeam: 'moveTeam',
+  assignTeam: 'assignTeam',
+  addScore: 'addScore',
+  setScore: 'setScore',
+  addTeamScore: 'addTeamScore',
+  resetScores: 'resetScores',
+  undoScore: 'undoScore',
+  undoTo: 'undoTo',
+  setAvatar: 'setAvatar',
+  setCardImage: 'setCardImage',
+  countdownStart: 'countdownStart',
+  countdownPause: 'countdownPause',
+  countdownResume: 'countdownResume',
+  countdownReset: 'countdownReset',
+  setLayout: 'setLayout',
+  setMemberLayout: 'setMemberLayout',
+  resetLayout: 'resetLayout',
+  applyTheme: 'applyTheme',
+  updateSettings: 'updateSettings',
+});
+
+module.exports = { OPS };

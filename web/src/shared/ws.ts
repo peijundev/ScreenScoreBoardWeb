@@ -1,10 +1,11 @@
 // WS 客户端：指数退避重连 + 全量状态回调 + op 请求 Promise 化
 // 移植自 public/shared.js 的 connectWS
 import type { RuntimeSnapshot, Snapshot } from './types';
+import type { OpName } from './ops.generated';
 
 export type ConnStatus = 'connecting' | 'connected';
 
-export type SendOp = (op: string, payload?: Record<string, unknown>) => Promise<unknown>;
+export type SendOp = (op: OpName, payload?: Record<string, unknown>) => Promise<unknown>;
 
 export interface Connection {
   sendOp: SendOp;
@@ -87,7 +88,7 @@ export function connectWS(
     };
   }
 
-  function sendOp(op: string, payload?: Record<string, unknown>): Promise<unknown> {
+  function sendOp(op: OpName, payload?: Record<string, unknown>): Promise<unknown> {
     return new Promise((resolve, reject) => {
       if (!ws || ws.readyState !== WebSocket.OPEN) {
         reject(new Error('未连接到服务器'));

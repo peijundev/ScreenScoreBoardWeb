@@ -167,7 +167,7 @@ async function startEmbeddedServer() {
   process.env.DATA_DIR = dataDir;
 
   const { start } = require('../server/index');
-  const result = await start({ port: 0 });
+  const result = await start({ port: 0, host: '127.0.0.1' });
   serverPort = result.port;
 }
 

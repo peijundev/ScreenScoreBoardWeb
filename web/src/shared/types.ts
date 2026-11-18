@@ -32,34 +32,10 @@ export interface Team {
   order?: number;
 }
 
-// Phase 0 只声明常用字段；其余 150+ 项在 Phase 2 由 settings schema 收敛类型
-export type Settings = Record<string, any> & {
-  title: string;
-  theme: 'dark' | 'light';
-  density: 'comfortable' | 'compact';
-  displayStyle: string;
-  columns: number;
-  sortBy: string;
-  sortOrder: string;
-  accent: string;
-  layoutMode: 'auto' | 'free';
-  titleSize: number;
-  titleColor: string;
-  titleFont: string;
-  bgType: 'color' | 'image';
-  bgImage: string | null;
-  bgImageBlur: boolean;
-  bgImageBlurAmount: number;
-  scrimOpacity: number;
-  bgScrimEnabled: boolean;
-  featureBio: boolean;
-  bioFont: string;
-  bioFontCustom: string;
-  bioSize: number;
-  bioColor: string;
-  bioOpacity: number;
-  bioItalic: boolean;
-};
+import type { SettingsFields } from './settings.generated';
+
+// 完整字段由 server/state.js 的 DEFAULT_SETTINGS 生成；动态键通过索引签名访问
+export type Settings = SettingsFields & Record<string, any>;
 
 export interface Project {
   id: string;
