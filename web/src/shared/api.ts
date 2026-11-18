@@ -28,10 +28,18 @@ interface AvatarSource {
   avatar?: string | null;
 }
 
+// 首字头像缓存：大屏每帧会为同一批人员重复调用，避免重复生成/编码 SVG
+const avatarCache = new Map<string, string>();
+const AVATAR_CACHE_LIMIT = 5000;
+
 /** 有上传头像用头像，否则生成姓名首字的彩色 SVG */
 export function avatarURL(entity: AvatarSource | null | undefined, size = 96): string {
   if (entity?.avatar) return '/' + entity.avatar;
   const name = entity?.name || '?';
+  const key = size + '|' + name;
+  const cached = avatarCache.get(key);
+  if (cached) return cached;
+
   const ch = Array.from(name)[0] || '?';
   const color = nameColor(name);
   const svg =
@@ -40,7 +48,10 @@ export function avatarURL(entity: AvatarSource | null | undefined, size = 96): s
     '<text x="50%" y="50%" dy="0.35em" text-anchor="middle" font-size="' +
     Math.round(size * 0.48) +
     '" fill="#fff" font-family="sans-serif">' + escapeXML(ch) + '</text></svg>';
-  return 'data:image/svg+xml,' + encodeURIComponent(svg);
+  const url = 'data:image/svg+xml,' + encodeURIComponent(svg);
+  if (avatarCache.size >= AVATAR_CACHE_LIMIT) avatarCache.clear();
+  avatarCache.set(key, url);
+  return url;
 }
 
 async function upload(file: File, endpoint: string): Promise<string> {

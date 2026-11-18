@@ -13,3 +13,4 @@ public/v2/
 # 日志与系统文件
 *.log
 .DS_Store
+/CLAUDE.md

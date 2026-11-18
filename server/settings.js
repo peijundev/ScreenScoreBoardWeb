@@ -44,6 +44,8 @@ const DEFAULT_SETTINGS = {
   spotlightTheme: 'pop',    // pop | fly | genie | squeeze
   spotlightReturnToOrigin: false, // （兼容）fly 主题开关
   spotlightReturnDuration: 1600,  // fly 主题时长 ms（600–6000）
+  spotlightScrimEnabled: true,    // 突显时压暗背景
+  spotlightScrimOpacity: 0.45,    // 压暗强度 0–1
   scoreEffectDuration: 700, // 特效时长 ms（200–3000）
   scoreEffectColor: '',     // '' = 自动（加分绿/减分红）；或 #rrggbb
   scoreEffectOnlyPositive: false, // 仅加分触发特效
@@ -302,6 +304,12 @@ const SETTINGS_VALIDATORS = {
   spotlightHeight: (v) => intRange(v, 0, 1200, '突显高度须为 0–1200（0=自动）'),
   spotlightReturnToOrigin: (v) => boolStrict(v, '从哪来回哪去开关'),
   spotlightReturnDuration: (v) => intRange(v, 600, 6000, '飞入飞回时长须为 600–6000 ms'),
+  spotlightScrimEnabled: (v) => boolStrict(v, '突显压暗开关'),
+  spotlightScrimOpacity: (v) => {
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0 || n > 1) throw new OpError('突显压暗强度须在 0–1 之间');
+    return Math.round(n * 100) / 100;
+  },
   spotlightTheme: (v) =>
     (['pop', 'fly', 'genie', 'squeeze'].includes(v)
       ? v

@@ -54,7 +54,8 @@ body[data-theme="dark"] {
   --card-img-veil: rgba(10, 12, 16, 0.62);
   --neu-dark: rgba(0, 0, 0, 0.55);
   --neu-light: rgba(255, 255, 255, 0.045);
-  --spot-scrim: rgba(0, 0, 0, 0.5);
+  --spot-scrim-rgb: 0, 0, 0;
+  --spot-scrim-alpha: 0.5;
 }
 body[data-theme="light"] {
   --bg-fallback: #e9ebee;
@@ -66,7 +67,9 @@ body[data-theme="light"] {
   --card-img-veil: rgba(255, 255, 255, 0.66);
   --neu-dark: rgba(163, 177, 198, 0.6);
   --neu-light: rgba(255, 255, 255, 0.95);
-  --spot-scrim: rgba(255, 255, 255, 0.55);
+  /* 浅色主题下聚光遮罩用深色压暗；白色会把整页洗白 */
+  --spot-scrim-rgb: 18, 22, 28;
+  --spot-scrim-alpha: 0.4;
 }
 /* 大屏展示：字号与留白按「远处也能看清」定 */
 body[data-density="comfortable"] {
@@ -1099,7 +1102,7 @@ body[data-score-effect="shake"] .fx { animation: fx-shake var(--fx-duration, 700
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--spot-scrim);
+  background: rgba(var(--spot-scrim-rgb), var(--spot-scrim-alpha));
   pointer-events: none;
   animation: spot-fade var(--spot-duration, 1400ms) ease forwards;
 }
@@ -1201,7 +1204,8 @@ body[data-score-effect="shake"] .fx { animation: fx-shake var(--fx-duration, 700
 .spotlight-return-scrim {
   position: absolute;
   inset: 0;
-  background: var(--spot-scrim);
+  background: rgba(var(--spot-scrim-rgb), var(--spot-scrim-alpha));
+  opacity: 0;
 }
 .spotlight-return-box {
   position: fixed;

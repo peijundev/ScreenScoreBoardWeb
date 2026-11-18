@@ -22,6 +22,8 @@ const projectParam = params.get('project');
 const viewParam = params.get('view');
 const isEdit = params.get('edit') === '1';
 const inPreviewFrame = window.parent !== window;
+// 卡片很多时跳过 FLIP（逐卡读布局会明显拖低帧率）
+const FLIP_MAX_ITEMS = 300;
 
 function itemScore(it: Item): number {
   return it.kind === 'person' && it.person ? it.person.score : it.members.reduce((s, m) => s + m.score, 0);
@@ -30,6 +32,7 @@ function itemScore(it: Item): number {
 export default function App(): JSX.Element {
   const snapshot = useAppStore((s) => s.snapshot);
   const runtime = useAppStore((s) => s.runtime);
+  const connected = useAppStore((s) => s.connected);
   const [projectId] = useState<string | null>(projectParam);
   const project = projectOf(snapshot, projectId);
   const settings = project?.settings;
@@ -42,8 +45,13 @@ export default function App(): JSX.Element {
   const prevRanks = useRef<Record<string, number>>({});
   const prevProject = useRef<string | null>(null);
   const prevRects = useRef(new Map<string, DOMRect>());
+  const prevOrderKey = useRef('');
+  const offsetMs = useMemo(
+    () => (runtime?.serverNow ? runtime.serverNow - Date.now() : 0),
+    [runtime],
+  );
   const [carouselIndex, setCarouselIndex] = useState(0);
-  const [runtimeReceivedAt] = useState(() => Date.now());
+  const lastAppearance = useRef('');
 
   useEffect(() => {
     document.body.classList.toggle('edit-mode', isEdit);
@@ -51,7 +59,12 @@ export default function App(): JSX.Element {
   }, []);
 
   useLayoutEffect(() => {
-    if (settings) applyAppearance(settings);
+    if (!settings) return;
+    // 设置对象未变化时跳过整页 CSS 变量/theme 写入
+    const signature = JSON.stringify(settings);
+    if (signature === lastAppearance.current) return;
+    lastAppearance.current = signature;
+    applyAppearance(settings);
   }, [settings]);
 
   // 本次快照带来的分数变化
@@ -79,6 +92,10 @@ export default function App(): JSX.Element {
   );
   const free = settings?.layoutMode === 'free';
   const editable = isEdit && free;
+  const orderKey = useMemo(
+    () => items.map((it) => it.kind + ':' + (it.person?.id ?? it.team?.id)).join('|'),
+    [items],
+  );
 
   useInteractions({
     boardRef,
@@ -93,13 +110,26 @@ export default function App(): JSX.Element {
   useLayoutEffect(() => {
     const board = boardRef.current;
     if (!board || !settings) return;
+
+    // 只在「按分数排序 + 卡片顺序真的变化」时读布局，避免每次广播都强制 reflow
+    const canFlip = settings.sortAnimation && settings.sortBy === 'score' &&
+      items.length <= FLIP_MAX_ITEMS && !free && !prefersReducedMotion();
+    if (!canFlip) {
+      prevRects.current = new Map();
+      prevOrderKey.current = orderKey;
+      applyAutoAvatarSizes(board, settings);
+      return;
+    }
+    if (prevOrderKey.current === orderKey) return;
+    prevOrderKey.current = orderKey;
+
     const next = new Map<string, DOMRect>();
     board.querySelectorAll<HTMLElement>('.card[data-kind]').forEach((el) => {
       const key = (el.dataset.kind || '') + ':' + (el.dataset.id || '');
       const rect = el.getBoundingClientRect();
       next.set(key, rect);
       const old = prevRects.current.get(key);
-      if (old && settings.sortAnimation && !free && !prefersReducedMotion()) {
+      if (old) {
         const dx = old.left - rect.left;
         const dy = old.top - rect.top;
         if (Math.abs(dx) >= 1 || Math.abs(dy) >= 1) {
@@ -115,7 +145,7 @@ export default function App(): JSX.Element {
     });
     prevRects.current = next;
     applyAutoAvatarSizes(board, settings);
-  });
+  }, [orderKey, settings, free, items.length]);
 
   useEffect(() => {
     function onResize(): void {
@@ -310,8 +340,6 @@ export default function App(): JSX.Element {
     viewParam === 'leaderboard' || (viewParam == null && effectiveView === 'leaderboard' && settings.featureLeaderboard);
   const showWelcome =
     viewParam === 'welcome' || (viewParam == null && effectiveView === 'welcome' && settings.featureWelcome);
-  const connected = useAppStore.getState().connected;
-  const offsetMs = runtime?.serverNow ? runtime.serverNow - runtimeReceivedAt : 0;
 
   return (
     <>

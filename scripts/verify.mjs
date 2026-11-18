@@ -446,14 +446,16 @@ async function main() {
     patch: {
       scoreEffect: 'spotlight', spotlightScope: 'person_team',
       spotlightWidth: 700, spotlightHeight: 420, spotlightTheme: 'fly',
-      spotlightReturnDuration: 2200, customSound: soundUp.path,
+      spotlightReturnDuration: 2200, spotlightScrimEnabled: true, spotlightScrimOpacity: 0.25,
+      customSound: soundUp.path,
     },
   });
   s = await viewer.waitState((st) => P(st).settings.scoreEffect === 'spotlight');
   assert(P(s).settings.customSound === soundUp.path && P(s).settings.spotlightScope === 'person_team' &&
     P(s).settings.spotlightWidth === 700 && P(s).settings.spotlightHeight === 420 &&
-    P(s).settings.spotlightTheme === 'fly' && P(s).settings.spotlightReturnDuration === 2200,
-    '居中突显特效/范围/宽高/主题/飞入飞回时长/自定义音效同步');
+    P(s).settings.spotlightTheme === 'fly' && P(s).settings.spotlightReturnDuration === 2200 &&
+    P(s).settings.spotlightScrimEnabled === true && P(s).settings.spotlightScrimOpacity === 0.25,
+    '居中突显特效/范围/宽高/主题/飞入飞回时长/压暗开关与强度/自定义音效同步');
   await adminOp('updateSettings', { patch: { spotlightTheme: 'genie' } });
   s = await viewer.waitState((st) => P(st).settings.spotlightTheme === 'genie');
   assert(true, '神灯主题可选');
@@ -465,6 +467,12 @@ async function main() {
   });
   await adminOp('updateSettings', { patch: { spotlightReturnDuration: 100 } }).catch((e) => {
     assert(/飞入飞回时长/.test(e.message), '非法飞入飞回时长被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { spotlightScrimOpacity: 1.5 } }).catch((e) => {
+    assert(/压暗强度/.test(e.message), '非法突显压暗强度被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { spotlightScrimEnabled: 'yes' } }).catch((e) => {
+    assert(/压暗开关/.test(e.message), '非法突显压暗开关被拒绝');
   });
   await adminOp('updateSettings', { patch: { scoreEffect: 'highlight', scoreRolling: false } });
   s = await viewer.waitState((st) => P(st).settings.scoreEffect === 'highlight' &&
@@ -955,8 +963,9 @@ async function main() {
   assert(rp.settings.scoreEffect === 'highlight' && rp.settings.customSound === soundUp.path &&
     rp.settings.spotlightScope === 'person_team' && rp.settings.spotlightWidth === 700 &&
     rp.settings.spotlightHeight === 420 && rp.settings.spotlightTheme === 'squeeze' &&
-    rp.settings.spotlightReturnDuration === 2200 && rp.settings.scoreRolling === false,
-    '重启后居中突显/范围/宽高/主题/飞入飞回时长/滚动数字/自定义音效恢复');
+    rp.settings.spotlightReturnDuration === 2200 && rp.settings.spotlightScrimEnabled === true &&
+    rp.settings.spotlightScrimOpacity === 0.25 && rp.settings.scoreRolling === false,
+    '重启后居中突显/范围/宽高/主题/飞入飞回时长/压暗开关与强度/滚动数字/自定义音效恢复');
   assert(rp.settings.countdownDisplayMode === 'fullscreen' && rp.settings.countdownShape === 'rounded-rect' &&
     rp.settings.countdownSize === 600 && rp.settings.countdownHeight === 300 &&
     rp.settings.countdownFontSize === 96 && rp.settings.countdownPosition === 'bottom-right' &&

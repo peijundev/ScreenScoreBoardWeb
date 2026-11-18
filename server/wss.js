@@ -37,6 +37,7 @@ function attachWSS(server, opts = {}) {
   // ---- 合并广播：窗口内的多次变更只序列化/发送一次 ----
   let pending = false;
   let timer = null;
+  let lastMessageBytes = 0;
 
   function flush() {
     if (timer) {
@@ -47,6 +48,7 @@ function attachWSS(server, opts = {}) {
     pending = false;
     if (wss.clients.size === 0) return;
     const msg = stateMessage();
+    lastMessageBytes = msg.length;
     let sent = 0;
     let skipped = 0;
     for (const client of wss.clients) {
@@ -74,7 +76,9 @@ function attachWSS(server, opts = {}) {
     }
     pending = true;
     if (timer) return;
-    timer = setTimeout(flush, cfg.coalesceMs);
+    // 大状态（如 2000 人）一次布局成本高，自动放宽合并窗口，优先流畅度
+    const windowMs = lastMessageBytes > cfg.largeBytes ? cfg.largeCoalesceMs : cfg.coalesceMs;
+    timer = setTimeout(flush, windowMs);
     if (timer.unref) timer.unref();
   }
 

@@ -1,4 +1,4 @@
-import type { CSSProperties, JSX, RefObject } from 'react';
+import { memo, type CSSProperties, type JSX, type RefObject } from 'react';
 import type { Layout, Person, Project, Settings, Team } from '../../shared/types';
 import { avatarURL } from '../../shared/api';
 import {
@@ -48,7 +48,7 @@ function barHTML(score: number, maxAbs: number): JSX.Element {
   );
 }
 
-export default function Board({
+function Board({
   settings,
   items,
   ranks,
@@ -66,7 +66,7 @@ export default function Board({
       {items.map((it, i) => {
         if (it.kind === 'person' && it.person) {
           return (
-            <PersonCard
+            <PersonCardMemo
               key={'p:' + it.person.id}
               person={it.person}
               settings={settings}
@@ -80,7 +80,7 @@ export default function Board({
         }
         if (it.team) {
           return (
-            <TeamCard
+            <TeamCardMemo
               key={'t:' + it.team.id}
               team={it.team}
               members={it.members}
@@ -99,6 +99,9 @@ export default function Board({
     </main>
   );
 }
+
+const BoardMemo = memo(Board);
+export default BoardMemo;
 
 function itemScore(it: Item): number {
   return it.kind === 'person' && it.person ? it.person.score : it.members.reduce((s, m) => s + m.score, 0);
@@ -217,7 +220,7 @@ function TeamCard({
       <div className={'team-members' + (free ? ' free' : '')}>
         {members.length === 0 && <div className="member-empty">暂无成员</div>}
         {members.map((m, i) => (
-          <MemberChip
+          <MemberChipMemo
             key={m.id}
             member={m}
             settings={settings}
@@ -340,3 +343,7 @@ export function WelcomeView({ settings }: { settings: Settings }): JSX.Element {
     </main>
   );
 }
+
+const PersonCardMemo = memo(PersonCard);
+const TeamCardMemo = memo(TeamCard);
+const MemberChipMemo = memo(MemberChip);

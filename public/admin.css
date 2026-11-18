@@ -619,6 +619,7 @@ select:focus { border-color: var(--accent); }
 /* ---- 人员列表 ---- */
 .person-row {
   display: flex;
+  contain: layout paint style;
   align-items: center;
   gap: 8px;
   padding: 6px 6px;
@@ -652,6 +653,7 @@ select:focus { border-color: var(--accent); }
 
 /* ---- 团队列表 ---- */
 .team-block {
+  contain: layout paint style;
   border: 1px solid var(--card-border);
   border-radius: 0;
   padding: 8px 10px;

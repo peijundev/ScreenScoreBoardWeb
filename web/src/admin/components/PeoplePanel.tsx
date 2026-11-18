@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ChangeEvent, type JSX } from 'react';
+import { memo, useMemo, useRef, useState, type ChangeEvent, type JSX } from 'react';
 import type { Person, Project, Team } from '../../shared/types';
 import { avatarURL, uploadAvatar } from '../../shared/api';
 import { projectOp } from '../../shared/store';
@@ -16,6 +16,7 @@ export default function PeoplePanel({ project }: Props): JSX.Element {
   const [batchOpen, setBatchOpen] = useState(false);
   const avatarInput = useRef<HTMLInputElement>(null);
   const settings = project.settings;
+  const presets = useMemo(() => quickPresets(settings), [settings]);
 
   const allPeople = useMemo(
     () => Object.values(project.people).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
@@ -138,13 +139,13 @@ export default function PeoplePanel({ project }: Props): JSX.Element {
         {people.map((p) => (
           <PersonRow
             key={p.id}
-            project={project}
+            projectId={project.id}
             person={p}
             teams={teams}
             index={allPeople.indexOf(p)}
             canUp={allPeople.indexOf(p) > 0}
             canDown={allPeople.indexOf(p) < allPeople.length - 1}
-            presets={quickPresets(settings)}
+            presets={presets}
             quickScore={Boolean(settings.featureQuickScore)}
             avatarEdit={settings.featureAvatarEdit !== false}
           />
@@ -157,7 +158,7 @@ export default function PeoplePanel({ project }: Props): JSX.Element {
 }
 
 interface RowProps {
-  project: Project;
+  projectId: string;
   person: Person;
   teams: Team[];
   index: number;
@@ -168,8 +169,8 @@ interface RowProps {
   avatarEdit: boolean;
 }
 
-function PersonRow({
-  project,
+function PersonRowBase({
+  projectId,
   person,
   teams,
   canUp,
@@ -182,7 +183,7 @@ function PersonRow({
 
   function addScore(n: number): void {
     if (!Number.isFinite(n) || n === 0) return;
-    projectOp(project.id, 'addScore', { personId: person.id, delta: n }).catch((err: Error) =>
+    projectOp(projectId, 'addScore', { personId: person.id, delta: n }).catch((err: Error) =>
       toast(err.message),
     );
   }
@@ -198,7 +199,7 @@ function PersonRow({
     if (name == null) return;
     const value = name.trim();
     if (!value || value === person.name) return;
-    projectOp(project.id, 'renamePerson', { personId: person.id, name: value }).catch((err: Error) =>
+    projectOp(projectId, 'renamePerson', { personId: person.id, name: value }).catch((err: Error) =>
       toast(err.message),
     );
   }
@@ -206,20 +207,20 @@ function PersonRow({
   function editBio(): void {
     const text = window.prompt('简介（最多 60 字，留空清除）', person.bio || '');
     if (text == null) return;
-    projectOp(project.id, 'setBio', { kind: 'person', id: person.id, bio: text }).catch((err: Error) =>
+    projectOp(projectId, 'setBio', { kind: 'person', id: person.id, bio: text }).catch((err: Error) =>
       toast(err.message),
     );
   }
 
   function uploadCardImage(file: File): void {
     uploadAvatar(file)
-      .then((path) => projectOp(project.id, 'setCardImage', { kind: 'person', id: person.id, image: path }))
+      .then((path) => projectOp(projectId, 'setCardImage', { kind: 'person', id: person.id, image: path }))
       .catch((err: Error) => toast(err.message));
   }
 
   function uploadRowAvatar(file: File): void {
     uploadAvatar(file)
-      .then((path) => projectOp(project.id, 'setAvatar', { kind: 'person', id: person.id, avatar: path }))
+      .then((path) => projectOp(projectId, 'setAvatar', { kind: 'person', id: person.id, avatar: path }))
       .catch((err: Error) => toast(err.message));
   }
 
@@ -230,7 +231,7 @@ function PersonRow({
           className="btn small move-up"
           title="上移"
           disabled={!canUp}
-          onClick={() => projectOp(project.id, 'movePerson', { personId: person.id, direction: 'up' })}
+          onClick={() => projectOp(projectId, 'movePerson', { personId: person.id, direction: 'up' })}
         >
           ↑
         </button>
@@ -238,7 +239,7 @@ function PersonRow({
           className="btn small move-down"
           title="下移"
           disabled={!canDown}
-          onClick={() => projectOp(project.id, 'movePerson', { personId: person.id, direction: 'down' })}
+          onClick={() => projectOp(projectId, 'movePerson', { personId: person.id, direction: 'down' })}
         >
           ↓
         </button>
@@ -265,7 +266,7 @@ function PersonRow({
             <button
               className="btn small avatar-clear"
               onClick={() =>
-                projectOp(project.id, 'setAvatar', { kind: 'person', id: person.id, avatar: null }).catch(
+                projectOp(projectId, 'setAvatar', { kind: 'person', id: person.id, avatar: null }).catch(
                   (err: Error) => toast(err.message),
                 )
               }
@@ -332,7 +333,7 @@ function PersonRow({
         className="team-select"
         value={person.teamId ?? ''}
         onChange={(e) =>
-          projectOp(project.id, 'assignTeam', { personId: person.id, teamId: e.target.value || null }).catch(
+          projectOp(projectId, 'assignTeam', { personId: person.id, teamId: e.target.value || null }).catch(
             (err: Error) => toast(err.message),
           )
         }
@@ -363,7 +364,7 @@ function PersonRow({
         <button
           className="btn small card-img-clear"
           onClick={() =>
-            projectOp(project.id, 'setCardImage', { kind: 'person', id: person.id, image: null }).catch(
+            projectOp(projectId, 'setCardImage', { kind: 'person', id: person.id, image: null }).catch(
               (err: Error) => toast(err.message),
             )
           }
@@ -376,7 +377,7 @@ function PersonRow({
         className="btn small danger person-del"
         onClick={() => {
           if (window.confirm('确定删除「' + person.name + '」？')) {
-            projectOp(project.id, 'removePerson', { personId: person.id }).catch((err: Error) =>
+            projectOp(projectId, 'removePerson', { personId: person.id }).catch((err: Error) =>
               toast(err.message),
             );
           }
@@ -387,3 +388,5 @@ function PersonRow({
     </div>
   );
 }
+
+const PersonRow = memo(PersonRowBase);

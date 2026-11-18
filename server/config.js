@@ -24,6 +24,8 @@ function load() {
     allowMultiInstance: bool('ALLOW_MULTI_INSTANCE', false),
     broadcast: {
       coalesceMs: num('BROADCAST_COALESCE_MS', 50),
+      largeCoalesceMs: num('BROADCAST_LARGE_COALESCE_MS', 250),
+      largeBytes: num('BROADCAST_LARGE_BYTES', 150 * 1024),
       maxBufferedBytes: num('WS_MAX_BUFFERED_BYTES', 1024 * 1024),
       maxConnections: num('WS_MAX_CONNECTIONS', 200),
       permessageDeflate: bool('WS_PERMESSAGE_DEFLATE', true),

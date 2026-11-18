@@ -108,6 +108,11 @@ export function applyAppearance(s: Settings): void {
   setVar(root.style, '--rank-size', s.rankSize + 'px');
   setVar(root.style, '--bar-height', s.scoreBarHeight + 'px');
   setVar(root.style, '--scrim-opacity', s.bgScrimEnabled === false ? '0' : String(s.scrimOpacity));
+  const spotDimOn = s.spotlightScrimEnabled !== false;
+  const spotDimRaw = Number(s.spotlightScrimOpacity);
+  const spotDim = spotDimOn ? clamp(Number.isFinite(spotDimRaw) ? spotDimRaw : 0.45, 0, 1) : 0;
+  // 主题变量定义在 body 上，必须同样写在 body 才能覆盖，不能只挂在 html 根节点
+  setVar(body.style, '--spot-scrim-alpha', String(spotDim));
   setVar(root.style, '--score-pos', s.positiveColor);
   setVar(root.style, '--score-neg', s.negativeColor);
   setVar(root.style, '--title-color', s.titleColor || '');
@@ -538,6 +543,8 @@ function spawnSpotlightReturn(els: HTMLElement[], s: Settings, delta?: number): 
   overlay.style.setProperty('--spot-duration', total + 'ms');
   const scrim = document.createElement('div');
   scrim.className = 'spotlight-return-scrim';
+  // 先置 0：append 到 WAAPI 生效之间、以及动画结束 fill 回默认值时都不能闪白罩
+  scrim.style.opacity = '0';
   overlay.appendChild(scrim);
 
   const items = buildSpotlightItems(els, s, delta, 'spotlight-return-box');
@@ -582,6 +589,8 @@ function spawnSpotlightGenie(els: HTMLElement[], s: Settings, delta?: number): v
   overlay.className = 'spotlight-return-overlay';
   const scrim = document.createElement('div');
   scrim.className = 'spotlight-return-scrim';
+  // 先置 0：append 到 WAAPI 生效之间、以及动画结束 fill 回默认值时都不能闪白罩
+  scrim.style.opacity = '0';
   overlay.appendChild(scrim);
 
   const items = buildSpotlightItems(els, s, delta, 'spotlight-return-box genie-box');

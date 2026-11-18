@@ -90,6 +90,8 @@ STORAGE=mysql MYSQL_URL=mysql://user:pass@localhost:3306/scoreboard npm start
 | `LOG_FORMAT` | `text` | `text` 或 `json`（便于日志采集） |
 | `SLOW_OP_MS` | `100` | 慢 op 告警阈值 |
 | `BROADCAST_COALESCE_MS` | `50` | WebSocket 广播合并窗口，`0` 关闭合并 |
+| `BROADCAST_LARGE_COALESCE_MS` | `250` | 大状态（默认 >150KB）使用的合并窗口，优先流畅度 |
+| `BROADCAST_LARGE_BYTES` | `153600` | 判定“大状态”的广播体积阈值 |
 | `WS_MAX_CONNECTIONS` | `200` | 最大 WebSocket 连接数 |
 | `WS_MAX_BUFFERED_BYTES` | `1048576` | 单连接发送积压上限（背压） |
 | `WS_PERMESSAGE_DEFLATE` | `1` | 是否启用 WebSocket 压缩 |

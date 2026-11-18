@@ -90,6 +90,7 @@ export default function DialogShell({
       className="settings-dialog"
       style={{
         display: 'flex',
+        flexDirection: 'column',
         left: rect.left,
         top: rect.top,
         width: rect.width,

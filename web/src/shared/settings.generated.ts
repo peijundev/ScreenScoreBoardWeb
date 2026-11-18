@@ -38,6 +38,8 @@ export interface SettingsFields {
   spotlightTheme: string;
   spotlightReturnToOrigin: boolean;
   spotlightReturnDuration: number;
+  spotlightScrimEnabled: boolean;
+  spotlightScrimOpacity: number;
   scoreEffectDuration: number;
   scoreEffectColor: string;
   scoreEffectOnlyPositive: boolean;
