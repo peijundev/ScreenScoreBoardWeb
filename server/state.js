@@ -475,7 +475,7 @@ const SETTINGS_VALIDATORS = {
   title: (v) => needString(v, '标题', 30),
   displayStyle: (v) =>
     (['lecture', 'ppt', 'seewo', 'kde', 'custom',
-      'guofeng', 'ink', 'modern', 'neon', 'poster'].includes(v)
+      'guofeng', 'ink', 'xianxia', 'modern', 'neon', 'poster'].includes(v)
       ? v
       : (() => { throw new OpError('显示风格非法'); })()),
   columns: (v) => {

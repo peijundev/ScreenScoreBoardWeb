@@ -68,6 +68,8 @@ function hexToRgba(hex, alpha) {
 
 // 分数变化时：特效类 + 浮动增量数字
 function fxAttrs(settings, delta) {
+  // 真·古风主题强制卷轴卡面，记分特效整体禁用
+  if (settings.displayStyle === 'xianxia') return { cls: '', badge: '' };
   if (delta == null || delta === 0 || settings.scoreEffect === 'none') return { cls: '', badge: '' };
   if (settings.scoreEffectOnlyPositive && delta < 0) return { cls: '', badge: '' };
   const color = settings.scoreEffectColor || (delta > 0 ? '#6fbf7b' : '#e06c75');
@@ -447,7 +449,7 @@ function spawnSpotlight(els, settings, delta) {
 // 管理端点「预览突显效果」时，用当前范围/宽高在预览里演示一次
 function previewSpotlight() {
   const settings = currentSettings;
-  if (!settings) return;
+  if (!settings || settings.displayStyle === 'xianxia') return;
   const scope = settings.spotlightScope || 'person';
   const teamCard = board.querySelector('.card[data-kind="team"]');
   const memberEl = board.querySelector('.member[data-person]');
@@ -634,7 +636,7 @@ function applyAdvancedAppearance(settings) {
   const body = document.body;
 
   // 古风/水墨默认使用宋体；用户显式选字体时以用户设置为准
-  const serifStyles = ['guofeng', 'ink'];
+  const serifStyles = ['guofeng', 'ink', 'xianxia'];
   if (settings.fontFamily === 'custom' && settings.fontFamilyCustom) {
     const name = settings.fontFamilyCustom.replace(/["\\]/g, '');
     body.style.fontFamily = '"' + name + '", ' + FONT_STACKS.system;
@@ -1322,7 +1324,7 @@ function render(project) {
 
   // FLIP 重排：grid 布局下记录旧卡片位置，重排后平滑归位
   let flipOld = null;
-  if (settings.sortAnimation && !free && !prefersReducedMotion()) {
+  if (settings.sortAnimation && settings.displayStyle !== 'xianxia' && !free && !prefersReducedMotion()) {
     flipOld = new Map();
     board.querySelectorAll('.card[data-kind]').forEach((el) => {
       flipOld.set(el.dataset.kind + ':' + el.dataset.id, el.getBoundingClientRect());
@@ -1368,8 +1370,8 @@ function render(project) {
     });
   }
 
-  // 名次升降动画
-  if (settings.rankChangeAnimation && ranked && !prefersReducedMotion()) {
+  // 名次升降动画（真·古风主题下禁用）
+  if (settings.rankChangeAnimation && settings.displayStyle !== 'xianxia' && ranked && !prefersReducedMotion()) {
     items.forEach((it, i) => {
       const id = it.kind === 'person' ? it.person.id : it.team.id;
       const rank = ranks[i];
@@ -1387,7 +1389,7 @@ function render(project) {
   // 音效与彩带（一次状态更新只播一次声音）
   const totalDelta = Array.from(deltas.values()).reduce((a, b) => a + b, 0);
   if (totalDelta !== 0) playScoreSound(totalDelta, settings);
-  if (settings.scoreEffect === 'confetti') {
+  if (settings.displayStyle !== 'xianxia' && settings.scoreEffect === 'confetti') {
     const colors = [
       settings.scoreEffectColor || settings.accent,
       '#6fbf7b', '#e06c75', '#e8a33d', '#4f8cff', '#ffffff',
@@ -1402,7 +1404,7 @@ function render(project) {
       if (el) spawnConfetti(el, colors, settings.scoreEffectDuration);
     }
   }
-  if (settings.scoreEffect === 'spotlight') {
+  if (settings.displayStyle !== 'xianxia' && settings.scoreEffect === 'spotlight') {
     const scope = settings.spotlightScope || 'person';
     const changed = Object.values(project.people).filter((p) => {
       const d = deltas.get(p.id);
@@ -1429,7 +1431,7 @@ function render(project) {
       if (els.length) spawnSpotlight(els, settings, deltas.get(p.id));
     }
   }
-  if (settings.scoreEffect === 'highlight') {
+  if (settings.displayStyle !== 'xianxia' && settings.scoreEffect === 'highlight') {
     const changed = Object.values(project.people).filter((p) => {
       const d = deltas.get(p.id);
       return d && !(settings.scoreEffectOnlyPositive && d < 0);
@@ -1445,7 +1447,7 @@ function render(project) {
   }
 
   // 滚动数字：放在所有特效之后，保证突显克隆到的是「新值」而非被滚动改写的旧值
-  if (settings.scoreRolling && !prefersReducedMotion()) {
+  if (settings.scoreRolling && settings.displayStyle !== 'xianxia' && !prefersReducedMotion()) {
     for (const [personId, delta] of deltas) {
       if (!delta) continue;
       const el = board.querySelector('.score-num[data-person-score="' + personId + '"]');

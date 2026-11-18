@@ -135,6 +135,8 @@ async function main() {
   assert(r.status === 400 || r.status === 404, '路径穿越被拒绝');
   r = await fetch(BASE + '/shared.js');
   assert(r.ok && (await r.text()).includes('connectWS'), '静态资源可访问');
+  r = await fetch(BASE + '/img/xianxia/scroll-1.webp');
+  assert(r.ok && /image\/webp/.test(r.headers.get('content-type') || ''), '真·古风卷轴卡面素材可访问');
 
   console.log('头像上传:');
   r = await fetch(BASE + '/api/avatar', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: PNG });
@@ -313,7 +315,7 @@ async function main() {
   await adminOp('updateSettings', { patch: { displayStyle: 'hologram' } }).catch((e) => {
     assert(/显示风格/.test(e.message), '非法显示风格被拒绝');
   });
-  for (const style of ['guofeng', 'ink', 'modern', 'neon', 'poster']) {
+  for (const style of ['guofeng', 'ink', 'xianxia', 'modern', 'neon', 'poster']) {
     await adminOp('updateSettings', { patch: { displayStyle: style } });
     await viewer.waitState((st) => P(st).settings.displayStyle === style);
   }

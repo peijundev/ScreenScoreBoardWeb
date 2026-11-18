@@ -7,6 +7,15 @@
   <link rel="stylesheet" href="/admin.css">
 </head>
 <body data-theme="dark">
+  <script>
+    // 尽早应用保存的管理端浅色/深色偏好，避免刷新时闪一下
+    try {
+      var savedAdminTheme = localStorage.getItem('admin-theme');
+      if (savedAdminTheme === 'light' || savedAdminTheme === 'dark') {
+        document.body.dataset.theme = savedAdminTheme;
+      }
+    } catch (_) {}
+  </script>
   <header class="topbar">
     <h1>管理控制台</h1>
     <select id="project-select" class="project-select" title="切换项目"></select>
@@ -20,6 +29,7 @@
     <span id="conn-dot" class="dot connecting" title="连接状态"></span>
     <!--suppress HtmlUnknownTarget -->
     <a class="open-display" href="/display" target="_blank">打开显示端</a>
+    <button id="theme-toggle" class="btn small" type="button" title="切换浅色 / 深色">主题：深色</button>
   </header>
   <div id="toast" class="toast hidden"></div>
 
@@ -64,6 +74,7 @@
             <option value="kde">KDE 桌面</option>
             <option value="guofeng">古风雅集</option>
             <option value="ink">水墨</option>
+            <option value="xianxia">真·古风</option>
             <option value="modern">现代极简</option>
             <option value="neon">赛博霓虹</option>
             <option value="poster">海报展板</option>
@@ -587,6 +598,7 @@
               <option value="kde">KDE 桌面</option>
               <option value="guofeng">古风雅集</option>
               <option value="ink">水墨</option>
+              <option value="xianxia">真·古风</option>
               <option value="modern">现代极简</option>
               <option value="neon">赛博霓虹</option>
               <option value="poster">海报展板</option>
@@ -688,6 +700,7 @@
               <option value="paper">纸片</option>
             </select>
           </label>
+          <p id="xianxia-card-hint" class="hint" hidden>真·古风主题强制使用内置卷轴卡面，卡片样式、底色、圆角、边框已禁用。</p>
           <label>强调色
             <input id="set-accent" type="color">
           </label>
@@ -904,6 +917,7 @@
               <option value="none">关闭</option>
             </select>
           </label>
+          <p id="xianxia-fx-hint" class="hint" hidden>真·古风主题下记分特效（弹跳/发光/彩带/突显/聚光灯）与排序/名次动画已禁用。</p>
           <label>突显主题
             <select id="set-spotlight-theme">
               <option value="pop">放大缩回</option>

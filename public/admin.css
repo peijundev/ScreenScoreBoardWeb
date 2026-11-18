@@ -13,6 +13,29 @@ body[data-theme="dark"] {
   --accent-text: #171a1c;
   --danger: #da4453;
   --positive: #27ae60;
+  --panel-head: #2a2e32;    /* 面板标题栏 */
+  --subcard: #202326;       /* 卡片内的次级块 */
+  --btn-bg: #2a2e32;        /* 普通按钮 / 标签 */
+  --border-strong: #4b5158;
+}
+body[data-theme="light"] {
+  --bg: #eff0f1;
+  --card: #fcfcfc;
+  --card-border: #bdc3c7;
+  --text: #232629;
+  --text-dim: #6b7375;
+  --input-bg: #ffffff;
+  --hover: #dcdfe3;
+  --row-alt: #f4f5f6;
+  --accent: #1f7bb3;
+  --accent-hover: #2b93d1;
+  --accent-text: #ffffff;
+  --danger: #da4453;
+  --positive: #1e8449;
+  --panel-head: #e5e8ea;
+  --subcard: #f2f3f5;
+  --btn-bg: #e8eaec;
+  --border-strong: #9aa3a8;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -28,8 +51,8 @@ body {
 /* 细方角滚动条 */
 ::-webkit-scrollbar { width: 12px; height: 12px; }
 ::-webkit-scrollbar-track { background: var(--card); }
-::-webkit-scrollbar-thumb { background: #3b4045; border: 2px solid var(--card); }
-::-webkit-scrollbar-thumb:hover { background: #4b5158; }
+::-webkit-scrollbar-thumb { background: var(--card-border); border: 2px solid var(--card); }
+::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
 
 /* ---- 顶部工具条：类 KDE 标题栏 ---- */
 .topbar {
@@ -39,7 +62,7 @@ body {
   gap: 8px;
   padding: 8px 14px;
   background: var(--hover);
-  border-bottom: 1px solid #121517;
+  border-bottom: 1px solid var(--card-border);
 }
 .topbar h1 {
   font-size: 15px;
@@ -111,7 +134,7 @@ body {
 .panel h2 {
   font-size: 13px;
   font-weight: 600;
-  background: #2a2e32;
+  background: var(--panel-head);
   margin: 0 -12px 10px;
   padding: 7px 12px;
   border-bottom: 1px solid var(--card-border);
@@ -129,7 +152,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  background: #2a2e32;
+  background: var(--panel-head);
   margin: 0 -12px 10px;
   padding: 4px 12px;
   border-bottom: 1px solid var(--card-border);
@@ -183,7 +206,7 @@ body {
   gap: 8px 14px;
   padding: 8px 0;
   margin-bottom: 8px;
-  border-bottom: 1px solid #2a2e32;
+  border-bottom: 1px solid var(--card-border);
 }
 .preview-quickbar > label {
   display: flex;
@@ -225,7 +248,7 @@ body {
   min-height: 480px;
   overflow: auto;
   border: 1px solid var(--card-border);
-  background: #121517;
+  background: var(--input-bg);
 }
 .preview-stage {
   flex: 0 0 auto;
@@ -238,7 +261,7 @@ body {
   height: 100%;
   border: 0;
   border-radius: 0;
-  background: #121517;
+  background: var(--input-bg);
   transform-origin: top left;
 }
 
@@ -313,7 +336,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  background: #2a2e32;
+  background: var(--panel-head);
   padding: 8px 12px;
   border-bottom: 1px solid var(--card-border);
   cursor: move;
@@ -333,8 +356,8 @@ body {
   min-height: 0;
 }
 .settings-dialog .set-group {
-  border: 1px solid #2a2e32;
-  background: #202326;
+  border: 1px solid var(--card-border);
+  background: var(--subcard);
   padding: 10px;
   gap: 8px;
 }
@@ -364,7 +387,7 @@ body {
   gap: 8px 14px;
   padding: 8px 0;
   margin-bottom: 8px;
-  border-bottom: 1px solid #2a2e32;
+  border-bottom: 1px solid var(--card-border);
 }
 .preview-countdown > label {
   display: flex;
@@ -444,7 +467,7 @@ body {
   align-items: center;
   gap: 10px;
   padding: 4px 0;
-  border-bottom: 1px solid #2a2e32;
+  border-bottom: 1px solid var(--card-border);
   font-size: 13px;
 }
 .log-row .hint { min-width: 64px; flex: 0 0 auto; }
@@ -469,14 +492,14 @@ select:focus { border-color: var(--accent); }
 
 .btn {
   border: 1px solid var(--card-border);
-  background: #2a2e32;
+  background: var(--btn-bg);
   color: var(--text);
   border-radius: 0;
   padding: 5px 12px;
   font-size: 13px;
   cursor: pointer;
 }
-.btn:hover { background: var(--hover); border-color: #4b5158; }
+.btn:hover { background: var(--hover); border-color: var(--border-strong); }
 .btn:active { background: var(--input-bg); }
 .btn:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
 .btn.primary {
@@ -490,7 +513,7 @@ select:focus { border-color: var(--accent); }
 .btn.danger:hover { border-color: var(--danger); }
 .btn.small { padding: 2px 8px; font-size: 12px; }
 .btn:disabled { opacity: 0.35; cursor: not-allowed; }
-.btn:disabled:hover { background: #2a2e32; border-color: var(--card-border); }
+.btn:disabled:hover { background: var(--btn-bg); border-color: var(--card-border); }
 
 /* ---- 顺序调整 ---- */
 .move-btns { display: inline-flex; flex-direction: column; gap: 2px; }
@@ -504,7 +527,7 @@ select:focus { border-color: var(--accent); }
   flex-wrap: wrap;
   padding: 10px 0;
   margin-bottom: 6px;
-  border-bottom: 1px solid #2a2e32;
+  border-bottom: 1px solid var(--card-border);
 }
 .avatar-preview {
   width: 34px; height: 34px;
@@ -518,7 +541,7 @@ select:focus { border-color: var(--accent); }
   padding: 5px 10px;
   font-size: 12px;
   color: var(--text);
-  background: #2a2e32;
+  background: var(--btn-bg);
   cursor: pointer;
 }
 .file-btn:hover { background: var(--hover); }
@@ -530,7 +553,7 @@ select:focus { border-color: var(--accent); }
   gap: 8px;
   padding: 6px 6px;
   flex-wrap: wrap;
-  border-bottom: 1px solid #2a2e32;
+  border-bottom: 1px solid var(--card-border);
 }
 .person-row:nth-child(even) { background: var(--row-alt); }
 .person-row img {
@@ -563,7 +586,7 @@ select:focus { border-color: var(--accent); }
   border-radius: 0;
   padding: 8px 10px;
   margin-bottom: 8px;
-  background: #202326;
+  background: var(--subcard);
 }
 .team-block .team-top {
   display: flex;
@@ -580,7 +603,7 @@ select:focus { border-color: var(--accent); }
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: #2a2e32;
+  background: var(--btn-bg);
   border: 1px solid var(--card-border);
   border-radius: 0;
   padding: 1px 6px 1px 1px;
@@ -602,7 +625,7 @@ select:focus { border-color: var(--accent); }
   flex-direction: column;
   gap: 8px;
   padding-top: 12px;
-  border-top: 1px solid #2a2e32;
+  border-top: 1px solid var(--card-border);
 }
 .set-group:first-child { padding-top: 4px; border-top: none; }
 .set-group h3 {
@@ -621,7 +644,7 @@ select:focus { border-color: var(--accent); }
   padding: 4px 12px;
   font-size: 12px;
   color: var(--text);
-  background: #2a2e32;
+  background: var(--btn-bg);
   cursor: pointer;
   user-select: none;
 }

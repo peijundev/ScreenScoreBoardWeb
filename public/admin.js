@@ -78,6 +78,31 @@ const conn = connectWS(
   }
 );
 
+// ============ 管理端浅色 / 深色切换 ============
+const themeToggleBtn = document.getElementById('theme-toggle');
+function applyAdminTheme(theme) {
+  const next = theme === 'light' ? 'light' : 'dark';
+  document.body.dataset.theme = next;
+  if (themeToggleBtn) {
+    themeToggleBtn.textContent = '主题：' + (next === 'light' ? '浅色' : '深色');
+    themeToggleBtn.title = '当前为' + (next === 'light' ? '浅色' : '深色') + '，点击切换';
+  }
+}
+applyAdminTheme(document.body.dataset.theme);
+if (themeToggleBtn) {
+  themeToggleBtn.addEventListener('click', () => {
+    const next = document.body.dataset.theme === 'light' ? 'dark' : 'light';
+    applyAdminTheme(next);
+    try { localStorage.setItem('admin-theme', next); } catch (_) {}
+  });
+}
+// 多标签页同步
+window.addEventListener('storage', (e) => {
+  if (e.key === 'admin-theme' && (e.newValue === 'light' || e.newValue === 'dark')) {
+    applyAdminTheme(e.newValue);
+  }
+});
+
 function currentProject() {
   if (!currentState || !currentState.projects) return null;
   const projects = currentState.projects;
@@ -2275,6 +2300,36 @@ function renderSettings(settings) {
   }
   classEls.welcomeFontSizeVal.textContent =
     settings.welcomeFontSize === 0 ? '自动' : settings.welcomeFontSize + ' px';
+
+  // 真·古风主题：卡片强制卷轴卡面，卡片样式与特效整体禁用
+  const xianxia = settings.displayStyle === 'xianxia';
+  if (xianxia) {
+    [settingEls.cardStyle, settingEls.cardBgMode, settingEls.cardBg, settingEls.cardOpacity,
+      settingEls.cardAcrylicBlur, settingEls.cardRadius, settingEls.scoreEffect,
+      settingEls.previewSpotlight, settingEls.fxDuration, settingEls.fxOnlyPositive,
+      settingEls.fxColorEnabled, settingEls.fxColor, adv.cardBorderWidth,
+      adv.cardBorderColorEnabled, adv.cardBorderColor, adv.cardShadow,
+      adv.teamBarWidth, adv.showTeamAccent, adv.teamAccentColorEnabled, adv.teamAccentColor,
+    ].forEach((el) => { if (el) el.disabled = true; });
+  } else {
+    // 解除锁定时恢复各控件按当前设置应有的可用状态
+    [settingEls.cardStyle, settingEls.cardBgMode, settingEls.cardRadius,
+      settingEls.scoreEffect, settingEls.previewSpotlight, settingEls.fxDuration,
+      settingEls.fxOnlyPositive, settingEls.fxColorEnabled, adv.cardBorderWidth,
+      adv.cardBorderColorEnabled, adv.cardShadow, adv.teamBarWidth,
+      adv.showTeamAccent, adv.teamAccentColorEnabled,
+    ].forEach((el) => { if (el) el.disabled = false; });
+    updateCardBgControls();
+    syncAdvColorToggle(adv.cardBorderColorEnabled, adv.cardBorderColor, settings.cardBorderColor, settings.accent);
+    syncAdvColorToggle(adv.teamAccentColorEnabled, adv.teamAccentColor, settings.teamAccentColor, settings.accent);
+    settingEls.fxColor.disabled = !settings.scoreEffectColor;
+  }
+  settingEls.cardStyle.title = xianxia ? '真·古风主题强制使用内置卷轴卡面，卡片样式已禁用' : '';
+  settingEls.scoreEffect.title = xianxia ? '真·古风主题下记分特效已禁用' : '';
+  const cardHint = document.getElementById('xianxia-card-hint');
+  const fxHint = document.getElementById('xianxia-fx-hint');
+  if (cardHint) cardHint.hidden = !xianxia;
+  if (fxHint) fxHint.hidden = !xianxia;
 }
 
 // ============ 总渲染 ============
