@@ -1575,9 +1575,9 @@ classEls.clockSeconds.addEventListener('change', () =>
 classEls.clockDate.addEventListener('change', () =>
   pushSetting('clockShowDate', classEls.clockDate.checked, true));
 classEls.countdownMin.addEventListener('input', () => {
-  const mins = Number(classEls.countdownMin.value);
-  if (Number.isFinite(mins) && mins >= 1 && mins <= 60) {
-    pushSetting('countdownDurationSec', Math.round(mins * 60));
+  const secs = Number(classEls.countdownMin.value);
+  if (Number.isFinite(secs) && secs >= 1 && secs <= 3600) {
+    pushSetting('countdownDurationSec', Math.round(secs));
   }
 });
 classEls.countdownMode.addEventListener('change', () =>
@@ -1647,8 +1647,8 @@ classEls.cdBlur.addEventListener('input', () => {
 updateCountdownBgControls();
 bindAdvColorToggle(classEls.cdTextEnabled, classEls.cdText, 'countdownTextColor');
 classEls.cdStart.addEventListener('click', () => {
-  const mins = Number(classEls.countdownMin.value) || 5;
-  projectOp('countdownStart', { durationSec: Math.round(mins * 60) })
+  const secs = Number(classEls.countdownMin.value) || 300;
+  projectOp('countdownStart', { durationSec: Math.round(secs) })
     .catch((e) => toast(e.message));
 });
 classEls.cdPause.addEventListener('click', () =>
@@ -1660,17 +1660,17 @@ classEls.cdReset.addEventListener('click', () =>
 
 // 预览旁倒计时快捷操作
 classEls.quickCdMin.addEventListener('input', () => {
-  const mins = Number(classEls.quickCdMin.value);
-  if (Number.isFinite(mins) && mins >= 1 && mins <= 60) {
-    pushSetting('countdownDurationSec', Math.round(mins * 60));
+  const secs = Number(classEls.quickCdMin.value);
+  if (Number.isFinite(secs) && secs >= 1 && secs <= 3600) {
+    pushSetting('countdownDurationSec', Math.round(secs));
   }
 });
-const quickCdMins = () => {
-  const mins = Number(classEls.quickCdMin.value);
-  return Number.isFinite(mins) && mins >= 1 && mins <= 60 ? Math.round(mins * 60) : 300;
+const quickCdSecs = () => {
+  const secs = Number(classEls.quickCdMin.value);
+  return Number.isFinite(secs) && secs >= 1 && secs <= 3600 ? Math.round(secs) : 300;
 };
 classEls.quickCdStart.addEventListener('click', () =>
-  projectOp('countdownStart', { durationSec: quickCdMins() }).catch((e) => toast(e.message)));
+  projectOp('countdownStart', { durationSec: quickCdSecs() }).catch((e) => toast(e.message)));
 classEls.quickCdPause.addEventListener('click', () =>
   projectOp('countdownPause', {}).catch((e) => toast(e.message)));
 classEls.quickCdResume.addEventListener('click', () =>
@@ -2016,10 +2016,10 @@ function renderSettings(settings) {
   classEls.clockSeconds.checked = settings.clockShowSeconds;
   classEls.clockDate.checked = settings.clockShowDate;
   if (document.activeElement !== classEls.countdownMin) {
-    classEls.countdownMin.value = String(Math.max(1, Math.round(settings.countdownDurationSec / 60)));
+    classEls.countdownMin.value = String(Math.max(1, Math.round(settings.countdownDurationSec)));
   }
   if (document.activeElement !== classEls.quickCdMin) {
-    classEls.quickCdMin.value = String(Math.max(1, Math.round(settings.countdownDurationSec / 60)));
+    classEls.quickCdMin.value = String(Math.max(1, Math.round(settings.countdownDurationSec)));
   }
   classEls.countdownMode.value = settings.countdownDisplayMode || 'corner';
   classEls.countdownTheme.value = settings.countdownTheme || 'classic';
