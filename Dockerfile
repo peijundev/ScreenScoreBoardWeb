@@ -8,6 +8,17 @@ RUN apt-get update \
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
+# 前端（React v2）构建：产出 public/v2
+FROM node:24-bookworm-slim AS web
+WORKDIR /app
+# 只构建前端，不需要 Electron 二进制
+ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
+COPY package.json package-lock.json ./
+RUN npm ci --omit=optional && npm cache clean --force
+COPY vite.config.mts tsconfig.json ./
+COPY web ./web
+RUN npm run build:web
+
 FROM node:24-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production \
@@ -17,6 +28,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY package.json ./
 COPY server ./server
 COPY public ./public
+COPY --from=web /app/public/v2 ./public/v2
 RUN mkdir -p /data && chown -R node:node /app /data
 USER node
 VOLUME ["/data"]

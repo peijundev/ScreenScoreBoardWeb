@@ -7,6 +7,9 @@ data/
 # Electron 打包产物
 dist/
 
+# React v2 构建产物（由 npm run build:web 生成）
+public/v2/
+
 # 日志与系统文件
 *.log
 .DS_Store

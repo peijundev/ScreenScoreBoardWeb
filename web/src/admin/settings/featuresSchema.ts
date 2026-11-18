@@ -1,0 +1,172 @@
+import type { Field, Group } from './types';
+
+const FEATURES: Array<[string, string]> = [
+  ['featureAvatarEdit', '头像修改'],
+  ['featureSettingsResize', '设置窗口缩放'],
+  ['featureBatchAdd', '批量添加人员'],
+  ['featureSearch', '人员 / 团队搜索'],
+  ['featureQuickScore', '快捷记分按钮'],
+  ['featureTeamScore', '团队整体记分'],
+  ['featureUndo', '撤销上一步记分'],
+  ['featureResetScores', '重置本局分数'],
+  ['featureClock', '时钟'],
+  ['featureCountdown', '倒计时'],
+  ['featureLeaderboard', '排行榜视图'],
+  ['featureRankTies', '并列名次'],
+  ['featureExportImport', '导出 / 导入项目'],
+  ['featureCsvExport', '分数 CSV 导出'],
+  ['featureDataMaintenance', '备份 / 清理工具'],
+];
+
+const featureField = (k: string, label: string): Field => ({ t: 'check', k, label });
+
+/** 功能面板（与旧版 #features-dialog 对齐） */
+export const FEATURE_GROUPS: Group[] = [
+  {
+    title: '功能开关',
+    fields: [
+      ...FEATURES.map(([k, label]) => featureField(k, label)),
+      featureField('featureMarquee', '跑马灯横幅'),
+      featureField('featureWelcome', '欢迎幕布'),
+    ],
+  },
+  {
+    title: '时钟',
+    fields: [
+      {
+        t: 'select',
+        k: 'clockPosition',
+        label: '时钟位置',
+        opts: [['top-left', '左上'], ['top-right', '右上'], ['bottom-left', '左下'], ['bottom-right', '右下']],
+      },
+      { t: 'select', k: 'clockFormat', label: '时钟格式', opts: [['24', '24 小时'], ['12', '12 小时']] },
+      { t: 'check', k: 'clockShowSeconds', label: '显示秒' },
+      { t: 'check', k: 'clockShowDate', label: '显示日期' },
+      { t: 'font', k: 'clockFont', ck: 'clockFontCustom', label: '时钟字体', customLabel: '时钟字体名称' },
+      { t: 'range', k: 'clockFontSize', label: '时钟字号', min: 0, max: 200, step: 2, fmt: 'auto', unit: ' px' },
+    ],
+  },
+  {
+    title: '倒计时',
+    fields: [
+      { t: 'num', k: 'countdownDurationSec', label: '倒计时时长（秒）', min: 1, max: 3600 },
+      {
+        t: 'select',
+        k: 'countdownDisplayMode',
+        label: '倒计时显示模式',
+        opts: [['corner', '角落小窗'], ['center', '居中大窗口'], ['fullscreen', '全屏模式']],
+      },
+      {
+        t: 'select',
+        k: 'countdownTheme',
+        label: '倒计时主题',
+        opts: [['classic', '经典'], ['ink', '水墨（静态画面）'], ['video', '水墨影片（原片）']],
+      },
+      {
+        t: 'select',
+        k: 'countdownShape',
+        label: '窗口形状',
+        opts: [['circle', '圆形'], ['square', '方形'], ['rounded', '圆角方形'], ['rounded-rect', '圆角矩形'], ['rect', '矩形']],
+      },
+      {
+        t: 'select',
+        k: 'countdownPosition',
+        label: '窗口位置',
+        opts: [
+          ['center', '居中'], ['top-left', '左上'], ['top', '上'], ['top-right', '右上'],
+          ['left', '左'], ['right', '右'], ['bottom-left', '左下'], ['bottom', '下'], ['bottom-right', '右下'],
+        ],
+      },
+      { t: 'range', k: 'countdownSize', label: '窗口宽度', min: 200, max: 900, step: 10, fmt: 'num', unit: ' px' },
+      { t: 'range', k: 'countdownHeight', label: '窗口高度', min: 0, max: 900, step: 10, fmt: 'auto', unit: ' px' },
+      { t: 'range', k: 'countdownRadius', label: '窗口圆角', min: 0, max: 120, step: 2, fmt: 'num', unit: ' px' },
+      { t: 'range', k: 'countdownFontSize', label: '倒计时字号', min: 0, max: 300, step: 2, fmt: 'auto', unit: ' px' },
+      { t: 'font', k: 'countdownFont', ck: 'countdownFontCustom', label: '倒计时字体', customLabel: '倒计时字体名称' },
+      { t: 'range', k: 'countdownOpacity', label: '窗口不透明度', min: 0.2, max: 1, step: 0.05, fmt: 'pct', unit: '%' },
+      { t: 'check', k: 'countdownShowProgress', label: '显示进度环' },
+      { t: 'check', k: 'countdownShowBackdrop', label: '显示背景遮罩' },
+      {
+        t: 'select',
+        k: 'countdownBgMode',
+        label: '窗口背景',
+        opts: [['theme', '跟随主题'], ['custom', '自定义颜色'], ['translucent', '半透明'], ['acrylic', '亚克力（半透明 + 虚化）']],
+      },
+      { t: 'color', k: 'countdownBg', label: '窗口底色', disabled: (s) => s.countdownBgMode === 'theme' },
+      {
+        t: 'range',
+        k: 'countdownBlur',
+        label: '亚克力模糊',
+        min: 0,
+        max: 40,
+        step: 1,
+        fmt: 'num',
+        unit: ' px',
+        disabled: (s) => s.countdownBgMode !== 'acrylic',
+      },
+      { t: 'colorToggle', k: 'countdownTextColor', label: '自定义文字颜色' },
+      { t: 'custom', id: 'countdownActions' },
+    ],
+  },
+  {
+    title: '排行榜',
+    fields: [
+      {
+        t: 'select',
+        k: 'leaderboardScope',
+        label: '排行榜范围',
+        opts: [['auto', '自动（团队 + 独立人员）'], ['people', '仅人员'], ['teams', '仅团队']],
+      },
+      { t: 'num', k: 'leaderboardLimit', label: '显示条数（0=全部）', min: 0, max: 200 },
+      { t: 'range', k: 'leaderboardScale', label: '排行榜缩放', min: 0.8, max: 1.6, step: 0.05, fmt: 'x', unit: ' 倍' },
+      { t: 'font', k: 'leaderboardFont', ck: 'leaderboardFontCustom', label: '排行榜字体', customLabel: '排行榜字体名称' },
+      {
+        t: 'select',
+        k: 'rankTieMode',
+        label: '并列名次模式',
+        opts: [['competition', '竞赛式（1,1,3）'], ['dense', '密集式（1,1,2）'], ['none', '顺序编号（1,2,3）']],
+      },
+      { t: 'custom', id: 'toggleLeaderboard' },
+    ],
+  },
+  {
+    title: '记分效率',
+    fields: [{ t: 'custom', id: 'quickPresets' }],
+  },
+  {
+    title: '课堂玩法',
+    fields: [
+      { t: 'check', k: 'featureMarquee', label: '跑马灯横幅' },
+      { t: 'text', k: 'marqueeText', label: '跑马灯文字', max: 200, placeholder: '欢迎来到比赛现场' },
+      { t: 'select', k: 'marqueePosition', label: '跑马灯位置', opts: [['top', '顶部'], ['bottom', '底部']] },
+      {
+        t: 'select',
+        k: 'marqueeEffect',
+        label: '跑马灯特效',
+        opts: [['scroll', '滚动'], ['blink', '闪烁'], ['none', '静止']],
+      },
+      { t: 'range', k: 'marqueeFontSize', label: '跑马灯字号', min: 0, max: 120, step: 2, fmt: 'auto', unit: ' px' },
+      { t: 'font', k: 'marqueeFont', ck: 'marqueeFontCustom', label: '跑马灯字体', customLabel: '跑马灯字体名称' },
+      { t: 'range', k: 'marqueeSpeed', label: '滚动速度', min: 0.5, max: 3, step: 0.1, fmt: 'x', unit: ' 倍' },
+      { t: 'colorToggle', k: 'marqueeColor', label: '跑马灯自定义文字颜色' },
+      { t: 'colorToggle', k: 'marqueeBgColor', label: '跑马灯自定义背景色' },
+      { t: 'check', k: 'bgmEnabled', label: '背景音乐' },
+      { t: 'custom', id: 'bgmFile' },
+      { t: 'range', k: 'bgmVolume', label: '背景音乐音量', min: 0, max: 1, step: 0.05, fmt: 'pct', unit: '%' },
+      { t: 'check', k: 'bgmLoop', label: '循环播放' },
+      { t: 'check', k: 'featureWelcome', label: '欢迎幕布' },
+      { t: 'text', k: 'welcomeText', label: '欢迎文字', max: 200, placeholder: '欢迎光临' },
+      { t: 'font', k: 'welcomeFont', ck: 'welcomeFontCustom', label: '欢迎幕布字体', customLabel: '欢迎幕布字体名称' },
+      { t: 'range', k: 'welcomeFontSize', label: '欢迎文字字号', min: 0, max: 300, step: 4, fmt: 'auto', unit: ' px' },
+      { t: 'colorToggle', k: 'welcomeBgColor', label: '自定义画板底色', fallback: (s) => (s.theme === 'light' ? '#ffffff' : '#12161c') },
+      { t: 'custom', id: 'welcomeImage' },
+    ],
+  },
+  {
+    title: '数据',
+    fields: [{ t: 'custom', id: 'dataTools' }],
+  },
+  {
+    title: '日志',
+    fields: [{ t: 'custom', id: 'logTools' }],
+  },
+];

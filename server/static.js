@@ -23,6 +23,11 @@ const MIME = {
   '.mp3': 'audio/mpeg',
   '.wav': 'audio/wav',
   '.m4a': 'audio/mp4',
+  // React v2 构建产物可能用到的字体/映射文件
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.map': 'application/json; charset=utf-8',
 };
 
 // 从 baseDir 中安全地取文件；越界返回 null

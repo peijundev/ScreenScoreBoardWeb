@@ -6,7 +6,9 @@ const path = require('path');
 const crypto = require('crypto');
 const { serveStatic, send, PUBLIC_DIR } = require('./static');
 const APP_VERSION = require('../package.json').version;
+// 1.4.0 是原技术栈（原生 JS 前端）的最后一个发布版本；此后前端迁移到 React
 const FINAL_TECH_STACK_RELEASE = '1.4.0';
+const REACT_BUILT = fs.existsSync(path.join(PUBLIC_DIR, 'v2', 'admin.html'));
 const {
   state,
   init: initState,
@@ -275,8 +277,17 @@ const server = http.createServer((req, res) => {
     res.writeHead(302, { Location: '/display' });
     return res.end();
   }
-  if (req.method === 'GET' && (p === '/display' || p === '/admin')) {
-    if (serveStatic(res, PUBLIC_DIR, p + '.html')) return;
+  // React 前端入口（构建产物在 public/v2/）；未构建时返回明确提示，不再回退旧版页面
+  if (req.method === 'GET' && (p === '/admin' || p === '/admin-v2' || p === '/display' || p === '/display-v2')) {
+    const isAdmin = p === '/admin' || p === '/admin-v2';
+    if (serveStatic(res, PUBLIC_DIR, isAdmin ? '/v2/admin.html' : '/v2/display.html')) return;
+    res.writeHead(503, { 'Content-Type': 'text/html; charset=utf-8' });
+    return res.end(
+      '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>前端未构建</title></head>' +
+        '<body style="font-family:sans-serif;padding:40px;line-height:1.8">' +
+        '<h1>前端尚未构建</h1><p>请先执行 <code>npm run build:web</code>，或直接运行 <code>npm run start:build</code>。</p>' +
+        '</body></html>',
+    );
   }
   if (req.method === 'GET' && p === '/api/state') {
     return send(res, 200, JSON.stringify({ ...state, runtime: runtime.getRuntimeSnapshot() }), {
@@ -286,7 +297,10 @@ const server = http.createServer((req, res) => {
   if (req.method === 'GET' && p === '/api/version') {
     return send(res, 200, JSON.stringify({
       version: APP_VERSION,
+      // 1.4.0 是原技术栈的最后一个发布版本（历史信息，不代表当前运行的前端）
       finalForTechStack: APP_VERSION === FINAL_TECH_STACK_RELEASE,
+      // 当前前端是否已构建：react = public/v2 已构建；missing = 尚未构建
+      frontend: REACT_BUILT ? 'react' : 'missing',
     }), { 'Content-Type': 'application/json' });
   }
   if (req.method === 'GET' && p === '/api/export') {
@@ -398,12 +412,14 @@ async function start(options = {}) {
       resolve(server.address().port);
     });
   });
-  console.log(`计分板服务已启动 v${APP_VERSION}（存储: ${storageKind}）:`);
-  if (APP_VERSION === FINAL_TECH_STACK_RELEASE) {
-    console.log('  ※ 本版本是原技术栈（Node 原生 http + WebSocket，无构建）的最后一个版本');
-  }
+  console.log(
+    `计分板服务已启动 v${APP_VERSION}（存储: ${storageKind}，前端: ${REACT_BUILT ? 'React' : '未构建'}）:`,
+  );
   console.log(`  显示端  http://localhost:${actualPort}/display`);
   console.log(`  管理端  http://localhost:${actualPort}/admin`);
+  if (!REACT_BUILT) {
+    console.log('  ※ 未检测到 React 构建产物，当前回退到旧版页面；如需 React 版请先执行 npm run build:web');
+  }
   return { server, port: actualPort };
 }
 

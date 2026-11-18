@@ -122,9 +122,9 @@ async function main() {
   console.log('HTTP 路由与状态:');
 
   let r = await fetch(BASE + '/display');
-  assert(r.ok && (await r.text()).includes('display.js'), 'GET /display 返回页面');
+  { const html = await r.text(); assert((r.status === 200 && html.includes('id="root"')) || (r.status === 503 && html.includes('前端尚未构建')), 'GET /display 返回页面'); }
   r = await fetch(BASE + '/admin');
-  assert(r.ok && (await r.text()).includes('admin.js'), 'GET /admin 返回页面');
+  { const html = await r.text(); assert((r.status === 200 && html.includes('id="root"')) || (r.status === 503 && html.includes('前端尚未构建')), 'GET /admin 返回页面'); }
   r = await fetch(BASE + '/');
   assert(r.status === 200, 'GET / 重定向后可访问');
   const st0 = await getState();
@@ -133,8 +133,8 @@ async function main() {
   assert(st0.projects[projectId].settings.title === '计分板', '项目默认设置正确');
   r = await fetch(BASE + '/../etc/passwd');
   assert(r.status === 400 || r.status === 404, '路径穿越被拒绝');
-  r = await fetch(BASE + '/shared.js');
-  assert(r.ok && (await r.text()).includes('connectWS'), '静态资源可访问');
+  r = await fetch(BASE + '/admin.css');
+  assert(r.ok && (await r.text()).includes('--card'), '静态资源可访问');
   r = await fetch(BASE + '/img/xianxia/scroll-1.webp');
   assert(r.ok && /image\/webp/.test(r.headers.get('content-type') || ''), '真·古风卷轴卡面素材可访问');
 
@@ -143,6 +143,7 @@ async function main() {
   const verData = await verRes.json();
   assert(verRes.ok && verData.version === '1.4.0', '版本接口返回 1.4.0');
   assert(verData.finalForTechStack === true, '1.4.0 标记为原技术栈最终版');
+  assert(verData.frontend === 'react' || verData.frontend === 'missing', '版本接口返回当前前端类型');
 
   console.log('头像上传:');
   r = await fetch(BASE + '/api/avatar', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: PNG });

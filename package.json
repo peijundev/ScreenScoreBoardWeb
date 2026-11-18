@@ -27,18 +27,28 @@
   ],
   "scripts": {
     "start": "node server/index.js",
+    "start:build": "npm run build:web && node server/index.js",
+    "dev:web": "vite",
+    "build:web": "vite build",
+    "typecheck": "tsc --noEmit",
     "verify": "node scripts/verify.mjs",
     "electron": "electron electron/main.js",
-    "dist": "electron-builder --publish never",
-    "dist:linux": "electron-builder --linux --publish never",
-    "dist:win": "electron-builder --win --publish never",
-    "dist:mac": "electron-builder --mac --publish never"
+    "dist": "npm run build:web && electron-builder --publish never",
+    "dist:linux": "npm run build:web && electron-builder --linux --publish never",
+    "dist:win": "npm run build:web && electron-builder --win --publish never",
+    "dist:mac": "npm run build:web && electron-builder --mac --publish never",
+    "prepublishOnly": "npm run build:web",
+    "preelectron": "npm run build:web",
+    "prestart": "npm run build:web"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.19"
   },
   "dependencies": {
-    "ws": "^8.18.0"
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "ws": "^8.18.0",
+    "zustand": "^5.1.0"
   },
   "optionalDependencies": {
     "better-sqlite3": "^12.11.1",
@@ -51,8 +61,13 @@
     "electron-winstaller@5.4.0": true
   },
   "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
     "electron": "^45.3.2",
-    "electron-builder": "^26.18.0"
+    "electron-builder": "^26.18.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8"
   },
   "build": {
     "appId": "com.screenscoreboard.app",

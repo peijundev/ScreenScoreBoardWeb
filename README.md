@@ -1,16 +1,11 @@
 # 实时计分板
 
-显示端 + 管理端的实时计分板网页，Node 原生 http + WebSocket技术栈，不用构建。支持多项目（每个项目一个独立积分榜）和可切换的存储后端（JSON / SQLite / PostgreSQL / MySQL）。
+显示端 + 管理端的实时计分板。后端为 Node 原生 http + WebSocket；前端为 React 19 + Vite + TypeScript（源码在 `web/`，构建产物在 `public/v2/`）。支持多项目（每个项目一个独立积分榜）和可切换的存储后端（JSON / SQLite / PostgreSQL / MySQL）。
 
-> ## 版本 1.4.0 — 原技术栈的最后一个版本
+> ## 技术栈说明
 >
-> **本版本（1.4.0）是当前技术栈（Node 原生 http + WebSocket、零构建、原生 DOM 前端）的最终版本。**
->
-> - 1.4.x 只做问题修复，不再新增功能；
-> - 后续版本将迁移到新的技术栈，届时数据格式与使用方式以新版本说明为准，现有数据可通过导出 / 导入迁移；
-> - 仍在使用本技术栈的部署，建议停留在 1.4.x，并在升级前先备份 `data/` 目录。
->
-> 完整变更见 [CHANGELOG.md](CHANGELOG.md)。
+> 1.4.0 是原技术栈（零构建、原生 DOM 前端）的最后一个**发布版本**，发布说明见 [CHANGELOG.md](CHANGELOG.md)。
+> 当前 `master` 已完全迁移到 React 技术栈：前端源码在 `web/`，构建后由 `public/v2/` 提供；后端与 WS 协议不变，`data/` 数据格式完全兼容。
 
 ## 为什么做这个项目？
 
@@ -22,19 +17,36 @@
 
 ```bash
 npm install
-npm start
+npm start          # prestart 会自动构建 React 前端，然后启动服务
 ```
 
 - 显示端（大屏）：http://localhost:3000/display
 - 管理端（控制台）：http://localhost:3000/admin
 
+也可以分开执行：`npm run build:web` 构建前端，`npm run start:build` 一步构建并启动。
+
 局域网内其他设备用本机 IP 访问同一地址即可。端口可用 `PORT=8080 npm start` 修改。
 
-Node 版本要求 20+，项目用 `.nvmrc` 固定为 24。如果切换了 Node 大版本，使用 SQLite 后端前需要重新编译原生模块：
+Node 版本要求 20.19+（Vite 构建要求），项目用 `.nvmrc` 固定为 24。如果切换了 Node 大版本，使用 SQLite 后端前需要重新编译原生模块：
 
 ```bash
 npm rebuild better-sqlite3
 ```
+
+## React 技术栈
+
+1.4.0 之后前端已完全迁移到 React（源码在 `web/`），旧版原生 JS 前端已移除，后端与 WebSocket 协议保持不变。
+
+- 入口：`/admin`、`/display`（`/admin-v2`、`/display-v2` 为等价别名）
+- 未构建 `public/v2/` 时，页面会提示先执行 `npm run build:web`
+- `npm start` 会通过 `prestart` 自动构建前端；也可用 `npm run start:build`
+- 开发：终端 A `npm start`（后端 3000），终端 B `npm run dev:web`，打开 http://localhost:5173/admin.html
+- 构建：`npm run build:web` 产出 `public/v2/`（已被 `.gitignore` 忽略；Electron 打包与 npm 发布会自动构建）
+- 类型检查：`npm run typecheck`
+
+技术基线：React 19 + Vite + TypeScript + Zustand；CSS 与 `body[data-*]` 主题体系沿用旧版。构建前端需要 Node 20.19+ / 22.12+（Vite 要求），推荐直接用 `.nvmrc` 的 24。
+
+**IDE 运行配置**（`.idea/runConfigurations/`）：`构建并启动计分板`（`npm run start:build`，先构建 React 前端再启动服务）、`启动计分板`、`Vite 开发`、`全栈开发（后端 + Vite）`、`构建前端`、`类型检查`、`调试前端（Admin/Display）`、`验证计分板`、`Electron 开发` 与三平台打包。新增 npm script 时同步补充对应运行配置。
 
 ## 多项目
 
@@ -161,7 +173,8 @@ systemd：
 sudo useradd -r -s /usr/sbin/nologin scoreboard
 sudo mkdir -p /opt/screenscoreboard /var/lib/screenscoreboard
 sudo cp -r server public package*.json /opt/screenscoreboard/
-cd /opt/screenscoreboard && sudo npm ci --omit=dev
+# 前端构建需要 devDependencies（Vite）；构建完成后再裁掉
+cd /opt/screenscoreboard && sudo npm ci && sudo npm run build:web && sudo npm prune --omit=dev
 sudo cp deploy/screenscoreboard.service /etc/systemd/system/
 sudo systemctl daemon-reload && sudo systemctl enable --now screenscoreboard
 ```
@@ -231,7 +244,8 @@ server/wss.js     WebSocket：op 分发、全量广播（含 runtime）、心跳
 server/backup.js  自动备份
 server/cleanup.js 孤儿上传文件清理
 server/static.js  静态文件服务（防路径穿越）
-public/           display.* 显示端 / admin.* 管理端 / shared.js 共用
+public/           静态资源（CSS / 图片 / 媒体）；React 构建产物在 public/v2/
+web/              React + TypeScript 前端源码（admin / display）
 scripts/verify.mjs 端到端验证（120+ 断言）
 Dockerfile / docker-compose.yml / deploy/screenscoreboard.service 部署
 ```
