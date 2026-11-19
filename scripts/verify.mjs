@@ -138,7 +138,15 @@ async function main() {
   r = await fetch(BASE + '/admin');
   { const html = await r.text(); assert((r.status === 200 && html.includes('id="root"')) || (r.status === 503 && html.includes('前端尚未构建')), 'GET /admin 返回页面'); }
   r = await fetch(BASE + '/');
-  assert(r.status === 200, 'GET / 重定向后可访问');
+  {
+    const html = await r.text();
+    // CI 不构建前端时，重定向目标会返回 503，这也是合法状态
+    assert(
+      (r.status === 200 && html.includes('id="root"')) ||
+      (r.status === 503 && html.includes('前端尚未构建')),
+      'GET / 重定向后可访问',
+    );
+  }
   const st0 = await getState();
   const projectId = Object.keys(st0.projects || {})[0];
   assert(Boolean(projectId), '默认创建一个项目');
