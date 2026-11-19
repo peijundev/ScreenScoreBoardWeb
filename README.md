@@ -291,8 +291,6 @@ npm run test:theme
 npm run test:all     # 聚合 API / MCP / 主题 / 手机端
 ```
 
-约定：新增/修改面向用户的能力必须提供开关与可调参数，详见 [CLAUDE.md](CLAUDE.md)。
-
 ## 数据
 
 - 默认存储在 `data/state.json`，也可切换到 SQLite / PostgreSQL / MySQL（见上）
@@ -321,3 +319,6 @@ docs/             文档（API / MCP / 手机端 / 安全 / 主题规范）
 scripts/          契约生成与测试：verify / api-v1 / mcp / mobile-ui / theme-*
 Dockerfile / docker-compose.yml / deploy/screenscoreboard.service 部署
 ```
+##
+
+PeijunDev 用♥️开发
