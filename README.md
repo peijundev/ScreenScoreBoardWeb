@@ -2,11 +2,12 @@
 
 显示端 + 管理端的实时计分板。后端为 Node 原生 http + WebSocket；前端为 React 19 + Vite + TypeScript（源码在 `web/`，构建产物在 `public/v2/`）。支持多项目（每个项目一个独立积分榜）和可切换的存储后端（JSON / SQLite / PostgreSQL / MySQL）。
 
-> ## 版本 1.5.0 — React UI 技术栈起点
+> ## 版本 1.5.2 — 完整 API、MCP 与手机管理端
 >
+> - **新增**：REST API v1（92 条端点 + OpenAPI 3.1）、MCP（HTTP / stdio，87 个工具）、手机全功能管理端
 > - **1.4.0 已封存**：原技术栈（零构建、原生 DOM 前端）的最终版本，不再更新，历史说明见 [CHANGELOG.md](CHANGELOG.md)。
 > - **1.5.0 起**：前端为 React 19 + Vite + TypeScript（源码 `web/`，构建产物 `public/v2/`）；后端仍为 Node 原生 http + WebSocket。
-> - `data/` 数据格式与 WS 协议完全兼容，可直接升级；首次运行 `npm start` 会自动构建前端。
+> - `data/` 数据格式、存储后端与 WS 协议与 1.5.0 兼容，可直接升级；首次运行 `npm start` 会自动构建前端。
 
 ## 为什么做这个项目？
 
@@ -267,7 +268,7 @@ npm run dist:win       # NSIS 安装包 + portable
 npm run dist:mac       # dmg + zip（必须在 macOS 上执行）
 ```
 
-产物输出到 `dist/`。WebStorm 里也提供了对应运行配置：**Electron 开发 / 打包 Linux / 打包 Windows / 打包 macOS**。
+产物输出到 `dist/`。WebStorm 里也提供了对应运行配置：**开发 · Electron / 打包 · Linux / 打包 · Windows / 打包 · macOS**。
 
 说明：
 

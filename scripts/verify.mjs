@@ -183,8 +183,8 @@ async function main() {
   console.log('版本信息:');
   const verRes = await fetch(BASE + '/api/version');
   const verData = await verRes.json();
-  assert(verRes.ok && verData.version === '1.5.0', '版本接口返回 1.5.0');
-  assert(verData.finalForTechStack === false, '1.5.0 不再标记为原技术栈最终版');
+  assert(verRes.ok && verData.version === '1.5.2', '版本接口返回 1.5.2');
+  assert(verData.finalForTechStack === false, '1.5.2 不再标记为原技术栈最终版');
   assert(verData.frontend === 'react' || verData.frontend === 'missing', '版本接口返回当前前端类型');
 
   console.log('头像上传:');
