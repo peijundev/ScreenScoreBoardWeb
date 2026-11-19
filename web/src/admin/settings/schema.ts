@@ -361,4 +361,26 @@ export const SETTINGS_GROUPS: Group[] = [
       },
     ],
   },
+  {
+    title: '管理端',
+    tab: 'layout',
+    advanced: true,
+    fields: [
+      {
+        t: 'check',
+        k: 'featureMobileAdmin',
+        label: '启用手机专用布局（关闭后手机也使用桌面布局）',
+      },
+      {
+        t: 'range',
+        k: 'adminTouchTargetSize',
+        label: '最小触控目标',
+        min: 40,
+        max: 64,
+        step: 1,
+        fmt: 'num',
+        unit: ' px',
+      },
+    ],
+  },
 ];

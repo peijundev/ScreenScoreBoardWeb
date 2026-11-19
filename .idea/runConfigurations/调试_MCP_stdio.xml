@@ -1,0 +1,9 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="调试 · MCP stdio" type="NodeJSConfigurationType" nameIsGenerated="false" path-to-js-file="bin/screenscoreboard-mcp.js" working-dir="$PROJECT_DIR$">
+    <node-interpreter value="project" />
+    <envs>
+      <env name="SCOREBOARD_URL" value="http://127.0.0.1:3000" />
+    </envs>
+    <method v="2" />
+  </configuration>
+</component>

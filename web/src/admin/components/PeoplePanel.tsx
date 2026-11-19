@@ -4,6 +4,7 @@ import { avatarURL, uploadAvatar } from '../../shared/api';
 import { projectOp } from '../../shared/store';
 import { quickPresets, scoreClass, toast } from '../../shared/ui';
 import BatchAddDialog from './BatchAddDialog';
+import { confirm, prompt } from './dialogs';
 
 interface Props {
   project: Project;
@@ -85,10 +86,18 @@ export default function PeoplePanel({ project }: Props): JSX.Element {
             className="btn small danger"
             type="button"
             onClick={() => {
-              if (!window.confirm('确定把本局所有人员分数清零？')) return;
-              projectOp(project.id, 'resetScores')
-                .then((res) => toast('已重置 ' + ((res as { count?: number }).count ?? 0) + ' 人'))
-                .catch((err: Error) => toast(err.message));
+              void (async () => {
+                const ok = await confirm({
+                  title: '重置本局分数',
+                  message: '确定把本局所有人员分数清零？',
+                  confirmText: '清零',
+                  danger: true,
+                });
+                if (!ok) return;
+                projectOp(project.id, 'resetScores')
+                  .then((res) => toast('已重置 ' + ((res as { count?: number }).count ?? 0) + ' 人'))
+                  .catch((err: Error) => toast(err.message));
+              })();
             }}
           >
             重置本局分数
@@ -194,8 +203,12 @@ function PersonRowBase({
     return Math.max(-10000, Math.min(10000, n));
   }
 
-  function rename(): void {
-    const name = window.prompt('修改姓名（最多 20 字）', person.name);
+  async function rename(): Promise<void> {
+    const name = await prompt({
+      title: '修改姓名',
+      label: '最多 20 字',
+      defaultValue: person.name,
+    });
     if (name == null) return;
     const value = name.trim();
     if (!value || value === person.name) return;
@@ -204,8 +217,14 @@ function PersonRowBase({
     );
   }
 
-  function editBio(): void {
-    const text = window.prompt('简介（最多 60 字，留空清除）', person.bio || '');
+  async function editBio(): Promise<void> {
+    const text = await prompt({
+      title: '人员简介',
+      label: '最多 60 字，留空清除',
+      defaultValue: person.bio || '',
+      multiline: true,
+      allowEmpty: true,
+    });
     if (text == null) return;
     projectOp(projectId, 'setBio', { kind: 'person', id: person.id, bio: text }).catch((err: Error) =>
       toast(err.message),
@@ -277,14 +296,17 @@ function PersonRowBase({
         </>
       )}
 
-      <span className="p-name editable" title="点击改名" onClick={rename}>
+      <span className="p-name" title={person.name}>
         {person.name}
       </span>
+      <button className="btn small" type="button" title="修改姓名" onClick={() => { void rename(); }}>
+        改名
+      </button>
       <button
         className="btn small bio-btn"
         type="button"
         title={person.bio ? '简介：' + person.bio : '设置简介'}
-        onClick={editBio}
+        onClick={() => { void editBio(); }}
       >
         简介
       </button>
@@ -376,11 +398,18 @@ function PersonRowBase({
       <button
         className="btn small danger person-del"
         onClick={() => {
-          if (window.confirm('确定删除「' + person.name + '」？')) {
+          void (async () => {
+            const ok = await confirm({
+              title: '删除人员',
+              message: '确定删除「' + person.name + '」？',
+              confirmText: '删除',
+              danger: true,
+            });
+            if (!ok) return;
             projectOp(projectId, 'removePerson', { personId: person.id }).catch((err: Error) =>
               toast(err.message),
             );
-          }
+          })();
         }}
       >
         删除

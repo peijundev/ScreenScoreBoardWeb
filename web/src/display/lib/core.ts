@@ -66,6 +66,11 @@ export function applyAppearance(s: Settings): void {
   const root = document.documentElement;
   const body = document.body;
 
+  // featureMobileAdmin / adminTouchTargetSize 只影响管理端布局与触控目标，
+  // 显示端没有对应语义，明确跳过（设置仍走完整校验、契约与持久化链路）。
+  void s.featureMobileAdmin;
+  void s.adminTouchTargetSize;
+
   // 字体
   const serifStyles = ['guofeng', 'ink', 'xianxia'];
   if (s.fontFamily === 'custom' && s.fontFamilyCustom) {

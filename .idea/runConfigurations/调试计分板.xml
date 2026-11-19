@@ -1,9 +1,0 @@
-<component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="调试计分板" type="NodeJSConfigurationType" nameIsGenerated="false" path-to-js-file="server/index.js" working-dir="$PROJECT_DIR$">
-    <node-interpreter value="project" />
-    <envs>
-      <env name="PORT" value="3000" />
-    </envs>
-    <method v="2" />
-  </configuration>
-</component>

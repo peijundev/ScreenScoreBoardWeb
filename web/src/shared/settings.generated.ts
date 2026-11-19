@@ -167,4 +167,6 @@ export interface SettingsFields {
   welcomeFontSize: number;
   welcomeImage: string;
   welcomeBgColor: string;
+  featureMobileAdmin: boolean;
+  adminTouchTargetSize: number;
 }

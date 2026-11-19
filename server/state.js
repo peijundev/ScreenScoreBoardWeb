@@ -9,7 +9,8 @@ const { config } = require('./config');
 const { logger } = require('./logger');
 const { OPS } = require('./ops');
 const {
-  OpError, needString, needAvatar, needBio, needScore, needLayout, intRange,
+  OpError, NotFoundError, FeatureDisabledError,
+  needString, needAvatar, needBio, needScore, needLayout, intRange,
 } = require('./validation');
 const { DEFAULT_SETTINGS, THEME_SETTING_KEYS, SETTINGS_VALIDATORS } = require('./settings');
 const {
@@ -359,17 +360,17 @@ process.on('SIGTERM', () => { void shutdown(0); });
 // ---------- 领域校验辅助 ----------
 function needProject(id) {
   const p = state.projects[id];
-  if (!p) throw new OpError('项目不存在');
+  if (!p) throw new NotFoundError('项目不存在');
   return p;
 }
 function needPerson(project, id) {
   const p = project.people[id];
-  if (!p) throw new OpError('人员不存在');
+  if (!p) throw new NotFoundError('人员不存在');
   return p;
 }
 function needTeam(project, id) {
   const t = project.teams[id];
-  if (!t) throw new OpError('团队不存在');
+  if (!t) throw new NotFoundError('团队不存在');
   return t;
 }
 function needEntity(project, kind, id) {
@@ -378,13 +379,13 @@ function needEntity(project, kind, id) {
   throw new OpError('实体类型非法');
 }
 function requireFeature(project, key) {
-  if (!project.settings[key]) throw new OpError('该功能未开启');
+  if (!project.settings[key]) throw new FeatureDisabledError('该功能未开启');
 }
 
 function needTheme(themeId) {
-  if (typeof themeId !== 'string' || !themeId) throw new OpError('缺少主题 ID');
+  if (typeof themeId !== 'string' || !themeId) throw new NotFoundError('缺少主题 ID');
   const theme = state.themes[themeId];
-  if (!theme) throw new OpError('主题不存在');
+  if (!theme) throw new NotFoundError('主题不存在');
   return theme;
 }
 
@@ -512,13 +513,15 @@ function applyOp(op, payload) {
   switch (op) {
     case OPS.addPerson: {
       const id = genId('p');
+      const teamId = payload.teamId == null || payload.teamId === '' ? null : needTeam(project, payload.teamId).id;
       project.people[id] = {
         id,
         name: needString(payload.name, '姓名', 20),
         avatar: needAvatar(payload.avatar),
         cardImage: needAvatar(payload.cardImage),
+        bio: payload.bio === undefined ? '' : needBio(payload.bio),
         score: 0,
-        teamId: null,
+        teamId,
         layout: null,
         memberLayout: null,
         createdAt: Date.now(),
@@ -574,6 +577,18 @@ function applyOp(op, payload) {
       p.name = needString(payload.name, '姓名', 20);
       return { name: p.name };
     }
+    case OPS.updatePerson: {
+      const p = needPerson(project, payload.personId);
+      if (payload.name !== undefined) p.name = needString(payload.name, '姓名', 20);
+      if (payload.avatar !== undefined) p.avatar = needAvatar(payload.avatar);
+      if (payload.cardImage !== undefined) p.cardImage = needAvatar(payload.cardImage);
+      if (payload.bio !== undefined) p.bio = needBio(payload.bio);
+      if (payload.teamId !== undefined) {
+        if (payload.teamId == null || payload.teamId === '') p.teamId = null;
+        else p.teamId = needTeam(project, payload.teamId).id;
+      }
+      return { personId: p.id };
+    }
     case OPS.setBio: {
       const entity = needEntity(project, payload.kind, payload.id);
       entity.bio = needBio(payload.bio);
@@ -599,6 +614,7 @@ function applyOp(op, payload) {
         name: needString(payload.name, '团队名', 20),
         avatar: needAvatar(payload.avatar),
         cardImage: needAvatar(payload.cardImage),
+        bio: payload.bio === undefined ? '' : needBio(payload.bio),
         layout: null,
         createdAt: Date.now(),
         order: nextOrder(project),
@@ -609,6 +625,14 @@ function applyOp(op, payload) {
       const t = needTeam(project, payload.teamId);
       t.name = needString(payload.name, '团队名', 20);
       return { name: t.name };
+    }
+    case OPS.updateTeam: {
+      const t = needTeam(project, payload.teamId);
+      if (payload.name !== undefined) t.name = needString(payload.name, '团队名', 20);
+      if (payload.avatar !== undefined) t.avatar = needAvatar(payload.avatar);
+      if (payload.cardImage !== undefined) t.cardImage = needAvatar(payload.cardImage);
+      if (payload.bio !== undefined) t.bio = needBio(payload.bio);
+      return { teamId: t.id };
     }
     case OPS.removeTeam: {
       needTeam(project, payload.teamId);
@@ -777,7 +801,10 @@ function applyOp(op, payload) {
     }
     case OPS.draftSave: {
       if (!payload.theme || typeof payload.theme !== 'object') throw new OpError('主题草稿非法');
-      const theme = normalizeDraft(payload.theme, project.id, state.themeDrafts[project.id]);
+      const existing = state.themeDrafts[project.id];
+      const theme = normalizeDraft(payload.theme, project.id, existing);
+      // 草稿也参与乐观并发：每次保存递增 revision（旧 WS 客户端不受影响）
+      theme.meta.revision = ((existing && existing.meta && existing.meta.revision) || 0) + 1;
       state.themeDrafts[project.id] = theme;
       return { theme: themeSummary(theme) };
     }
@@ -946,6 +973,8 @@ module.exports = {
   onShutdown,
   shutdown,
   OpError,
+  NotFoundError,
+  FeatureDisabledError,
   DATA_DIR,
   AVATAR_DIR,
   SOUND_DIR,

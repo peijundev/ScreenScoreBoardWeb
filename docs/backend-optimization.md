@@ -77,7 +77,7 @@
 
 ## Phase 2（可维护性 / 契约）— 已完成核心部分
 
-- ✅ 契约单一来源：`server/ops.js`（31 个 op）+ `server/state.js` 的 `DEFAULT_SETTINGS`（162 键）→ `scripts/gen-contracts.mjs` 生成 `web/src/shared/{settings,ops}.generated.ts`；前端 `SendOp`/`Ctx.op` 使用 `OpName`，设置字段获得完整类型。
+- ✅ 契约单一来源：`server/ops.js`（当前 42 个 op）+ `server/state.js` 的 `DEFAULT_SETTINGS`→ `scripts/gen-contracts.mjs` 生成 `web/src/shared/{settings,ops}.generated.ts`；前端 `SendOp`/`Ctx.op` 使用 `OpName`，设置字段获得完整类型。
 - ✅ `tsconfig.server.json`（`allowJs + checkJs`）覆盖全部 `server/*.js`，`npm run typecheck:server` 零错误（零构建，Electron 路径不变）。
 - ✅ CI 新增 `.github/workflows/ci.yml`：前端/后端 typecheck、生成文件一致性、`npm run verify`；Release 构建增加 `checks` 门禁。
 - ✅ 拆分 `server/state.js`：抽出 `server/validation.js`（通用校验）与 `server/settings.js`（默认值/主题白名单/逐项校验）；`state.js` 从 1,335 行降到约 790 行，导出路径不变。
@@ -97,6 +97,16 @@
 - ✅ 单实例锁：`DATA_DIR/scoreboard.lock`（含 PID 与启动时间），第二个实例明确报错退出；进程已退出的陈旧锁自动清理；`ALLOW_MULTI_INSTANCE=1` 可强制绕过（仅调试）。
 - ✅ SQLite `busy_timeout = 5000`。
 - ⏳ 未做：Postgres advisory lock / MySQL GET_LOCK（跨主机多实例）、版本号 + CAS、Redis/差分订阅协议。
+
+## Phase 5（完整 API / MCP）— 已完成
+
+- ✅ REST v1 `/api/v1`：92 条路由，全部写操作经 `commit()` → `applyOp` → `save()` → `broadcastState()`，禁止直接改 state；旧 `/api/*` 与 `/ws` 保持不变。
+- ✅ 错误分层：`NotFoundError` / `FeatureDisabledError` 继承 `OpError`，精确映射 404/403，同时保持旧 `instanceof OpError` 兼容。
+- ✅ 主题子资源乐观并发：`If-Match` 或 `?revision=`，缺失 428、冲突 409、成功返回新 revision；草稿 revision 自增。
+- ✅ OpenAPI 3.1 由路由表动态生成，避免文档与实现漂移。
+- ✅ MCP：手写 JSON-RPC 2.0（`initialize` / `ping` / `tools/list` / `tools/call` / `resources/*`），HTTP `POST /mcp` 与 stdio 共用路由派生工具；stdio 作为 REST 客户端连接已运行服务，不启动第二实例、不碰单实例锁。
+- ✅ 测试：`scripts/api-v1.test.mjs`（CRUD、revision、422、WS 广播、旧 API 兼容）、`scripts/mcp.test.mjs`（HTTP/stdio 工具表一致、实际调用、resources）、`scripts/mobile-ui.test.mjs`（CDP 390×844）。
+- ⏳ 鉴权/授权/限流/审计/CSP 仍不做，见 `docs/security-notes.md` 的后续清单。
 
 ## 明确不做
 

@@ -275,6 +275,14 @@ body {
   transform-origin: top left;
 }
 
+/* 批量添加等模态对话框的遮罩（桌面） */
+.batch-add-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: rgba(0, 0, 0, 0.45);
+}
+
 /* ---- 排版设置窗口：非模态、可拖动、可拉伸 ---- */
 .settings-dialog {
   position: fixed;
@@ -1019,4 +1027,217 @@ select:focus-visible {
 @media (max-width: 1000px) {
   .widgets-editor { grid-template-columns: 200px minmax(0, 1fr); }
   .widgets-editor > .vector-side:last-child { grid-column: 1 / -1; }
+}
+
+/* ---------- 应用内 prompt / confirm ---------- */
+.app-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+}
+.app-dialog-message { margin: 0; line-height: 1.65; color: var(--text); }
+.app-dialog-input {
+  width: 100%;
+  min-height: var(--touch-target, 44px);
+  padding: 8px 10px;
+  background: var(--input-bg);
+  color: var(--text);
+  border: 1px solid var(--card-border);
+  border-radius: 0;
+  font: inherit;
+  resize: vertical;
+}
+.app-dialog-input:focus { border-color: var(--accent); outline: none; }
+.app-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.app-dialog-actions .btn { min-height: var(--touch-target, 44px); }
+
+/* ---------- 移动端管理端 ---------- */
+@media (max-width: 860px) {
+  .dialog-mobile {
+    position: fixed;
+    inset: 0;
+    left: 0;
+    top: 0;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    max-width: 100vw;
+    max-height: 100dvh;
+    min-width: 0;
+    min-height: 0;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    border: 0;
+    z-index: 1200;
+  }
+  .dialog-mobile .dialog-header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    flex: 0 0 auto;
+  }
+  .dialog-mobile .settings-form {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+
+  .mobile-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 900;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    padding-top: calc(8px + env(safe-area-inset-top));
+    background: var(--hover);
+    border-bottom: 1px solid var(--card-border);
+  }
+  .mobile-topbar .project-select {
+    flex: 1 1 auto;
+    max-width: none;
+    min-height: var(--touch-target, 44px);
+  }
+  .mobile-topbar .btn.small { min-height: var(--touch-target, 44px); }
+  .mobile-topbar .dot { margin: 0 6px; }
+
+  .batch-add-backdrop { display: none; }
+  .mobile-content { padding: 12px; }
+  .mobile-panel { padding: 12px 12px calc(84px + env(safe-area-inset-bottom)); }
+  .mobile-panel.is-hidden { display: none; }
+  .mobile-panel .panel {
+    background: transparent;
+    border: 0;
+    padding: 0;
+  }
+  .mobile-panel .panel h2 {
+    margin: 0 0 8px;
+    background: transparent;
+    border-bottom: 1px solid var(--card-border);
+  }
+  .mobile-panel .preview-frame-wrap { height: 60vh; min-height: 0; }
+  .mobile-panel .preview-panel { grid-column: auto; }
+
+  .mobile-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  .mobile-card h2 {
+    margin: 4px 0;
+    font-size: 13px;
+    color: var(--text-dim);
+    font-weight: 600;
+  }
+  .mobile-wide {
+    width: 100%;
+    min-height: var(--touch-target, 44px);
+    text-align: center;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .mobile-wide.open-display { margin-left: 0; }
+
+  .mobile-tabbar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 950;
+    display: flex;
+    background: var(--card);
+    border-top: 1px solid var(--card-border);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .mobile-tab {
+    flex: 1 1 0;
+    min-height: var(--touch-target, 44px);
+    border: 0;
+    border-right: 1px solid var(--card-border);
+    background: transparent;
+    color: var(--text-dim);
+    font: inherit;
+    font-size: 13px;
+    padding: 8px 4px;
+  }
+  .mobile-tab:last-child { border-right: 0; }
+  .mobile-tab.active { color: var(--accent); background: var(--hover); font-weight: 600; }
+
+  .toast { top: calc(8px + env(safe-area-inset-top)); max-width: 92vw; }
+
+  /* 人员：控件换行、可触控尺寸 */
+  .person-row { gap: 6px; padding: 8px 4px; }
+  .person-row .p-name { min-width: 0; flex: 1 1 100px; word-break: break-word; }
+  .person-row .btn.small,
+  .person-row .file-btn,
+  .person-row select,
+  .team-block .btn.small,
+  .team-block .file-btn,
+  .team-block select { min-height: var(--touch-target, 44px); }
+  .person-row select { max-width: none; flex: 1 1 100%; }
+  .score-ctl { flex: 1 1 100%; }
+  .score-ctl input { width: auto; flex: 1 1 auto; min-height: var(--touch-target, 44px); }
+  .quick-scores { flex: 1 1 100%; }
+  .chip .x {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: var(--touch-target, 44px);
+    min-height: var(--touch-target, 44px);
+    border: 0;
+    background: transparent;
+    font: inherit;
+    color: var(--text-dim);
+  }
+
+  .settings-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; }
+  .settings-tabs button { flex: 0 0 auto; min-height: var(--touch-target, 44px); }
+}
+
+.preview-frame-wrap.pan-mode { cursor: grab; touch-action: none; }
+.preview-frame-wrap.pan-mode:active { cursor: grabbing; }
+.btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+@media (max-width: 860px) {
+  .theme-studio-tabs,
+  .settings-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .theme-studio-tabs button,
+  .settings-tabs button { flex: 0 0 auto; }
+
+  .vector-editor,
+  .widgets-editor,
+  .theme-lib,
+  .theme-meta,
+  .theme-settings-grid { grid-template-columns: 1fr !important; }
+  .vector-side { max-height: 45vh; overflow-y: auto; }
+  .vector-stage-wrap { min-height: 46vh; }
+  .vector-props { max-height: 50vh; overflow-y: auto; }
+  .theme-preview-frame { min-height: 50vh; }
+  .theme-script-code { min-height: 200px; }
+  .vector-layers { max-height: 32vh; overflow-y: auto; }
+
+  .field-row,
+  .set-row,
+  .set-group.advanced .set-group-fields { grid-template-columns: 1fr; }
+
+  .countdown-style,
+  .data-buttons,
+  .feature-grid { grid-template-columns: 1fr; }
 }

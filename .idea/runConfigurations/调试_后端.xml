@@ -1,0 +1,10 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="调试 · 后端" type="NodeJSConfigurationType" nameIsGenerated="false" path-to-js-file="server/index.js" working-dir="$PROJECT_DIR$">
+    <node-interpreter value="project" />
+    <envs>
+      <env name="PORT" value="3000" />
+      <env name="LOG_LEVEL" value="debug" />
+    </envs>
+    <method v="2" />
+  </configuration>
+</component>

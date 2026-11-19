@@ -1,6 +1,26 @@
 'use strict';
 // 通用校验辅助（不依赖具体状态）
-class OpError extends Error {}
+class OpError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'OpError';
+  }
+}
+
+/** 资源不存在（API 层映射为 404，同时保持 instanceof OpError 兼容） */
+class NotFoundError extends OpError {
+  constructor(message) {
+    super(message);
+    this.name = 'NotFoundError';
+  }
+}
+/** 功能开关关闭（API 层映射为 403） */
+class FeatureDisabledError extends OpError {
+  constructor(message) {
+    super(message);
+    this.name = 'FeatureDisabledError';
+  }
+}
 
 function needString(v, field, max = 40) {
   if (typeof v !== 'string' || !v.trim()) throw new OpError(`${field}不能为空`);
@@ -71,6 +91,7 @@ function fontChoice(label) {
 }
 
 module.exports = {
-  OpError, needString, needAvatar, needBio, needScore, needLayout,
+  OpError, NotFoundError, FeatureDisabledError,
+  needString, needAvatar, needBio, needScore, needLayout,
   HEX_COLOR, hexOrEmpty, intRange, boolStrict, fontNameOrEmpty, fontChoice,
 };

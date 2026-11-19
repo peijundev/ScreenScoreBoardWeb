@@ -10,9 +10,7 @@
 
 ## 为什么做这个项目？
 
-学校活动，让做个大屏幕投票计分板，都折腾两天了，既然都做这么多功能了，那就扔Github吃灰把，要是有用呢？
-
-对吧
+学校活动，让做个大屏幕投票计分板，都折腾两天了，既然都做这么多功能了，那就扔Github吃灰吧，正好还能用CI，要是有人真的会去用呢？ 对吧
 
 ## 启动
 
@@ -47,7 +45,15 @@ npm rebuild better-sqlite3
 
 技术基线：React 19 + Vite + TypeScript + Zustand；CSS 与 `body[data-*]` 主题体系沿用旧版。构建前端需要 Node 20.19+ / 22.12+（Vite 要求），推荐直接用 `.nvmrc` 的 24。
 
-**IDE 运行配置**（`.idea/runConfigurations/`）：`构建并启动计分板`（`npm run start:build`，先构建 React 前端再启动服务）、`启动计分板`、`Vite 开发`、`全栈开发（后端 + Vite）`、`构建前端`、`类型检查`、`调试前端（Admin/Display）`、`验证计分板`、`Electron 开发` 与三平台打包。新增 npm script 时同步补充对应运行配置。
+**IDE 运行配置**（`.idea/runConfigurations/`）：按「调试 / 启动 / 开发 / 构建 / 检查 / 测试 / 打包」分组；调试类配置使用 IDE 原生 Node.js / Chrome 调试，可直接下断点，其余为日常启动、构建与测试。
+
+- 后端：`调试 · 后端`（Node.js 配置，直接在 `server/*.js` 下断点）
+- 前端：先启动 `开发 · Vite`，再运行 `调试 · 前端 Admin` 或 `调试 · 前端 Display`（Chrome 调试，`.tsx` 源码断点）
+- 全栈：`调试 · 全栈（后端 + Vite）` 同时拉起后端断点会话与 Vite；浏览器端断点用上面的前端配置附加
+- 测试：`调试 · 测试 API/MCP/手机端` 可直接在测试脚本与业务代码中断点；日常跑全量用 `测试 · 全部`
+- 其他：`调试 · 验证脚本`、`调试 · MCP stdio`、`启动 · 计分板`、`启动 · 构建并启动`、`开发 · Electron`、`构建 · 前端`、`检查 · 类型/Lint`、`测试 · 主题` 与三平台打包
+
+新增 npm script 时同步补充对应运行配置。
 
 ## 多项目
 
@@ -57,6 +63,24 @@ npm rebuild better-sqlite3
 - 显示端：`/display?project=<id>`
 
 访问地址不带 `project` 时自动使用最早创建的项目。至少保留一个项目。
+
+## REST API、MCP 与手机管理端
+
+- **REST API v1**：`/api/v1` 覆盖项目、人员、团队、分数、设置、运行态、主题库与主题子资源、主题草稿、导入导出、上传、备份和低层 `op`。所有写操作都走同一 `applyOp` 入口，并通过 WebSocket 实时同步。机器可读契约：`GET /api/v1/openapi.json`（OpenAPI 3.1）。
+- **MCP**：`POST /mcp`（HTTP）与 `bin/screenscoreboard-mcp.js`（stdio）两种形态，共用同一套工具定义，可直接被 Claude Desktop / Claude Code / 自研 AI 客户端调用。
+- **手机管理端**：管理端在 ≤860px 自动切换为底部标签布局，全部功能（含主题工作室与矢量编辑）可用；对话框全屏、触控目标可调。
+
+```bash
+# REST 冒烟
+curl http://localhost:3000/api/v1/health
+
+# stdio MCP（需先启动服务）
+SCOREBOARD_URL=http://127.0.0.1:3000 node bin/screenscoreboard-mcp.js
+```
+
+文档：[API v1](docs/api-v1.md) · [MCP](docs/mcp.md) · [手机管理端](docs/mobile-admin.md) · [安全说明](docs/security-notes.md)
+
+> **安全提示：** 当前版本没有鉴权，只适合可信局域网或本机。HTTP MCP 等价于开放全部写权限。远程化前请先补齐安全系统，详见 [docs/security-notes.md](docs/security-notes.md)。
 
 ## 存储后端
 
@@ -255,8 +279,18 @@ npm run dist:mac       # dmg + zip（必须在 macOS 上执行）
 ## 验证
 
 ```bash
-npm run verify   # 端到端：HTTP/上传/WS 同步/多项目/SQLite 存储/主题/旧数据迁移，200+ 断言全部通过退出码 0
+npm run verify       # 端到端：HTTP/上传/WS 同步/多项目/SQLite/主题/旧数据迁移，200+ 断言
+npm run typecheck    # 前端 TypeScript
+npm run typecheck:server
+npm run lint
+npm run test:api     # REST v1：CRUD、revision、422、旧 API 兼容
+npm run test:mcp     # HTTP / stdio MCP 工具一致性与实际调用
+npm run test:mobile  # 390×844 手机布局（无 Chromium 自动 skip）
+npm run test:theme
+npm run test:all     # 聚合 API / MCP / 主题 / 手机端
 ```
+
+约定：新增/修改面向用户的能力必须提供开关与可调参数，详见 [CLAUDE.md](CLAUDE.md)。
 
 ## 数据
 
@@ -268,17 +302,21 @@ npm run verify   # 端到端：HTTP/上传/WS 同步/多项目/SQLite 存储/主
 ## 结构
 
 ```
-server/index.js   入口：http 路由、上传、导出/导入/CSV/备份/清理 API、挂载 WS
+server/index.js   入口：http 路由、上传、导出/导入/CSV/备份/清理 API、挂载 REST v1 / MCP / WS
+server/api/       REST v1：路由匹配、响应/错误、资源处理、OpenAPI 生成
+server/mcp/       MCP：JSON-RPC 协议、工具派生、HTTP 与 stdio 传输
 server/state.js   权威状态：多项目、applyOp 校验、防抖串行写盘、导入清洗
 server/runtime.js 运行时态：撤销栈、倒计时、广播快照（仅内存）
 server/storage.js 存储后端：json / sqlite / postgres / mysql
 server/wss.js     WebSocket：op 分发、全量广播（含 runtime）、心跳
+server/security.js 共享 Origin 校验
 server/backup.js  自动备份
 server/cleanup.js 孤儿上传文件清理
 server/static.js  静态文件服务（防路径穿越）
+bin/              CLI 入口（服务 + stdio MCP）
 public/           静态资源（CSS / 图片 / 媒体）；React 构建产物在 public/v2/
 web/              React + TypeScript 前端源码（admin / display）
-docs/             文档（主题规范等）
-scripts/verify.mjs 端到端验证（200+ 断言）
+docs/             文档（API / MCP / 手机端 / 安全 / 主题规范）
+scripts/          契约生成与测试：verify / api-v1 / mcp / mobile-ui / theme-*
 Dockerfile / docker-compose.yml / deploy/screenscoreboard.service 部署
 ```

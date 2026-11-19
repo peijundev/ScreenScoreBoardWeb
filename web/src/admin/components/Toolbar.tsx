@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type JSX } from 'react';
 import type { Project } from '../../shared/types';
 import { useAppStore } from '../../shared/store';
 import { toast } from '../../shared/ui';
+import { confirm, prompt } from './dialogs';
 
 interface Props {
   project: Project | null;
@@ -62,8 +63,12 @@ export default function Toolbar({
     }
   }, [theme]);
 
-  function addProject(): void {
-    const name = window.prompt('新项目名称（每个项目是一个独立积分榜）', '新项目');
+  async function addProject(): Promise<void> {
+    const name = await prompt({
+      title: '新建项目',
+      label: '每个项目是一个独立积分榜',
+      defaultValue: '新项目',
+    });
     if (!name?.trim()) return;
     sendOp('addProject', { name: name.trim() })
       .then((res) => {
@@ -73,18 +78,24 @@ export default function Toolbar({
       .catch((err: Error) => toast(err.message));
   }
 
-  function renameProject(): void {
+  async function renameProject(): Promise<void> {
     if (!project) return;
-    const name = window.prompt('项目名称', project.name);
+    const name = await prompt({ title: '重命名项目', defaultValue: project.name });
     if (!name?.trim() || name.trim() === project.name) return;
     sendOp('renameProject', { projectId: project.id, name: name.trim() }).catch((err: Error) =>
       toast(err.message),
     );
   }
 
-  function deleteProject(): void {
+  async function deleteProject(): Promise<void> {
     if (!project) return;
-    if (!window.confirm('确定删除项目「' + project.name + '」？其中的人员与团队也会一并删除。')) return;
+    const ok = await confirm({
+      title: '删除项目',
+      message: '确定删除项目「' + project.name + '」？其中的人员与团队也会一并删除。',
+      confirmText: '删除',
+      danger: true,
+    });
+    if (!ok) return;
     sendOp('deleteProject', { projectId: project.id }).catch((err: Error) => toast(err.message));
   }
 
@@ -104,13 +115,13 @@ export default function Toolbar({
           </option>
         ))}
       </select>
-      <button className="btn small" type="button" onClick={addProject}>
+      <button className="btn small" type="button" onClick={() => { void addProject(); }}>
         新建项目
       </button>
-      <button className="btn small" type="button" onClick={renameProject} disabled={!project}>
+      <button className="btn small" type="button" onClick={() => { void renameProject(); }} disabled={!project}>
         重命名
       </button>
-      <button className="btn small danger" type="button" onClick={deleteProject} disabled={!project}>
+      <button className="btn small danger" type="button" onClick={() => { void deleteProject(); }} disabled={!project}>
         删除项目
       </button>
       <button className="btn small" type="button" onClick={onOpenSettings} disabled={!project}>

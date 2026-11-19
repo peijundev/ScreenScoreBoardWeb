@@ -9,6 +9,7 @@ import WidgetsTab from './WidgetsTab';
 import { detectFormat, parseThemeText, stringifyTheme, type ThemeTextFormat } from '../codec';
 import { projectOp } from '../../../shared/store';
 import { toast } from '../../../shared/ui';
+import { confirm } from '../../components/dialogs';
 import type { Project, Settings } from '../../../shared/types';
 import type { ThemeSummary, ThemeV2 } from '../../../shared/theme';
 
@@ -295,7 +296,14 @@ export default function ThemeStudioDialog({
   }
 
   async function deleteTheme(): Promise<void> {
-    if (!selected || !window.confirm('确定删除这个主题？引用它的项目会自动解绑。')) return;
+    if (!selected) return;
+    const ok = await confirm({
+      title: '删除主题',
+      message: '确定删除这个主题？引用它的项目会自动解绑。',
+      confirmText: '删除',
+      danger: true,
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       await projectOp(project.id, 'themeDelete', { themeId: selected });

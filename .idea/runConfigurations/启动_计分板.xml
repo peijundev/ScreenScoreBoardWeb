@@ -1,9 +1,9 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="构建前端" type="js.build_tools.npm" nameIsGenerated="false">
+  <configuration default="false" name="启动 · 计分板" type="js.build_tools.npm" nameIsGenerated="false">
     <package-json value="$PROJECT_DIR$/package.json" />
     <command value="run" />
     <scripts>
-      <script value="build:web" />
+      <script value="start" />
     </scripts>
     <node-interpreter value="project" />
     <envs />

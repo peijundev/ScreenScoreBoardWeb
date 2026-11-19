@@ -31,6 +31,8 @@ const {
 } = require('./state');
 const { themeSummary } = require('./theme/schema');
 const { attachWSS, broadcastState } = require('./wss');
+const { handleApiV1 } = require('./api');
+const { handleMcpHttp } = require('./mcp/http');
 const runtime = require('./runtime');
 const { runBackup, listBackups, startBackupScheduler } = require('./backup');
 const { scanOrphans, cleanupOrphans, startCleanupScheduler } = require('./cleanup');
@@ -288,6 +290,16 @@ async function handleCleanup(req, res) {
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
   const p = url.pathname;
+
+  // REST v1：放在所有旧路由之前，避免被前缀匹配吞掉；旧 /api/* 行为不变
+  if (p === '/api/v1' || p.startsWith('/api/v1/')) {
+    void handleApiV1(req, res, url);
+    return;
+  }
+  if (p === '/mcp') {
+    void handleMcpHttp(req, res);
+    return;
+  }
 
   if (req.method === 'GET' && p === '/') {
     return send(res, 302, '', { Location: '/display' });

@@ -3,6 +3,7 @@ import type { Ctx, CustomRenderer } from './types';
 import { uploadAvatar, uploadSound } from '../../shared/api';
 import { useAppStore } from '../../shared/store';
 import { toast } from '../../shared/ui';
+import { confirm } from '../components/dialogs';
 
 function ResetLayout({ op }: Ctx): JSX.Element {
   return (
@@ -11,9 +12,16 @@ function ResetLayout({ op }: Ctx): JSX.Element {
         className="btn small"
         type="button"
         onClick={() => {
-          if (window.confirm('重置所有卡片的自由布局位置？')) {
+          void (async () => {
+            const ok = await confirm({
+              title: '重置卡片位置',
+              message: '重置所有卡片的自由布局位置？',
+              confirmText: '重置',
+              danger: true,
+            });
+            if (!ok) return;
             op('resetLayout').catch((err: Error) => toast(err.message));
-          }
+          })();
         }}
       >
         重置卡片位置
@@ -425,7 +433,13 @@ function DataTools(ctx: Ctx): JSX.Element {
           className="btn small danger"
           type="button"
           onClick={async () => {
-            if (!window.confirm('删除超过宽限期且未被引用的上传文件？')) return;
+            const ok = await confirm({
+              title: '清理孤儿文件',
+              message: '删除超过宽限期且未被引用的上传文件？',
+              confirmText: '清理',
+              danger: true,
+            });
+            if (!ok) return;
             try {
               const res = await fetch('/api/orphans/cleanup', {
                 method: 'POST',

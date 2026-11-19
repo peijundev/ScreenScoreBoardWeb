@@ -1,5 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="打包 macOS" type="js.build_tools.npm" nameIsGenerated="false">
+  <configuration default="false" name="打包 · macOS" type="js.build_tools.npm" nameIsGenerated="false">
     <package-json value="$PROJECT_DIR$/package.json" />
     <command value="run" />
     <scripts>

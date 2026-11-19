@@ -4,6 +4,20 @@
 
 ## 未发布
 
+### 新增
+
+- **REST API v1（`/api/v1`）**：92 条端点覆盖项目、人员、团队、分数、设置、运行态、主题库、主题子资源、主题草稿、导入导出、上传、备份与低层 `op`；全部写操作经 `applyOp` 落库并广播 WebSocket；动态生成 OpenAPI 3.1（`GET /api/v1/openapi.json`）
+- **MCP**：`POST /mcp`（HTTP）与 `bin/screenscoreboard-mcp.js`（stdio）两种传输，共用 87 个由路由表派生的工具与 5 个只读 resource；协议版本 `2025-06-18`
+- **手机管理端**：≤860px 自动切换底部标签布局（预览 / 人员 / 团队 / 主题 / 更多），保留全部功能；对话框全屏 + 安全区，应用内 `prompt/confirm`，触控目标可调，预览平移模式与矢量约束开关不再依赖键鼠
+- **新增设置**：`featureMobileAdmin`（默认开，回滚开关）、`adminTouchTargetSize`（40–64，默认 44）
+- **新增 op**：`updatePerson`、`updateTeam`
+- 文档：[docs/api-v1.md](docs/api-v1.md)、[docs/mcp.md](docs/mcp.md)、[docs/mobile-admin.md](docs/mobile-admin.md)、[docs/security-notes.md](docs/security-notes.md)
+- 测试脚本：`test:api`、`test:mcp`、`test:mobile`、`test:all`
+
+### 安全
+
+- 本期不实现鉴权，`/api/v1` 与 `/mcp` 仅适合可信局域网；REST 入口预留 `authorize()` 钩子，远程化时再补 Token、授权、限流、CSP 与审计
+
 ### 恢复 / 默认
 
 - 恢复内置显示风格「真·古风」（`xianxia`）及四色卷轴卡面素材；旧项目和旧导出文件中的该风格不再回落

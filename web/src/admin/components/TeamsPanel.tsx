@@ -3,6 +3,7 @@ import type { Project, Team } from '../../shared/types';
 import { avatarURL, uploadAvatar } from '../../shared/api';
 import { projectOp } from '../../shared/store';
 import { quickPresets, toast } from '../../shared/ui';
+import { confirm, prompt } from './dialogs';
 
 export default function TeamsPanel({ project }: { project: Project }): JSX.Element {
   const [query, setQuery] = useState('');
@@ -143,8 +144,12 @@ function TeamBlock({
     );
   }
 
-  function rename(): void {
-    const name = window.prompt('修改团队名（最多 20 字）', team.name);
+  async function rename(): Promise<void> {
+    const name = await prompt({
+      title: '修改团队名',
+      label: '最多 20 字',
+      defaultValue: team.name,
+    });
     if (name == null) return;
     const value = name.trim();
     if (!value || value === team.name) return;
@@ -153,8 +158,14 @@ function TeamBlock({
     );
   }
 
-  function editBio(): void {
-    const text = window.prompt('团队简介（最多 60 字，留空清除）', team.bio || '');
+  async function editBio(): Promise<void> {
+    const text = await prompt({
+      title: '团队简介',
+      label: '最多 60 字，留空清除',
+      defaultValue: team.bio || '',
+      multiline: true,
+      allowEmpty: true,
+    });
     if (text == null) return;
     projectOp(project.id, 'setBio', { kind: 'team', id: team.id, bio: text }).catch((err: Error) =>
       toast(err.message),
@@ -227,14 +238,17 @@ function TeamBlock({
           </>
         )}
 
-        <span className="t-name editable" title="点击改名" onClick={rename}>
+        <span className="t-name" title={team.name}>
           {team.name}
         </span>
+        <button className="btn small" type="button" title="修改团队名" onClick={() => { void rename(); }}>
+          改名
+        </button>
         <button
           className="btn small bio-btn"
           type="button"
           title={team.bio ? '简介：' + team.bio : '设置简介'}
-          onClick={editBio}
+          onClick={() => { void editBio(); }}
         >
           简介
         </button>
@@ -286,11 +300,18 @@ function TeamBlock({
         <button
           className="btn small danger team-del"
           onClick={() => {
-            if (window.confirm('确定删除团队「' + team.name + '」？成员会被移出但不会删除。')) {
+            void (async () => {
+              const ok = await confirm({
+                title: '删除团队',
+                message: '确定删除团队「' + team.name + '」？成员会被移出但不会删除。',
+                confirmText: '删除',
+                danger: true,
+              });
+              if (!ok) return;
               projectOp(project.id, 'removeTeam', { teamId: team.id }).catch((err: Error) =>
                 toast(err.message),
               );
-            }
+            })();
           }}
         >
           删除团队
@@ -307,8 +328,9 @@ function TeamBlock({
           <span className="chip" key={m.id}>
             <img src={avatarURL(m, 24)} alt="" />
             {m.name}
-            <span
+            <button
               className="x"
+              type="button"
               data-person={m.id}
               title="移出团队"
               onClick={() =>
@@ -318,7 +340,7 @@ function TeamBlock({
               }
             >
               ×
-            </span>
+            </button>
           </span>
         ))}
       </div>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type JSX, type PointerEvent as ReactPointerEvent } from 'react';
 import type { ThemeLayer, ThemeNode, ThemePoint, ThemeV2 } from '../../../shared/theme';
 import { ThemeNodeShape } from '../../../shared/theme-render';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 
 type Tool = 'select' | 'pen' | 'rect' | 'ellipse' | 'line' | 'text';
 type ShapeTool = 'rect' | 'ellipse' | 'line' | 'text';
@@ -81,6 +82,9 @@ export default function VectorTab({
   const [pointIndex, setPointIndex] = useState<number | null>(null);
   const [zoom, setZoom] = useState(1);
   const [showGrid, setShowGrid] = useState(true);
+  const [constrain, setConstrain] = useState(false);
+  const mobile = useMediaQuery('(max-width: 860px)');
+  const handleSize = mobile ? HANDLE * 1.8 : HANDLE;
   const [undo, setUndo] = useState<ThemeV2[]>([]);
   const [redo, setRedo] = useState<ThemeV2[]>([]);
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -456,7 +460,7 @@ export default function VectorTab({
         mode: 'create', tool: tool as ShapeTool, start: pt, current: pt,
         startClient: { x: e.clientX, y: e.clientY },
         currentClient: { x: e.clientX, y: e.clientY },
-        shift: e.shiftKey,
+        shift: e.shiftKey || constrain,
       };
       createRef.current = create;
       setDrag(create);
@@ -541,7 +545,7 @@ export default function VectorTab({
         ...drag,
         current: pt,
         currentClient: { x: e.clientX, y: e.clientY },
-        shift: e.shiftKey,
+        shift: e.shiftKey || constrain,
       };
       createRef.current = next;
       setDrag(next);
@@ -690,6 +694,14 @@ export default function VectorTab({
           <button className="btn small" type="button" onClick={() => setShowGrid((v) => !v)}>
             {showGrid ? '隐藏网格' : '显示网格'}
           </button>
+          <button
+            className={'btn small' + (constrain ? ' active' : '')}
+            type="button"
+            title="绘制时约束正方形/正圆/45° 线段（桌面也可按住 Shift）"
+            onClick={() => setConstrain((value) => !value)}
+          >
+            约束
+          </button>
         </div>
         <div className="vector-toolbar">
           <button className="btn small" type="button" onClick={() => setZoom((z) => Math.max(0.25, z - 0.25))}>−</button>
@@ -830,17 +842,17 @@ export default function VectorTab({
                 <rect x={b.x} y={b.y} width={b.w} height={b.h} fill="none" stroke="#4ea1ff" strokeWidth={2} strokeDasharray="8 5" pointerEvents="none" />
                 {([['nw', b.x, b.y], ['ne', b.x + b.w, b.y], ['sw', b.x, b.y + b.h], ['se', b.x + b.w, b.y + b.h]] as const).map(([corner, x, y]) => (
                   <rect
-                    key={corner} x={x - HANDLE / 2} y={y - HANDLE / 2} width={HANDLE} height={HANDLE}
+                    key={corner} x={x - handleSize / 2} y={y - handleSize / 2} width={handleSize} height={handleSize}
                     fill="#ffffff" stroke="#4ea1ff" strokeWidth={2} style={{ cursor: 'nwse-resize' }}
                     onPointerDown={(e) => startResize(e, selectedLayer.id, selectedNode, corner)}
                   />
                 ))}
                 <circle
-                  cx={b.x + b.w / 2} cy={b.y - 28} r={HANDLE / 2 + 2}
+                  cx={b.x + b.w / 2} cy={b.y - handleSize - 18} r={handleSize / 2 + 2}
                   fill="#4ea1ff" stroke="#ffffff" strokeWidth={2} style={{ cursor: 'grab' }}
                   onPointerDown={(e) => startRotate(e, selectedLayer.id, selectedNode)}
                 />
-                <line x1={b.x + b.w / 2} y1={b.y - 24} x2={b.x + b.w / 2} y2={b.y} stroke="#4ea1ff" strokeWidth={2} pointerEvents="none" />
+                <line x1={b.x + b.w / 2} y1={b.y - handleSize - 14} x2={b.x + b.w / 2} y2={b.y} stroke="#4ea1ff" strokeWidth={2} pointerEvents="none" />
               </g>
             )}
             {pen && penHover && (() => {
@@ -867,13 +879,13 @@ export default function VectorTab({
                         <>
                           <line x1={ax} y1={ay} x2={selectedNode.x + point.x + point.in.x} y2={selectedNode.y + point.y + point.in.y} stroke="#ffcc66" strokeWidth={2} pointerEvents="none" />
                           <line x1={ax} y1={ay} x2={selectedNode.x + point.x + point.out.x} y2={selectedNode.y + point.y + point.out.y} stroke="#ffcc66" strokeWidth={2} pointerEvents="none" />
-                          <circle cx={selectedNode.x + point.x + point.in.x} cy={selectedNode.y + point.y + point.in.y} r={5} fill="#ffcc66" stroke="#ffffff" strokeWidth={1}
+                          <circle cx={selectedNode.x + point.x + point.in.x} cy={selectedNode.y + point.y + point.in.y} r={mobile ? 9 : 5} fill="#ffcc66" stroke="#ffffff" strokeWidth={1}
                             onPointerDown={(e) => startHandleDrag(e, selectedLayer.id, selectedNode, index, 'in')} />
-                          <circle cx={selectedNode.x + point.x + point.out.x} cy={selectedNode.y + point.y + point.out.y} r={5} fill="#ffcc66" stroke="#ffffff" strokeWidth={1}
+                          <circle cx={selectedNode.x + point.x + point.out.x} cy={selectedNode.y + point.y + point.out.y} r={mobile ? 9 : 5} fill="#ffcc66" stroke="#ffffff" strokeWidth={1}
                             onPointerDown={(e) => startHandleDrag(e, selectedLayer.id, selectedNode, index, 'out')} />
                         </>
                       )}
-                      <circle cx={ax} cy={ay} r={7} fill={pointIndex === index ? '#ffcc66' : '#ffffff'} stroke="#4ea1ff" strokeWidth={2}
+                      <circle cx={ax} cy={ay} r={mobile ? 11 : 7} fill={pointIndex === index ? '#ffcc66' : '#ffffff'} stroke="#4ea1ff" strokeWidth={2}
                         style={{ cursor: 'move' }}
                         onPointerDown={(e) => startPointDrag(e, selectedLayer.id, selectedNode, index)} />
                     </g>

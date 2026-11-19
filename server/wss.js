@@ -8,6 +8,7 @@ const { logger } = require('./logger');
 
 const MAX_MSG = 64 * 1024;
 let broadcastImpl = null;
+let activeWss = null;
 
 function attachWSS(server, opts = {}) {
   const log = opts.log || logger.child({ scope: 'wss' });
@@ -173,6 +174,7 @@ function attachWSS(server, opts = {}) {
   });
   wss.on('error', (e) => log.error('服务端错误', { error: e.message }));
 
+  activeWss = wss;
   return wss;
 }
 
@@ -180,4 +182,8 @@ function broadcastState() {
   if (broadcastImpl) broadcastImpl();
 }
 
-module.exports = { attachWSS, broadcastState };
+function clientCount() {
+  return activeWss ? activeWss.clients.size : 0;
+}
+
+module.exports = { attachWSS, broadcastState, clientCount };

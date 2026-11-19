@@ -1,9 +1,9 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Vite 开发" type="js.build_tools.npm" nameIsGenerated="false">
+  <configuration default="false" name="测试 · 全部" type="js.build_tools.npm" nameIsGenerated="false">
     <package-json value="$PROJECT_DIR$/package.json" />
     <command value="run" />
     <scripts>
-      <script value="dev:web" />
+      <script value="test:all" />
     </scripts>
     <node-interpreter value="project" />
     <envs />

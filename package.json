@@ -17,7 +17,8 @@
   ],
   "main": "server/index.js",
   "bin": {
-    "screenscoreboard": "./bin/screenscoreboard.js"
+    "screenscoreboard": "./bin/screenscoreboard.js",
+    "screenscoreboard-mcp": "./bin/screenscoreboard-mcp.js"
   },
   "files": [
     "server/",
@@ -44,7 +45,12 @@
     "typecheck:server": "tsc -p tsconfig.server.json",
     "lint": "eslint .",
     "format": "prettier --write \"server/**/*.js\" \"scripts/**/*.mjs\" \"web/src/**/*.{ts,tsx}\"",
-    "test:theme": "node --test scripts/theme-schema.test.mjs scripts/theme-script.test.mjs"
+    "test:theme": "node --test scripts/theme-schema.test.mjs scripts/theme-script.test.mjs",
+    "test:api": "node --test scripts/api-v1.test.mjs",
+    "test:mcp": "node --test scripts/mcp.test.mjs",
+    "test:mobile": "node --test scripts/mobile-ui.test.mjs",
+    "mcp:stdio": "node bin/screenscoreboard-mcp.js",
+    "test:all": "node --test scripts/theme-schema.test.mjs scripts/theme-script.test.mjs scripts/api-v1.test.mjs scripts/mcp.test.mjs scripts/mobile-ui.test.mjs"
   },
   "engines": {
     "node": ">=20.19"

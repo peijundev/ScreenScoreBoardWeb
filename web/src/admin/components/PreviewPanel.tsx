@@ -32,6 +32,7 @@ export default function PreviewPanel({ project }: { project: Project }): JSX.Ele
   const [customW, setCustomW] = useState(() => readNumber('previewCustomW', 1280));
   const [customH, setCustomH] = useState(() => readNumber('previewCustomH', 720));
   const [fit, setFit] = useState(1);
+  const [panMode, setPanMode] = useState(false);
   const pan = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
 
   const src = useMemo(
@@ -144,16 +145,24 @@ export default function PreviewPanel({ project }: { project: Project }): JSX.Ele
           <button className="btn small" type="button" onClick={() => setZoom(1)}>
             重置
           </button>
+          <button
+            className={'btn small' + (panMode ? ' active' : '')}
+            type="button"
+            title="开启后可直接拖动预览画面（触屏可用）"
+            onClick={() => setPanMode((value) => !value)}
+          >
+            平移
+          </button>
         </div>
       </div>
 
       <QuickBar project={project} edit={edit} onEditChange={setEdit} />
 
       <div
-        className="preview-frame-wrap"
+        className={'preview-frame-wrap' + (panMode ? ' pan-mode' : '')}
         ref={wrap}
         onPointerDown={(e) => {
-          if (!e.altKey) return;
+          if (!e.altKey && !panMode) return;
           pan.current = { x: e.clientX, y: e.clientY, left: wrap.current?.scrollLeft ?? 0, top: wrap.current?.scrollTop ?? 0 };
           (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
         }}
@@ -175,7 +184,7 @@ export default function PreviewPanel({ project }: { project: Project }): JSX.Ele
         </div>
       </div>
       <p className="preview-hint">
-        预览与显示端 1:1 复刻；勾选「编辑布局」后可拖动卡片、拉右下角调整大小；按住 Alt 拖动可平移。
+        预览与显示端 1:1 复刻；勾选「编辑布局」后可拖动卡片、拉右下角调整大小；按住 Alt 或开启「平移」后拖动可移动画面。
       </p>
     </section>
   );

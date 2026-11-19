@@ -1,0 +1,9 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="调试 · 测试 手机端" type="NodeJSConfigurationType" nameIsGenerated="false" path-to-js-file="scripts/mobile-ui.test.mjs" working-dir="$PROJECT_DIR$">
+    <node-interpreter value="project" />
+    <envs>
+      <env name="CHROME_PATH" value="/usr/bin/chromium" />
+    </envs>
+    <method v="2" />
+  </configuration>
+</component>

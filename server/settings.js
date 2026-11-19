@@ -184,6 +184,8 @@ const DEFAULT_SETTINGS = {
   welcomeFontSize: 0,         // 欢迎幕布字号 px；0=自动
   welcomeImage: '',           // 欢迎幕布背景图
   welcomeBgColor: '',         // 欢迎幕布纯色画板底色（图空时用）
+  featureMobileAdmin: true,   // 管理端移动布局（关闭后手机也走桌面布局，作为回滚保险）
+  adminTouchTargetSize: 44,   // 管理端最小触控目标边长 px（40–64）
 };
 
 
@@ -570,6 +572,8 @@ const SETTINGS_VALIDATORS = {
   welcomeFontSize: (v) => intRange(v, 0, 300, '欢迎幕布字号须为 0–300（0=自动）'),
   welcomeImage: (v) => needAvatar(v === '' ? null : v),
   welcomeBgColor: (v) => hexOrEmpty(v, '欢迎幕布底色须为 #rrggbb 或留空'),
+  featureMobileAdmin: (v) => boolStrict(v, '管理端移动布局开关'),
+  adminTouchTargetSize: (v) => intRange(v, 40, 64, '触控目标尺寸须为 40–64'),
 };
 
 

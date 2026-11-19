@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type JSX, type ReactNode } from 'react';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 
 interface Props {
   title: string;
@@ -47,30 +48,37 @@ export default function DialogShell({
   onClose,
   children,
 }: Props): JSX.Element {
+  const mobile = useMediaQuery('(max-width: 860px)');
   const [rect, setRect] = useState<Rect>(() =>
     readRect(storageKey + '-rect', Math.min(defaultWidth, window.innerWidth - 40), defaultHeight),
   );
   const drag = useRef<{ mode: 'move' | 'resize'; x: number; y: number; start: Rect } | null>(null);
 
   useEffect(() => {
+    // 移动端全屏，不把手机尺寸写进桌面记忆
+    if (mobile) return;
     try {
       localStorage.setItem(storageKey + '-rect', JSON.stringify(rect));
     } catch {
       // ignore
     }
-  }, [rect, storageKey]);
+  }, [rect, storageKey, mobile]);
+
+  useEffect(() => {
+    if (mobile) drag.current = null;
+  }, [mobile]);
 
   useEffect(() => {
     function onMove(e: PointerEvent): void {
       const d = drag.current;
-      if (!d) return;
+      if (!d || mobile) return;
       if (d.mode === 'move') {
         setRect({ ...d.start, left: d.start.left + e.clientX - d.x, top: d.start.top + e.clientY - d.y });
       } else {
         setRect({
           ...d.start,
-          width: Math.max(480, Math.min(window.innerWidth - 20, d.start.width + e.clientX - d.x)),
-          height: Math.max(260, Math.min(window.innerHeight - 20, d.start.height + e.clientY - d.y)),
+          width: Math.max(360, Math.min(window.innerWidth - 20, d.start.width + e.clientX - d.x)),
+          height: Math.max(220, Math.min(window.innerHeight - 20, d.start.height + e.clientY - d.y)),
         });
       }
     }
@@ -83,23 +91,25 @@ export default function DialogShell({
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
     };
-  }, []);
+  }, [mobile]);
 
   return (
     <div
-      className="settings-dialog"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        left: rect.left,
-        top: rect.top,
-        width: rect.width,
-        height: rect.height,
-        maxHeight: 'none',
-        maxWidth: 'none',
-      }}
+      className={'settings-dialog' + (mobile ? ' dialog-mobile' : '')}
+      style={
+        mobile
+          ? { display: 'flex', flexDirection: 'column' }
+          : {
+              display: 'flex',
+              flexDirection: 'column',
+              left: rect.left,
+              top: rect.top,
+              width: rect.width,
+              height: rect.height,
+            }
+      }
     >
-      {resizable && (
+      {resizable && !mobile && (
         <div
           className="dialog-resize-handle"
           title="拖动调整设置窗口大小"
@@ -112,6 +122,7 @@ export default function DialogShell({
       <header
         className="dialog-header"
         onPointerDown={(e) => {
+          if (mobile) return;
           if ((e.target as HTMLElement).closest('button')) return;
           drag.current = { mode: 'move', x: e.clientX, y: e.clientY, start: rect };
           e.preventDefault();

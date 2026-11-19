@@ -567,6 +567,18 @@ async function main() {
   await adminOp('updateSettings', { patch: { themeScriptEnabled: false } });
   s = await viewer.waitState((st) => P(st).settings.themeScriptEnabled === false);
   assert(true, '主题脚本可关闭');
+  await adminOp('updateSettings', {
+    patch: { featureMobileAdmin: false, adminTouchTargetSize: 52 },
+  });
+  s = await viewer.waitState((st) => P(st).settings.featureMobileAdmin === false);
+  assert(P(s).settings.adminTouchTargetSize === 52,
+    '管理端移动布局开关与触控目标尺寸可调并同步');
+  await adminOp('updateSettings', { patch: { adminTouchTargetSize: 39 } })
+    .catch((e) => assert(/触控目标/.test(e.message), '非法触控目标尺寸被拒绝'));
+  await adminOp('updateSettings', { patch: { adminTouchTargetSize: 65 } })
+    .catch((e) => assert(/触控目标/.test(e.message), '触控目标尺寸上限被拒绝'));
+  await adminOp('updateSettings', { patch: { featureMobileAdmin: 'yes' } })
+    .catch((e) => assert(/布尔/.test(e.message), '非法管理端移动布局开关被拒绝'));
   await adminOp('updateSettings', { patch: { customSound: '../../etc/passwd' } }).catch((e) => {
     assert(/音效文件路径/.test(e.message), '非法音效路径被拒绝');
   });
@@ -1068,6 +1080,8 @@ async function main() {
   assert(rp.settings.featureRankTies === true && rp.settings.rankTieMode === 'competition' &&
     rp.settings.featureLeaderboard === true && rp.settings.displayView === 'leaderboard' &&
     rp.settings.featureCountdown === false, '重启后新功能开关恢复');
+  assert(rp.settings.featureMobileAdmin === false && rp.settings.adminTouchTargetSize === 52,
+    '重启后管理端移动布局与触控目标尺寸恢复');
   assert(!restored.runtime.undoCounts[projectId] && !restored.runtime.countdowns[projectId],
     '重启后撤销栈与倒计时运行态清空');
 
