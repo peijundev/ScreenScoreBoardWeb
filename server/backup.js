@@ -72,7 +72,9 @@ function runBackup() {
       i += 1;
     }
     const tmp = full + '.tmp';
-    await fsp.writeFile(tmp, JSON.stringify(state, null, 2), 'utf8');
+    // 草稿是临时工作状态，不进入长期备份；主题库随 state 一起备份
+    const { themeDrafts: _themeDrafts, ...snapshot } = state;
+    await fsp.writeFile(tmp, JSON.stringify(snapshot, null, 2), 'utf8');
     await fsp.rename(tmp, full);
     await prune(cfg.dir, cfg.keep);
     const st = await fsp.stat(full);

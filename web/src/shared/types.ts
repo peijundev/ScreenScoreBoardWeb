@@ -44,6 +44,8 @@ export interface Project {
   people: Record<string, Person>;
   teams: Record<string, Team>;
   settings: Settings;
+  themeId?: string | null;
+  themeRevision?: number;
 }
 
 export interface Snapshot {

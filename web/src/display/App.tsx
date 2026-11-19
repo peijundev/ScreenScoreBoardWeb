@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { projectOf, useAppStore } from '../shared/store';
+import type { Settings } from '../shared/types';
+import type { ThemeV2 } from '../shared/theme';
 import type { Item } from './lib/core';
 import {
   applyAppearance,
@@ -14,6 +16,8 @@ import {
   spawnSpotlight,
 } from './lib/core';
 import Board, { LeaderboardView, WelcomeView } from './components/Board';
+import ThemeCanvas from './theme/ThemeCanvas';
+import ThemeScriptLayer from './theme/ThemeScriptLayer';
 import { Clock, Countdown, Marquee } from './components/Overlays';
 import { useInteractions } from './hooks/useInteractions';
 
@@ -24,6 +28,7 @@ const isEdit = params.get('edit') === '1';
 const inPreviewFrame = window.parent !== window;
 // 卡片很多时跳过 FLIP（逐卡读布局会明显拖低帧率）
 const FLIP_MAX_ITEMS = 300;
+const themeSpecCache = new Map<string, ThemeV2>();
 
 function itemScore(it: Item): number {
   return it.kind === 'person' && it.person ? it.person.score : it.members.reduce((s, m) => s + m.score, 0);
@@ -35,7 +40,48 @@ export default function App(): JSX.Element {
   const connected = useAppStore((s) => s.connected);
   const [projectId] = useState<string | null>(projectParam);
   const project = projectOf(snapshot, projectId);
-  const settings = project?.settings;
+  const [previewTheme, setPreviewTheme] = useState<ThemeV2 | null>(null);
+  const baseSettings = project?.settings;
+  const settings = useMemo<Settings | undefined>(() => {
+    if (!baseSettings) return undefined;
+    if (!previewTheme) return baseSettings;
+    return {
+      ...baseSettings,
+      ...previewTheme.settings,
+      displayStyle: previewTheme.meta.baseStyle,
+    } as Settings;
+  }, [baseSettings, previewTheme]);
+  const [appliedTheme, setAppliedTheme] = useState<ThemeV2 | null>(null);
+
+  useEffect(() => {
+    const id = project?.themeId || null;
+    const revision = Number(project?.themeRevision) || 0;
+    if (!id) {
+      setAppliedTheme(null);
+      return;
+    }
+    const key = id + ':' + revision;
+    const cached = themeSpecCache.get(key);
+    if (cached) {
+      setAppliedTheme(cached);
+      return;
+    }
+    let cancelled = false;
+    fetch('/api/themes/' + encodeURIComponent(id))
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { theme?: ThemeV2 } | null) => {
+        if (cancelled) return;
+        const t = data?.theme || null;
+        if (t) themeSpecCache.set(key, t);
+        setAppliedTheme(t);
+      })
+      .catch(() => {
+        if (!cancelled) setAppliedTheme(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [project?.themeId, project?.themeRevision]);
 
   const boardRef = useRef<HTMLElement | null>(null);
   const titleRef = useRef<HTMLHeadingElement | null>(null);
@@ -83,7 +129,7 @@ export default function App(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snapshot]);
 
-  const items = useMemo(() => (project ? buildItems(project, project.settings) : []), [project]);
+  const items = useMemo(() => (project ? buildItems(project, settings ?? project.settings) : []), [project, settings]);
   const ranked = Boolean(settings && settings.sortBy === 'score' && settings.sortOrder === 'desc');
   const tieMode = settings?.featureRankTies ? String(settings.rankTieMode) : 'none';
   const ranks = useMemo(
@@ -112,8 +158,8 @@ export default function App(): JSX.Element {
     if (!board || !settings) return;
 
     // 只在「按分数排序 + 卡片顺序真的变化」时读布局，避免每次广播都强制 reflow
-    const canFlip = settings.sortAnimation && settings.sortBy === 'score' &&
-      items.length <= FLIP_MAX_ITEMS && !free && !prefersReducedMotion();
+    const canFlip = settings.sortAnimation && settings.displayStyle !== 'xianxia' &&
+      settings.sortBy === 'score' && items.length <= FLIP_MAX_ITEMS && !free && !prefersReducedMotion();
     if (!canFlip) {
       prevRects.current = new Map();
       prevOrderKey.current = orderKey;
@@ -162,7 +208,7 @@ export default function App(): JSX.Element {
     if (!board) return;
 
     // 名次升降动画
-    if (settings.rankChangeAnimation && ranked && !prefersReducedMotion()) {
+    if (settings.rankChangeAnimation && settings.displayStyle !== 'xianxia' && ranked && !prefersReducedMotion()) {
       items.forEach((it, i) => {
         const id = it.kind === 'person' && it.person ? it.person.id : it.team?.id;
         const rank = ranks[i];
@@ -183,7 +229,7 @@ export default function App(): JSX.Element {
     const totalDelta = Array.from(deltas.values()).reduce((a, b) => a + b, 0);
     if (totalDelta !== 0) playScoreSound(totalDelta, settings);
 
-    if (settings.scoreEffect === 'confetti') {
+    if (settings.displayStyle !== 'xianxia' && settings.scoreEffect === 'confetti') {
       const colors = [
         settings.scoreEffectColor || settings.accent,
         '#6fbf7b', '#e06c75', '#e8a33d', '#4f8cff', '#ffffff',
@@ -200,7 +246,7 @@ export default function App(): JSX.Element {
       }
     }
 
-    if (settings.scoreEffect === 'spotlight') {
+    if (settings.displayStyle !== 'xianxia' && settings.scoreEffect === 'spotlight') {
       const scope = String(settings.spotlightScope || 'person');
       const changed = Object.values(project.people).filter((p) => {
         const d = deltas.get(p.id);
@@ -231,7 +277,7 @@ export default function App(): JSX.Element {
       }
     }
 
-    if (settings.scoreEffect === 'highlight') {
+    if (settings.displayStyle !== 'xianxia' && settings.scoreEffect === 'highlight') {
       const changed = Object.values(project.people).filter((p) => {
         const d = deltas.get(p.id);
         return d && !(settings.scoreEffectOnlyPositive && d < 0);
@@ -246,7 +292,7 @@ export default function App(): JSX.Element {
       if (els.length && !prefersReducedMotion()) spawnHighlight(els, settings);
     }
 
-    if (settings.scoreRolling && !prefersReducedMotion()) {
+    if (settings.scoreRolling && settings.displayStyle !== 'xianxia' && !prefersReducedMotion()) {
       for (const [personId, delta] of deltas) {
         if (!delta) continue;
         const el = board.querySelector<HTMLElement>('.score-num[data-person-score="' + personId + '"]');
@@ -299,13 +345,25 @@ export default function App(): JSX.Element {
     return () => document.removeEventListener('pointerdown', unlock);
   }, []);
 
+  // 管理端主题工作室：草稿预览（只覆盖渲染，不写服务端）
+  useEffect(() => {
+    function onMessage(e: MessageEvent): void {
+      if (e.origin !== location.origin) return;
+      if (!e.data || e.data.type !== 'theme-preview') return;
+      const t = e.data.theme;
+      setPreviewTheme(t && typeof t === 'object' ? (t as ThemeV2) : null);
+    }
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+
   // 管理端预览：突显效果
   useEffect(() => {
     function onMessage(e: MessageEvent): void {
       if (e.origin !== location.origin) return;
       if (!e.data || e.data.type !== 'preview-spotlight') return;
       const board = boardRef.current;
-      if (!board || !settings) return;
+      if (!board || !settings || settings.displayStyle === 'xianxia') return;
       const scope = String(settings.spotlightScope || 'person');
       const teamCard = board.querySelector<HTMLElement>('.card[data-kind="team"]');
       const memberEl = board.querySelector<HTMLElement>('.member[data-person]');
@@ -343,6 +401,18 @@ export default function App(): JSX.Element {
 
   return (
     <>
+      <ThemeCanvas
+        theme={previewTheme ?? appliedTheme}
+        project={project}
+        settings={settings}
+        countdown={runtime?.countdowns?.[project.id] ?? null}
+      />
+      <ThemeScriptLayer
+        theme={previewTheme ?? appliedTheme}
+        project={project}
+        settings={settings}
+        runtime={runtime}
+      />
       <header className="topbar">
         <h1 id="board-title" ref={titleRef}>
           {settings.title}
@@ -365,6 +435,7 @@ export default function App(): JSX.Element {
           free={free}
           editable={editable}
           boardRef={boardRef}
+          theme={previewTheme ?? appliedTheme}
         />
       )}
 

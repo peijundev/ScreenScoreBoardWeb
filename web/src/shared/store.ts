@@ -66,7 +66,8 @@ function stabilizeProject(prev: Project | undefined, next: Project): Project {
   const teams = stabilizeMap(prev.teams, next.teams);
   const settingsEqual = valueEqual(prev.settings, next.settings);
   if (!people.changed && !teams.changed && settingsEqual &&
-    prev.name === next.name && prev.createdAt === next.createdAt) {
+    prev.name === next.name && prev.createdAt === next.createdAt &&
+    prev.themeId === next.themeId && prev.themeRevision === next.themeRevision) {
     return prev;
   }
   return {

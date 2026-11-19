@@ -67,7 +67,7 @@ export function applyAppearance(s: Settings): void {
   const body = document.body;
 
   // 字体
-  const serifStyles = ['guofeng', 'ink'];
+  const serifStyles = ['guofeng', 'ink', 'xianxia'];
   if (s.fontFamily === 'custom' && s.fontFamilyCustom) {
     const name = String(s.fontFamilyCustom).replace(/["\\]/g, '');
     body.style.fontFamily = '"' + name + '", ' + FONT_STACKS.system;
@@ -143,7 +143,7 @@ export function applyAppearance(s: Settings): void {
 
   body.dataset.theme = s.theme;
   body.dataset.density = s.density;
-  body.dataset.displayStyle = s.displayStyle || 'lecture';
+  body.dataset.displayStyle = s.displayStyle || 'guofeng';
   root.style.setProperty('--cols', String(s.columns));
   root.style.setProperty('--accent', s.accent);
   root.style.setProperty('--radius', s.cardRadius + 'px');
@@ -383,6 +383,7 @@ export interface FxInfo {
 }
 
 export function fxInfo(s: Settings, delta: number | null | undefined): FxInfo {
+  if (s.displayStyle === 'xianxia') return { cls: '', badge: null };
   if (delta == null || delta === 0 || s.scoreEffect === 'none') return { cls: '', badge: null };
   if (s.scoreEffectOnlyPositive && delta < 0) return { cls: '', badge: null };
   const color = s.scoreEffectColor || (delta > 0 ? '#6fbf7b' : '#e06c75');

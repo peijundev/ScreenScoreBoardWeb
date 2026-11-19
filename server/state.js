@@ -12,6 +12,10 @@ const {
   OpError, needString, needAvatar, needBio, needScore, needLayout, intRange,
 } = require('./validation');
 const { DEFAULT_SETTINGS, THEME_SETTING_KEYS, SETTINGS_VALIDATORS } = require('./settings');
+const {
+  THEME_FORMAT, THEME_VERSION, LIMITS,
+  genThemeId, normalizeTheme, normalizeDraft, themeBytes, themeSummary,
+} = require('./theme/schema');
 const lock = require('./lock');
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
@@ -21,7 +25,7 @@ const SOUND_DIR = path.join(DATA_DIR, 'sounds');
 
 const storage = createStorage();
 
-let state = { version: 2, projects: {} };
+let state = { version: 2, projects: {}, themes: {}, themeDrafts: {} };
 let initialized = false;
 
 function genId(prefix) {
@@ -40,6 +44,8 @@ function defaultProject(name) {
     people: {},
     teams: {},
     settings: defaultSettings(),
+    themeId: null,
+    themeRevision: 0,
   };
 }
 
@@ -137,9 +143,6 @@ function normalizeProject(raw) {
   }
   delete settings.glassEnabled;
 
-  // 已移除的内置主题「真·古风」→ 回落到大屏讲演
-  if (settings.displayStyle === 'xianxia') settings.displayStyle = 'lecture';
-
   // 旧版本：座右铭字段/设置改名为简介（bio）
   const rawSettings = p.settings && typeof p.settings === 'object' ? p.settings : {};
   const bioRename = {
@@ -190,13 +193,35 @@ function normalizeProject(raw) {
     people,
     teams,
     settings,
+    themeId: typeof p.themeId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(p.themeId) ? p.themeId : null,
+    themeRevision: Math.max(0, Math.floor(Number(p.themeRevision) || 0)),
   };
   normalizeOrders(project);
   return project;
 }
 
+function normalizeThemeMap(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [id, theme] of Object.entries(raw)) {
+    if (!theme || typeof theme !== 'object') continue;
+    try {
+      const meta = theme.meta && typeof theme.meta === 'object' ? theme.meta : {};
+      out[id] = normalizeTheme(theme, {
+        id,
+        createdAt: meta.createdAt,
+        updatedAt: meta.updatedAt,
+        revision: meta.revision,
+      });
+    } catch (e) {
+      logger.warn('忽略非法主题', { id, error: e.message });
+    }
+  }
+  return out;
+}
+
 function normalizeState(raw) {
-  const out = { version: 2, projects: {} };
+  const out = { version: 2, projects: {}, themes: {}, themeDrafts: {} };
   if (raw && raw.projects && typeof raw.projects === 'object') {
     for (const [id, p] of Object.entries(raw.projects)) {
       const project = normalizeProject({ ...(p && typeof p === 'object' ? p : {}), id });
@@ -217,6 +242,23 @@ function normalizeState(raw) {
   if (!Object.keys(out.projects).length) {
     const project = defaultProject('默认项目');
     out.projects[project.id] = project;
+  }
+  out.themes = normalizeThemeMap(raw && raw.themes);
+  if (raw && raw.themeDrafts && typeof raw.themeDrafts === 'object') {
+    for (const [projectId, draft] of Object.entries(raw.themeDrafts)) {
+      if (!out.projects[projectId] || !draft || typeof draft !== 'object') continue;
+      try {
+        const meta = draft.meta && typeof draft.meta === 'object' ? draft.meta : {};
+        out.themeDrafts[projectId] = normalizeTheme(draft, {
+          id: 'draft_' + projectId,
+          createdAt: meta.createdAt,
+          updatedAt: meta.updatedAt,
+          revision: meta.revision,
+        });
+      } catch (e) {
+        logger.warn('忽略非法主题草稿', { projectId, error: e.message });
+      }
+    }
   }
   return out;
 }
@@ -339,6 +381,37 @@ function requireFeature(project, key) {
   if (!project.settings[key]) throw new OpError('该功能未开启');
 }
 
+function needTheme(themeId) {
+  if (typeof themeId !== 'string' || !themeId) throw new OpError('缺少主题 ID');
+  const theme = state.themes[themeId];
+  if (!theme) throw new OpError('主题不存在');
+  return theme;
+}
+
+function assertThemeQuota(theme, replacedId) {
+  const count = Object.keys(state.themes).length + (replacedId ? 0 : 1);
+  if (count > LIMITS.libraryCount) throw new OpError('主题库数量已达上限（200）');
+  let bytes = themeBytes(theme);
+  for (const [id, item] of Object.entries(state.themes)) {
+    if (id !== replacedId) bytes += themeBytes(item);
+  }
+  if (bytes > LIMITS.libraryBytes) throw new OpError('主题库总大小已达上限（5MB）');
+}
+
+function publicState() {
+  const { themes: _themes, themeDrafts: _themeDrafts, ...hot } = state;
+  return hot;
+}
+
+function getTheme(themeId) {
+  return needTheme(themeId);
+}
+
+function getThemeDraft(projectId) {
+  needProject(projectId);
+  return state.themeDrafts[projectId] || null;
+}
+
 // ---------- op 全集 ----------
 function applyOp(op, payload) {
   payload = payload || {};
@@ -359,8 +432,77 @@ function applyOp(op, payload) {
       needProject(payload.projectId);
       if (Object.keys(state.projects).length <= 1) throw new OpError('至少保留一个项目');
       delete state.projects[payload.projectId];
+      delete state.themeDrafts[payload.projectId];
       runtime.clearProjectRuntime(payload.projectId);
       return {};
+    }
+    case OPS.themeCreate: {
+      const name = needString(payload.name, '主题名', LIMITS.name);
+      const theme = normalizeTheme({
+        format: THEME_FORMAT,
+        version: THEME_VERSION,
+        meta: { name, baseStyle: 'custom' },
+        settings: {},
+      }, { id: genThemeId() });
+      assertThemeQuota(theme);
+      state.themes[theme.meta.id] = theme;
+      return { themeId: theme.meta.id, theme: themeSummary(theme) };
+    }
+    case OPS.themeUpdate: {
+      if (!payload.theme || typeof payload.theme !== 'object') throw new OpError('主题内容非法');
+      const existing = needTheme(payload.themeId);
+      const theme = normalizeTheme(payload.theme, {
+        id: existing.meta.id,
+        createdAt: existing.meta.createdAt,
+        updatedAt: Date.now(),
+        revision: existing.meta.revision + 1,
+      });
+      assertThemeQuota(theme, existing.meta.id);
+      state.themes[theme.meta.id] = theme;
+      return { themeId: theme.meta.id, theme: themeSummary(theme) };
+    }
+    case OPS.themeRename: {
+      const existing = needTheme(payload.themeId);
+      const theme = JSON.parse(JSON.stringify(existing));
+      theme.meta.name = needString(payload.name, '主题名', LIMITS.name);
+      theme.meta.updatedAt = Date.now();
+      theme.meta.revision += 1;
+      assertThemeQuota(theme, existing.meta.id);
+      state.themes[theme.meta.id] = theme;
+      return { themeId: theme.meta.id, theme: themeSummary(theme) };
+    }
+    case OPS.themeDuplicate: {
+      const source = needTheme(payload.themeId);
+      const copy = JSON.parse(JSON.stringify(source));
+      copy.meta.id = genThemeId();
+      copy.meta.name = (source.meta.name + '（副本）').slice(0, LIMITS.name);
+      copy.meta.createdAt = Date.now();
+      copy.meta.updatedAt = Date.now();
+      copy.meta.revision = 1;
+      const theme = normalizeTheme(copy, { id: copy.meta.id });
+      assertThemeQuota(theme);
+      state.themes[theme.meta.id] = theme;
+      return { themeId: theme.meta.id, theme: themeSummary(theme) };
+    }
+    case OPS.themeDelete: {
+      needTheme(payload.themeId);
+      delete state.themes[payload.themeId];
+      const unbound = [];
+      for (const project of Object.values(state.projects)) {
+        if (project.themeId === payload.themeId) {
+          project.themeId = null;
+          project.themeRevision = 0;
+          unbound.push(project.id);
+        }
+      }
+      return { unbound };
+    }
+    case OPS.themeImport: {
+      if (!payload.theme || typeof payload.theme !== 'object') throw new OpError('主题内容非法');
+      const theme = normalizeTheme(payload.theme, { id: genThemeId() });
+      assertThemeQuota(theme);
+      state.themes[theme.meta.id] = theme;
+      return { themeId: theme.meta.id, theme: themeSummary(theme) };
     }
   }
 
@@ -620,6 +762,29 @@ function applyOp(op, payload) {
       for (const t of Object.values(project.teams)) t.layout = null;
       return {};
     }
+    case OPS.themeApply: {
+      const theme = needTheme(payload.themeId);
+      Object.assign(project.settings, theme.settings);
+      project.settings.displayStyle = theme.meta.baseStyle;
+      project.themeId = theme.meta.id;
+      project.themeRevision = theme.meta.revision;
+      return {
+        themeId: theme.meta.id,
+        revision: theme.meta.revision,
+        applied: Object.keys(theme.settings).length,
+        baseStyle: theme.meta.baseStyle,
+      };
+    }
+    case OPS.draftSave: {
+      if (!payload.theme || typeof payload.theme !== 'object') throw new OpError('主题草稿非法');
+      const theme = normalizeDraft(payload.theme, project.id, state.themeDrafts[project.id]);
+      state.themeDrafts[project.id] = theme;
+      return { theme: themeSummary(theme) };
+    }
+    case OPS.draftDelete: {
+      delete state.themeDrafts[project.id];
+      return {};
+    }
     case OPS.applyTheme: {
       const patch = payload.settings;
       if (patch !== undefined && (!patch || typeof patch !== 'object' || Array.isArray(patch))) {
@@ -688,8 +853,6 @@ function sanitizeImportedProject(raw) {
   if (!src || typeof src !== 'object') throw new OpError('导入数据格式非法');
   const settings = { ...DEFAULT_SETTINGS };
   if (src.settings && typeof src.settings === 'object') {
-    // 兼容已删除的内置主题「真·古风」
-    if (src.settings.displayStyle === 'xianxia') src.settings.displayStyle = 'lecture';
     for (const [key, value] of Object.entries(src.settings)) {
       const validator = SETTINGS_VALIDATORS[key];
       if (!validator) continue;
@@ -765,6 +928,8 @@ function sanitizeImportedProject(raw) {
     people,
     teams,
     settings,
+    themeId: null,
+    themeRevision: 0,
   };
   normalizeOrders(project);
   return project;
@@ -788,4 +953,7 @@ module.exports = {
   exportProjectData,
   sanitizeImportedProject,
   walkAssetRefs,
+  publicState,
+  getTheme,
+  getThemeDraft,
 };

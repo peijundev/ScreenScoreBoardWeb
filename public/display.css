@@ -1550,6 +1550,92 @@ body[data-display-style="poster"] .rank {
 body[data-display-style="poster"] .score-bar { background: #111111; height: 6px; }
 body[data-display-style="poster"] .member { background: #f1eee4; }
 
+/* ---------- 真·古风：宣纸卷轴、金线云纹、行楷标题（配色随强调色） ---------- */
+body[data-display-style="xianxia"][data-theme] {
+  --bg-fallback: #f2e8d2;
+  --card: #faf3e2;
+  --card-border: #c9a86a;
+  --text: #34271a;
+  --text-dim: #866f52;
+  --scrim: rgba(242, 232, 210, 0.72);
+  --card-img-veil: rgba(250, 243, 226, 0.78);
+  background-color: #f2e8d2;
+  background-image:
+    radial-gradient(1200px 440px at 50% 116%, rgba(146, 122, 88, 0.28), transparent 70%),
+    radial-gradient(860px 320px at 6% 122%, rgba(146, 122, 88, 0.2), transparent 70%),
+    radial-gradient(800px 300px at 95% 120%, rgba(146, 122, 88, 0.18), transparent 70%),
+    radial-gradient(1000px 240px at 50% -14%, rgba(200, 170, 110, 0.14), transparent 70%);
+  background-attachment: fixed;
+  font-family: "Noto Serif CJK SC", "Source Han Serif SC", "Songti SC", "STSong", "SimSun", serif;
+}
+body[data-display-style="xianxia"] .topbar h1 {
+  font-family: "STXingkai", "Xingkai SC", "华文行楷", "Kaiti SC", "KaiTi", "STKaiti",
+    "Noto Serif CJK SC", "Songti SC", serif;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  color: var(--title-color, #3a2d20);
+  text-shadow: 0 1px 0 rgba(255, 252, 244, 0.85);
+}
+body[data-display-style="xianxia"] .topbar::after {
+  width: 170px;
+  height: 6px;
+  border-radius: 3px;
+  background:
+    radial-gradient(circle at 50% 50%, #f7e9c6 0 1.5px, rgba(183, 143, 74, 0.9) 2px 3px, transparent 4px),
+    linear-gradient(90deg, transparent, rgba(183, 143, 74, 0.55) 18%,
+      rgba(220, 188, 126, 0.95) 50%, rgba(183, 143, 74, 0.55) 82%, transparent);
+}
+/* 卡片强制使用内置卷轴卡面（四色轮换），卡片样式/底色/圆角/边框一律让位 */
+body[data-display-style="xianxia"] .board > .card:nth-child(4n+1) {
+  --xcard-img: url("/img/xianxia/scroll-1.webp");
+}
+body[data-display-style="xianxia"] .board > .card:nth-child(4n+2) {
+  --xcard-img: url("/img/xianxia/scroll-2.webp");
+}
+body[data-display-style="xianxia"] .board > .card:nth-child(4n+3) {
+  --xcard-img: url("/img/xianxia/scroll-3.webp");
+}
+body[data-display-style="xianxia"] .board > .card:nth-child(4n) {
+  --xcard-img: url("/img/xianxia/scroll-4.webp");
+}
+body[data-display-style="xianxia"] .board > .card {
+  border: 0;
+  border-radius: 10px;
+  background-color: transparent;
+  background-image:
+    linear-gradient(180deg, rgba(250, 243, 226, 0.26) 0%, rgba(250, 243, 226, 0.56) 100%),
+    var(--xcard-img, url("/img/xianxia/scroll-1.webp"));
+  background-size: 100% 100%, 100% 100%;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
+  box-shadow: 0 8px 22px rgba(90, 62, 32, 0.16);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+/* 本主题禁用记分特效（弹跳/发光/彩带/突显/聚光灯） */
+body[data-display-style="xianxia"] .fx-delta,
+body[data-display-style="xianxia"] .confetti-layer,
+body[data-display-style="xianxia"] .spotlight-overlay,
+body[data-display-style="xianxia"] .spotlight-return-overlay,
+body[data-display-style="xianxia"] .highlight-scrim {
+  display: none !important;
+}
+body[data-display-style="xianxia"] .member {
+  background: rgba(201, 168, 106, 0.12);
+  border: 1px solid rgba(201, 168, 106, 0.35);
+}
+body[data-display-style="xianxia"] .score-bar {
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--accent) 55%, #7a5a34), var(--accent));
+}
+body[data-display-style="xianxia"] .rank { color: #b07d2b; }
+body[data-display-style="xianxia"] .lb-row {
+  border-radius: 4px;
+  box-shadow:
+    inset 0 0 0 3px rgba(251, 246, 233, 0.92),
+    inset 0 0 0 4px rgba(201, 168, 106, 0.4);
+}
+
 /* ============================================================
    高级外观覆盖：放在最后，优先级高于风格皮肤
    ============================================================ */
@@ -1630,3 +1716,39 @@ body[data-style-free="on"] .card {
   border-width: var(--card-border-width, 1px);
   box-shadow: var(--card-shadow, none);
 }
+
+/* ---- 主题工作室：矢量场景层 ---- */
+.theme-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+.topbar, .board, #leaderboard, #welcome {
+  position: relative;
+  z-index: 1;
+}
+
+.theme-script-sandbox {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.theme-script-canvas { z-index: 0; }
+
+.theme-widget-host {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.sdk-widget { display: flex; align-items: center; justify-content: inherit; }

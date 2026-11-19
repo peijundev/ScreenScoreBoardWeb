@@ -6,10 +6,11 @@ import TeamsPanel from './components/TeamsPanel';
 import SettingsDialog from './components/SettingsDialog';
 import FeaturesDialog from './components/FeaturesDialog';
 import ThemeEditorDialog from './components/ThemeEditorDialog';
+import ThemeStudioDialog from './theme/studio/ThemeStudioDialog';
 import Toasts from './components/Toasts';
 import { projectOf, projectsOf, useAppStore } from '../shared/store';
 
-type DialogKind = 'settings' | 'features' | 'theme' | null;
+type DialogKind = 'settings' | 'features' | 'theme' | 'studio' | null;
 
 export default function App(): JSX.Element {
   const snapshot = useAppStore((s) => s.snapshot);
@@ -41,6 +42,7 @@ export default function App(): JSX.Element {
         onOpenSettings={() => setDialog('settings')}
         onOpenFeatures={() => setDialog('features')}
         onOpenTheme={() => setDialog('theme')}
+        onOpenStudio={() => setDialog('studio')}
       />
       <Toasts />
 
@@ -62,6 +64,9 @@ export default function App(): JSX.Element {
       )}
       {project && dialog === 'theme' && (
         <ThemeEditorDialog project={project} onClose={() => setDialog(null)} />
+      )}
+      {project && dialog === 'studio' && (
+        <ThemeStudioDialog project={project} onClose={() => setDialog(null)} />
       )}
     </>
   );

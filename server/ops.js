@@ -32,6 +32,15 @@ const OPS = Object.freeze({
   resetLayout: 'resetLayout',
   applyTheme: 'applyTheme',
   updateSettings: 'updateSettings',
+  themeCreate: 'themeCreate',
+  themeUpdate: 'themeUpdate',
+  themeRename: 'themeRename',
+  themeDuplicate: 'themeDuplicate',
+  themeDelete: 'themeDelete',
+  themeImport: 'themeImport',
+  themeApply: 'themeApply',
+  draftSave: 'draftSave',
+  draftDelete: 'draftDelete',
 });
 
 module.exports = { OPS };

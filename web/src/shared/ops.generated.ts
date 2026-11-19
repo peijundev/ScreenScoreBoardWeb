@@ -30,7 +30,16 @@ export type OpName =
   | 'setMemberLayout'
   | 'resetLayout'
   | 'applyTheme'
-  | 'updateSettings';
+  | 'updateSettings'
+  | 'themeCreate'
+  | 'themeUpdate'
+  | 'themeRename'
+  | 'themeDuplicate'
+  | 'themeDelete'
+  | 'themeImport'
+  | 'themeApply'
+  | 'draftSave'
+  | 'draftDelete';
 
 export const OP_NAMES: readonly OpName[] = [
   'addProject',
@@ -64,4 +73,13 @@ export const OP_NAMES: readonly OpName[] = [
   'resetLayout',
   'applyTheme',
   'updateSettings',
+  'themeCreate',
+  'themeUpdate',
+  'themeRename',
+  'themeDuplicate',
+  'themeDelete',
+  'themeImport',
+  'themeApply',
+  'draftSave',
+  'draftDelete',
 ];

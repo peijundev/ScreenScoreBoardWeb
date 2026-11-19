@@ -143,10 +143,13 @@ async function main() {
   const projectId = Object.keys(st0.projects || {})[0];
   assert(Boolean(projectId), '默认创建一个项目');
   assert(st0.projects[projectId].settings.title === '计分板', '项目默认设置正确');
+  assert(st0.projects[projectId].settings.displayStyle === 'guofeng', '默认显示风格为古风雅集');
   r = await fetch(BASE + '/../etc/passwd');
   assert(r.status === 400 || r.status === 404, '路径穿越被拒绝');
   r = await fetch(BASE + '/admin.css');
   assert(r.ok && (await r.text()).includes('--card'), '静态资源可访问');
+  r = await fetch(BASE + '/img/xianxia/scroll-1.webp');
+  assert(r.ok && (await r.arrayBuffer()).byteLength > 1000, '真·古风卷轴素材可访问');
   console.log('P1 后端健壮性:');
   r = await fetch(BASE + '/api/health');
   const health = await r.json();
@@ -349,6 +352,76 @@ async function main() {
   await adminOp('applyTheme', { settings: { accent: 'red' } })
     .catch((e) => assert(/强调色/.test(e.message), '主题拒绝非法值'));
 
+  console.log('主题工作室（v2）:');
+  const v2Theme = (name, accent) => ({
+    format: 'screenscoreboard.theme',
+    version: 2,
+    meta: { name, author: '验证', description: 'v2', baseStyle: 'modern' },
+    canvas: { width: 1920, height: 1080, background: { type: 'none', color: '#000000', image: '' } },
+    layers: [{ name: '背景', nodes: [{ type: 'rect', x: 0, y: 0, w: 200, h: 120, fill: '#334455' }] }],
+    widgets: [{ type: 'title', surface: 'canvas', props: { fontSize: 64 } }],
+    settings: { accent, cardRadius: 21 },
+    script: { enabled: false },
+  });
+  const createdTheme = await adminOp('themeCreate', { name: '验证主题' });
+  const themeId = createdTheme.result.themeId;
+  assert(/^th_/.test(themeId), 'themeCreate 创建主题');
+  const updatedTheme = await adminOp('themeUpdate', {
+    themeId, theme: v2Theme('验证主题 v2', '#445566'),
+  });
+  assert(updatedTheme.result.theme && updatedTheme.result.theme.revision === 2, 'themeUpdate revision +1');
+  const themeListRes = await fetch(BASE + '/api/themes');
+  const themeList = await themeListRes.json();
+  assert(themeListRes.ok && themeList.themes.some((t) => t.id === themeId), '主题库接口返回摘要');
+  const themeRes = await fetch(BASE + '/api/themes/' + themeId);
+  const themeOne = await themeRes.json();
+  assert(themeRes.ok && themeOne.theme.layers.length === 1 && themeOne.theme.widgets.length === 1,
+    '主题详情返回完整 spec');
+  await adminOp('themeUpdate', { themeId, theme: { ...v2Theme('bad', '#445566'), settings: { title: 'bad' } } })
+    .catch((e) => assert(/不支持的设置项/.test(e.message), 'v2 主题拒绝非视觉设置项'));
+  await adminOp('themeUpdate', {
+    themeId, theme: { ...v2Theme('bad', '#445566'), settings: { themeScriptEnabled: true } },
+  }).catch((e) => assert(/不支持的设置项/.test(e.message), '主题设置不能自行开启主题脚本'));
+  await adminOp('themeUpdate', { themeId, theme: { ...v2Theme('bad', '#445566'), script: { enabled: true, source: '' } } })
+    .catch((e) => assert(/必须提供源码/.test(e.message), 'v2 主题拒绝空脚本'));
+
+  await adminOp('themeApply', { projectId, themeId });
+  s = await viewer.waitState((st) => P(st).settings.accent === '#445566');
+  assert(P(s).settings.cardRadius === 21 && P(s).settings.displayStyle === 'modern' &&
+    s.projects[projectId].themeId === themeId && s.projects[projectId].themeRevision === 2,
+    '主题应用设置并记录引用');
+  assert(P(s).settings.themeScriptEnabled === false, '主题脚本默认关闭');
+  const hot = viewer.states[viewer.states.length - 1];
+  assert(hot.themes === undefined && hot.themeDrafts === undefined, 'WS 热状态不广播主题库/草稿');
+
+  const scriptTheme = v2Theme('验证主题脚本', '#445566');
+  scriptTheme.script = {
+    enabled: true,
+    source: 'function drawTheme(ctx) { return [{ op: "text", x: 10, y: 20, text: ctx.title, size: 24, color: "#ffffff" }]; }',
+    entry: 'drawTheme',
+  };
+  await adminOp('themeUpdate', { themeId, theme: scriptTheme });
+  const scriptThemeRes = await fetch(BASE + '/api/themes/' + themeId);
+  const scriptThemeData = await scriptThemeRes.json();
+  assert(scriptThemeRes.ok && scriptThemeData.theme.script.enabled === true &&
+    /function drawTheme/.test(scriptThemeData.theme.script.source),
+    '主题脚本源码随主题保存并读取');
+
+  await adminOp('draftSave', { projectId, theme: v2Theme('项目草稿', '#778899') });
+  const draftRes = await fetch(BASE + '/api/projects/' + projectId + '/theme-draft');
+  const draftData = await draftRes.json();
+  assert(draftRes.ok && draftData.theme && draftData.theme.meta.name === '项目草稿' &&
+    draftData.theme.settings.accent === '#778899', '项目草稿保存与读取');
+  await adminOp('draftDelete', { projectId });
+  await adminOp('themeDuplicate', { themeId }).then((ack) =>
+    ack.result.themeId && adminOp('themeDelete', { themeId: ack.result.themeId }));
+  await adminOp('themeDelete', { themeId });
+  s = await viewer.waitState((st) => st.projects[projectId].themeId === null);
+  assert(s.projects[projectId].themeRevision === 0, '删除主题自动解绑项目');
+  await adminOp('updateSettings', {
+    patch: { accent: '#112233', displayStyle: 'ppt', cardRadius: 20 },
+  });
+
   await new Promise((r) => setTimeout(r, 250));
   const rawState = readFileSync(path.join(DATA_DIR, 'state.json'), 'utf8');
   assert(!rawState.includes('\n  '), 'JSON 存盘默认使用 compact 格式');
@@ -434,7 +507,7 @@ async function main() {
   await adminOp('updateSettings', { patch: { displayStyle: 'hologram' } }).catch((e) => {
     assert(/显示风格/.test(e.message), '非法显示风格被拒绝');
   });
-  for (const style of ['guofeng', 'ink', 'modern', 'neon', 'poster']) {
+  for (const style of ['guofeng', 'ink', 'xianxia', 'modern', 'neon', 'poster']) {
     await adminOp('updateSettings', { patch: { displayStyle: style } });
     await viewer.waitState((st) => P(st).settings.displayStyle === style);
   }
@@ -478,6 +551,22 @@ async function main() {
   s = await viewer.waitState((st) => P(st).settings.scoreEffect === 'highlight' &&
     P(st).settings.scoreRolling === false);
   assert(true, '原位聚光灯/滚动数字设置同步');
+
+  await adminOp('updateSettings', {
+    patch: { themeScriptEnabled: true, themeScriptFps: 12, themeScriptTimeoutMs: 150 },
+  });
+  s = await viewer.waitState((st) => P(st).settings.themeScriptEnabled === true);
+  assert(P(s).settings.themeScriptFps === 12 && P(s).settings.themeScriptTimeoutMs === 150,
+    '主题脚本开关/帧率/超时可调并同步');
+  await adminOp('updateSettings', { patch: { themeScriptFps: 0 } })
+    .catch((e) => assert(/帧率/.test(e.message), '非法主题脚本帧率被拒绝'));
+  await adminOp('updateSettings', { patch: { themeScriptTimeoutMs: 2000 } })
+    .catch((e) => assert(/超时/.test(e.message), '非法主题脚本超时被拒绝'));
+  await adminOp('updateSettings', { patch: { themeScriptEnabled: 'yes' } })
+    .catch((e) => assert(/布尔/.test(e.message), '非法主题脚本开关被拒绝'));
+  await adminOp('updateSettings', { patch: { themeScriptEnabled: false } });
+  s = await viewer.waitState((st) => P(st).settings.themeScriptEnabled === false);
+  assert(true, '主题脚本可关闭');
   await adminOp('updateSettings', { patch: { customSound: '../../etc/passwd' } }).catch((e) => {
     assert(/音效文件路径/.test(e.message), '非法音效路径被拒绝');
   });
@@ -1020,7 +1109,7 @@ async function main() {
   assert(legacyProjects[0].people.p_legacy && legacyProjects[0].people.p_legacy.score === 3, '旧人员数据保留');
   assert(legacyProjects[0].people.p_legacy.order === 0, '旧数据补齐排序序号');
   assert(legacyProjects[0].settings.title === '旧积分榜' && legacyProjects[0].settings.scoreEffect, '旧设置保留并补全新字段');
-  assert(legacyProjects[0].settings.displayStyle === 'lecture', '已删除的真·古风自动回落为 lecture');
+  assert(legacyProjects[0].settings.displayStyle === 'xianxia', '旧的真·古风风格保留');
   await stopServer(server);
 
   async function backendRoundtrip(label, env) {

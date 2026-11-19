@@ -7,7 +7,7 @@ const {
 
 const DEFAULT_SETTINGS = {
   title: '计分板',
-  displayStyle: 'lecture',  // lecture | ppt | seewo | kde | custom
+  displayStyle: 'guofeng',  // lecture | ppt | seewo | kde | guofeng | ink | xianxia | ...
   columns: 4,
   density: 'comfortable',   // comfortable | compact
   sortBy: 'score',          // score | created | manual
@@ -49,6 +49,10 @@ const DEFAULT_SETTINGS = {
   scoreEffectDuration: 700, // 特效时长 ms（200–3000）
   scoreEffectColor: '',     // '' = 自动（加分绿/减分红）；或 #rrggbb
   scoreEffectOnlyPositive: false, // 仅加分触发特效
+  // 主题脚本：默认关闭；脚本运行在不透明源沙箱里，只能返回受限绘制指令
+  themeScriptEnabled: false, // 是否允许执行主题脚本
+  themeScriptFps: 8,         // 主题脚本刷新率 1–30 fps
+  themeScriptTimeoutMs: 120, // 单帧执行超时 20–500 ms
   soundEnabled: false,      // 记分音效
   soundVolume: 0.5,         // 音效音量 0–1
   customSound: '',          // '' = 内置合成音；否则 sounds/xxx.mp3
@@ -216,7 +220,7 @@ const SETTINGS_VALIDATORS = {
   title: (v) => needString(v, '标题', 30),
   displayStyle: (v) =>
     (['lecture', 'ppt', 'seewo', 'kde', 'custom',
-      'guofeng', 'ink', 'modern', 'neon', 'poster'].includes(v)
+      'guofeng', 'ink', 'xianxia', 'modern', 'neon', 'poster'].includes(v)
       ? v
       : (() => { throw new OpError('显示风格非法'); })()),
   columns: (v) => {
@@ -324,6 +328,9 @@ const SETTINGS_VALIDATORS = {
     return /^#[0-9a-fA-F]{6}$/.test(v) ? v : (() => { throw new OpError('特效颜色须为 #rrggbb 或留空'); })();
   },
   scoreEffectOnlyPositive: (v) => Boolean(v),
+  themeScriptEnabled: (v) => boolStrict(v, '主题脚本开关'),
+  themeScriptFps: (v) => intRange(v, 1, 30, '主题脚本帧率须为 1–30'),
+  themeScriptTimeoutMs: (v) => intRange(v, 20, 500, '主题脚本单帧超时须为 20–500 ms'),
   soundEnabled: (v) => Boolean(v),
   soundVolume: (v) => {
     const n = Number(v);

@@ -11,6 +11,7 @@ interface Props {
   onOpenSettings: () => void;
   onOpenFeatures: () => void;
   onOpenTheme: () => void;
+  onOpenStudio: () => void;
 }
 
 interface VersionInfo {
@@ -27,6 +28,7 @@ export default function Toolbar({
   onOpenSettings,
   onOpenFeatures,
   onOpenTheme,
+  onOpenStudio,
 }: Props): JSX.Element {
   const sendOp = useAppStore((s) => s.sendOp);
   const undoCount = useAppStore((s) =>
@@ -116,6 +118,9 @@ export default function Toolbar({
       </button>
       <button className="btn small" type="button" onClick={onOpenTheme} disabled={!project}>
         主题编辑器
+      </button>
+      <button className="btn small" type="button" onClick={onOpenStudio} disabled={!project}>
+        主题工作室
       </button>
       <button className="btn small" type="button" onClick={onOpenFeatures} disabled={!project}>
         功能

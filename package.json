@@ -43,7 +43,8 @@
     "gen:contracts": "node scripts/gen-contracts.mjs",
     "typecheck:server": "tsc -p tsconfig.server.json",
     "lint": "eslint .",
-    "format": "prettier --write \"server/**/*.js\" \"scripts/**/*.mjs\" \"web/src/**/*.{ts,tsx}\""
+    "format": "prettier --write \"server/**/*.js\" \"scripts/**/*.mjs\" \"web/src/**/*.{ts,tsx}\"",
+    "test:theme": "node --test scripts/theme-schema.test.mjs scripts/theme-script.test.mjs"
   },
   "engines": {
     "node": ">=20.19"
@@ -51,6 +52,7 @@
   "dependencies": {
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
+    "smol-toml": "^1.9.1",
     "ws": "^8.18.0",
     "zustand": "^5.1.0"
   },

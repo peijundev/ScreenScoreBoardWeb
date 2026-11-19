@@ -1,5 +1,7 @@
 import { memo, type CSSProperties, type JSX, type RefObject } from 'react';
 import type { Layout, Person, Project, Settings, Team } from '../../shared/types';
+import type { ThemeV2, ThemeWidget } from '../../shared/theme';
+import { WidgetView, type WidgetContext } from '../theme/widgets';
 import { avatarURL } from '../../shared/api';
 import {
   fxInfo,
@@ -19,6 +21,7 @@ interface BoardProps {
   free: boolean;
   editable: boolean;
   boardRef: RefObject<HTMLElement | null>;
+  theme?: ThemeV2 | null;
 }
 
 function cardStyle(entity: Person | Team, layout: Layout | null): CSSProperties {
@@ -31,6 +34,21 @@ function cardStyle(entity: Person | Team, layout: Layout | null): CSSProperties 
   }
   if (entity.cardImage) style['--card-img'] = "url('/" + entity.cardImage + "')";
   return style as CSSProperties;
+}
+
+function widgetFor(theme: ThemeV2 | null | undefined, surface: string, slot: string): ThemeWidget | undefined {
+  return theme?.widgets.find((w) => w.surface === surface && w.slot === slot && w.visible !== false);
+}
+
+function slotOr(
+  theme: ThemeV2 | null | undefined,
+  surface: string,
+  slot: string,
+  ctx: WidgetContext,
+  fallback: JSX.Element | null,
+): JSX.Element | null {
+  const widget = widgetFor(theme, surface, slot);
+  return widget ? <WidgetView widget={widget} ctx={ctx} /> : fallback;
 }
 
 function rankHTML(rank: number | null): JSX.Element | null {
@@ -49,6 +67,7 @@ function barHTML(score: number, maxAbs: number): JSX.Element {
 }
 
 function Board({
+  project,
   settings,
   items,
   ranks,
@@ -56,6 +75,7 @@ function Board({
   free,
   editable,
   boardRef,
+  theme,
 }: BoardProps): JSX.Element {
   const maxAbs = Math.max(1, ...items.map((it) => itemScore(it)));
   const fallback = free ? shelfLayouts(items) : [];
@@ -69,6 +89,8 @@ function Board({
             <PersonCardMemo
               key={'p:' + it.person.id}
               person={it.person}
+              project={project}
+              theme={theme}
               settings={settings}
               layout={free ? it.person.layout || fallback[i] : null}
               delta={deltas.get(it.person.id)}
@@ -84,6 +106,8 @@ function Board({
               key={'t:' + it.team.id}
               team={it.team}
               members={it.members}
+              project={project}
+              theme={theme}
               settings={settings}
               layout={free ? it.team.layout || fallback[i] : null}
               deltas={deltas}
@@ -109,6 +133,8 @@ function itemScore(it: Item): number {
 
 function PersonCard({
   person,
+  project,
+  theme,
   settings,
   layout,
   delta,
@@ -117,6 +143,8 @@ function PersonCard({
   editable,
 }: {
   person: Person;
+  project: Project;
+  theme?: ThemeV2 | null;
   settings: Settings;
   layout: Layout | null;
   delta: number | undefined;
@@ -129,6 +157,10 @@ function PersonCard({
     'card person-card av-' +
     String(settings.avatarPosition ?? 'left') +
     (person.cardImage ? ' has-card-image' : '');
+  const ctx: WidgetContext = {
+    project, settings, entity: person, entityKind: 'person', rank, total: 0,
+    maxAbs, memberCount: 0, countdown: null, now: Date.now(),
+  };
   return (
     <div
       className={cls}
@@ -136,25 +168,30 @@ function PersonCard({
       data-id={person.id}
       style={cardStyle(person, layout)}
     >
-      {rankHTML(rank)}
-      <img src={avatarURL(person)} alt="" />
+      {slotOr(theme, 'card', 'rank', ctx, rankHTML(rank))}
+      {slotOr(theme, 'card', 'avatar', ctx, <img src={avatarURL(person)} alt="" />)}
       <div className="p-body">
-        <div className="person-name">{person.name}</div>
-        {settings.featureBio && person.bio && (
+        {slotOr(theme, 'card', 'name', ctx, <div className="person-name">{person.name}</div>)}
+        {settings.featureBio ? slotOr(theme, 'card', 'bio', ctx, person.bio ? (
           <div className="person-bio">{person.bio}</div>
-        )}
+        ) : null) : null}
       </div>
-      <div className={'score person-score ' + scoreClass(person.score) + fx.cls}>
-        {fx.badge && (
-          <span className="fx-delta" style={{ color: fx.badge.color }}>
-            {fx.badge.text}
+      {slotOr(theme, 'card', 'score', ctx, (
+        <div className={'score person-score ' + scoreClass(person.score) + fx.cls}>
+          {fx.badge && (
+            <span className="fx-delta" style={{ color: fx.badge.color }}>
+              {fx.badge.text}
+            </span>
+          )}
+          <span className="score-num" data-person-score={person.id}>
+            {person.score}
           </span>
-        )}
-        <span className="score-num" data-person-score={person.id}>
-          {person.score}
-        </span>
-      </div>
-      {barHTML(person.score, maxAbs)}
+        </div>
+      ))}
+      {slotOr(theme, 'card', 'bar', ctx, barHTML(person.score, maxAbs))}
+      {widgetFor(theme, 'card', 'extra') && (
+        <WidgetView widget={widgetFor(theme, 'card', 'extra')!} ctx={ctx} />
+      )}
       {editable && <span className="resize-handle" data-handle />}
     </div>
   );
@@ -163,6 +200,8 @@ function PersonCard({
 function TeamCard({
   team,
   members,
+  project,
+  theme,
   settings,
   layout,
   deltas,
@@ -173,6 +212,8 @@ function TeamCard({
 }: {
   team: Team;
   members: Person[];
+  project: Project;
+  theme?: ThemeV2 | null;
   settings: Settings;
   layout: Layout | null;
   deltas: Map<string, number>;
@@ -189,6 +230,10 @@ function TeamCard({
   }
   const fx = fxInfo(settings, teamDelta);
   const fallback = memberFallbackLayouts(members.length);
+  const ctx: WidgetContext = {
+    project, settings, entity: team, entityKind: 'team', rank, total,
+    maxAbs, memberCount: members.length, countdown: null, now: Date.now(),
+  };
 
   return (
     <div
@@ -197,11 +242,11 @@ function TeamCard({
       data-id={team.id}
       style={cardStyle(team, layout)}
     >
-      {rankHTML(rank)}
+      {slotOr(theme, 'teamCard', 'rank', ctx, rankHTML(rank))}
       <div className={'team-head av-' + String(settings.avatarPosition ?? 'left')}>
-        <img src={avatarURL(team, 64)} alt="" />
-        <div className="team-name">{team.name}</div>
-        {settings.showTeamTotal && (
+        {slotOr(theme, 'teamCard', 'avatar', ctx, <img src={avatarURL(team, 64)} alt="" />)}
+        {slotOr(theme, 'teamCard', 'teamName', ctx, <div className="team-name">{team.name}</div>)}
+        {settings.showTeamTotal ? slotOr(theme, 'teamCard', 'teamTotal', ctx, (
           <div className={'score team-total' + fx.cls}>
             {fx.badge && (
               <span className="fx-delta" style={{ color: fx.badge.color }}>
@@ -212,7 +257,7 @@ function TeamCard({
               {total}
             </span>
           </div>
-        )}
+        )) : null}
       </div>
       {settings.featureBio && team.bio && (
         <div className="team-bio">{team.bio}</div>
@@ -223,14 +268,20 @@ function TeamCard({
           <MemberChipMemo
             key={m.id}
             member={m}
+            project={project}
+            theme={theme}
             settings={settings}
             delta={deltas.get(m.id)}
             layout={free ? m.memberLayout || fallback[i] : null}
+            maxAbs={maxAbs}
             editable={editable}
           />
         ))}
       </div>
-      {barHTML(total, maxAbs)}
+      {slotOr(theme, 'teamCard', 'bar', ctx, barHTML(total, maxAbs))}
+      {widgetFor(theme, 'teamCard', 'extra') && (
+        <WidgetView widget={widgetFor(theme, 'teamCard', 'extra')!} ctx={ctx} />
+      )}
       {editable && <span className="resize-handle" data-handle />}
     </div>
   );
@@ -238,15 +289,21 @@ function TeamCard({
 
 function MemberChip({
   member,
+  project,
+  theme,
   settings,
   delta,
   layout,
+  maxAbs,
   editable,
 }: {
   member: Person;
+  project: Project;
+  theme?: ThemeV2 | null;
   settings: Settings;
   delta: number | undefined;
   layout: Layout | null;
+  maxAbs: number;
   editable: boolean;
 }): JSX.Element {
   const fx = fxInfo(settings, delta);
@@ -258,19 +315,23 @@ function MemberChip({
     style.height = layout.h + '%';
   }
   if (member.cardImage) style['--card-img'] = "url('/" + member.cardImage + "')";
+  const ctx: WidgetContext = {
+    project, settings, entity: member, entityKind: 'person', rank: null, total: 0,
+    maxAbs, memberCount: 0, countdown: null, now: Date.now(),
+  };
   return (
     <div
       className={'member av-' + String(settings.avatarPosition ?? 'left') + (member.cardImage ? ' has-card-image' : '')}
       data-person={member.id}
       style={style as CSSProperties}
     >
-      <img src={avatarURL(member, 48)} alt="" />
+      {slotOr(theme, 'memberChip', 'avatar', ctx, <img src={avatarURL(member, 48)} alt="" />)}
       <div className="m-body">
-        <div className="member-name">{member.name}</div>
-        {settings.featureBio && member.bio && (
+        {slotOr(theme, 'memberChip', 'name', ctx, <div className="member-name">{member.name}</div>)}
+        {settings.featureBio ? slotOr(theme, 'memberChip', 'bio', ctx, member.bio ? (
           <div className="member-bio">{member.bio}</div>
-        )}
-        {settings.showMemberScore && (
+        ) : null) : null}
+        {settings.showMemberScore ? slotOr(theme, 'memberChip', 'score', ctx, (
           <div className={'score member-score ' + scoreClass(member.score) + fx.cls}>
             {fx.badge && (
               <span className="fx-delta" style={{ color: fx.badge.color }}>
@@ -281,8 +342,11 @@ function MemberChip({
               {member.score}
             </span>
           </div>
-        )}
+        )) : null}
       </div>
+      {widgetFor(theme, 'memberChip', 'extra') && (
+        <WidgetView widget={widgetFor(theme, 'memberChip', 'extra')!} ctx={ctx} />
+      )}
       {editable && <span className="resize-handle" data-handle />}
     </div>
   );

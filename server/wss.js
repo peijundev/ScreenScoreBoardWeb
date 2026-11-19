@@ -1,7 +1,7 @@
 'use strict';
 // WebSocket：连接管理、op 分发、合并广播、背压、心跳
 const { WebSocketServer, WebSocket } = require('ws');
-const { state, applyOp, save, OpError } = require('./state');
+const { applyOp, save, OpError, publicState } = require('./state');
 const runtime = require('./runtime');
 const { config } = require('./config');
 const { logger } = require('./logger');
@@ -23,7 +23,8 @@ function attachWSS(server, opts = {}) {
   });
 
   function stateMessage() {
-    return JSON.stringify({ type: 'state', data: state, runtime: runtime.getRuntimeSnapshot() });
+    // 主题库/草稿可能很大，且显示端不需要；热状态广播只带项目与轻量引用
+    return JSON.stringify({ type: 'state', data: publicState(), runtime: runtime.getRuntimeSnapshot() });
   }
 
   function safeSend(ws, payload) {

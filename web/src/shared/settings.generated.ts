@@ -43,6 +43,9 @@ export interface SettingsFields {
   scoreEffectDuration: number;
   scoreEffectColor: string;
   scoreEffectOnlyPositive: boolean;
+  themeScriptEnabled: boolean;
+  themeScriptFps: number;
+  themeScriptTimeoutMs: number;
   soundEnabled: boolean;
   soundVolume: number;
   customSound: string;

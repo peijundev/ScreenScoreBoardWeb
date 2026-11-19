@@ -25,7 +25,11 @@ const {
   flushSave,
   onShutdown,
   OpError,
+  publicState,
+  getTheme,
+  getThemeDraft,
 } = require('./state');
+const { themeSummary } = require('./theme/schema');
 const { attachWSS, broadcastState } = require('./wss');
 const runtime = require('./runtime');
 const { runBackup, listBackups, startBackupScheduler } = require('./backup');
@@ -311,9 +315,32 @@ const server = http.createServer((req, res) => {
     });
   }
   if (req.method === 'GET' && p === '/api/state') {
-    return send(res, 200, JSON.stringify({ ...state, runtime: runtime.getRuntimeSnapshot() }), {
+    return send(res, 200, JSON.stringify({ ...publicState(), runtime: runtime.getRuntimeSnapshot() }), {
       'Content-Type': 'application/json',
     });
+  }
+  if (req.method === 'GET' && p === '/api/themes') {
+    const themes = Object.values(state.themes)
+      .map(themeSummary)
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+    return sendJSON(res, 200, { themes });
+  }
+  if (req.method === 'GET' && p.startsWith('/api/themes/')) {
+    const id = decodeURIComponent(p.slice('/api/themes/'.length));
+    try {
+      const theme = getTheme(id);
+      return sendJSON(res, 200, { theme, summary: themeSummary(theme) });
+    } catch (e) {
+      return sendJSON(res, e instanceof OpError ? 404 : 500, { error: e.message });
+    }
+  }
+  if (req.method === 'GET' && /^\/api\/projects\/[^/]+\/theme-draft$/.test(p)) {
+    const projectId = decodeURIComponent(p.split('/')[3] || '');
+    try {
+      return sendJSON(res, 200, { theme: getThemeDraft(projectId) });
+    } catch (e) {
+      return sendJSON(res, e instanceof OpError ? 404 : 500, { error: e.message });
+    }
   }
   if (req.method === 'GET' && p === '/api/version') {
     return send(res, 200, JSON.stringify({
