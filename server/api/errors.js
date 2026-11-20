@@ -1,6 +1,12 @@
 'use strict';
 // REST v1 错误类型与状态码映射（不依赖具体状态）
-const { OpError, NotFoundError, FeatureDisabledError } = require('../validation');
+const {
+  OpError,
+  NotFoundError,
+  FeatureDisabledError,
+  UnauthorizedError,
+  ForbiddenError,
+} = require('../validation');
 
 class ApiError extends Error {
   constructor(status, code, message, details) {
@@ -46,8 +52,20 @@ function toApiError(error) {
   const message = error && error.message ? String(error.message) : '服务器内部错误';
   // 子类必须先于 OpError 判断：NotFound / FeatureDisabled 都继承自 OpError
   if (isNotFound(error)) return new ApiError(404, 'NOT_FOUND', message);
+  if (error instanceof UnauthorizedError || (error && error.name === 'UnauthorizedError')) {
+    return new ApiError(401, 'UNAUTHORIZED', message);
+  }
+  if (error instanceof ForbiddenError || (error && error.name === 'ForbiddenError')) {
+    return new ApiError(403, 'FORBIDDEN', message);
+  }
   if (error instanceof FeatureDisabledError || (error && error.name === 'FeatureDisabledError')) {
     return new ApiError(403, 'FEATURE_DISABLED', message);
+  }
+  if (error && error.name === 'UserInputError') {
+    return new ApiError(400, 'INVALID_ARGUMENT', message);
+  }
+  if (error && error.name === 'PasswordPolicyError') {
+    return new ApiError(422, 'WEAK_PASSWORD', message);
   }
   if (error && error.name === 'PayloadTooLargeError') {
     return new ApiError(413, 'PAYLOAD_TOO_LARGE', message);

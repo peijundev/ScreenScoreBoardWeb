@@ -1,4 +1,5 @@
 // HTTP 侧工具：上传与头像回退图，移植自 public/shared.js
+import { authFetch } from './auth';
 
 const XML_ESCAPES: Record<string, string> = {
   '&': '&amp;',
@@ -55,7 +56,7 @@ export function avatarURL(entity: AvatarSource | null | undefined, size = 96): s
 }
 
 async function upload(file: File, endpoint: string): Promise<string> {
-  const res = await fetch(endpoint, {
+  const res = await authFetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': file.type || 'application/octet-stream',
@@ -90,7 +91,7 @@ export interface AssetList {
 
 /** 全局资源库：服务器 avatars/ 与 sounds/ 目录下的所有文件 */
 export async function listAssets(): Promise<AssetList> {
-  const res = await fetch('/api/v1/assets');
+  const res = await authFetch('/api/v1/assets');
   const payload = (await res.json().catch(() => ({}))) as {
     data?: { avatars?: Asset[]; sounds?: Asset[] };
     error?: { message?: string };
@@ -117,7 +118,7 @@ export async function deleteAsset(
 ): Promise<number> {
   const name = String(path || '').replace(/^(avatars|sounds)\//, '');
   const query = force ? '?force=1' : '';
-  const res = await fetch('/api/v1/assets/' + kind + '/' + encodeURIComponent(name) + query, {
+  const res = await authFetch('/api/v1/assets/' + kind + '/' + encodeURIComponent(name) + query, {
     method: 'DELETE',
   });
   const payload = (await res.json().catch(() => ({}))) as {

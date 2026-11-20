@@ -143,6 +143,11 @@ async function callToolInProcess(name, args) {
   return result.data;
 }
 
+function authHeaders() {
+  const token = process.env.SCOREBOARD_TOKEN;
+  return token ? { Authorization: 'Bearer ' + token } : {};
+}
+
 /** stdio 调用：通过 REST 访问已运行的服务 */
 async function callToolRemote(baseUrl, name, args) {
   const tool = toolMap.get(name);
@@ -159,7 +164,7 @@ async function callToolRemote(baseUrl, name, args) {
     if (args && args[key] != null && tool.route.method === 'GET') query.set(key, String(args[key]));
   }
   const url = baseUrl.replace(/\/$/, '') + '/api/v1' + path + (query.toString() ? '?' + query.toString() : '');
-  const headers = { Accept: 'application/json' };
+  const headers = { Accept: 'application/json', ...authHeaders() };
   const init = { method: tool.route.method, headers };
   if (args && args.revision != null) headers['If-Match'] = `"${args.revision}"`;
   if (tool.route.method !== 'GET' && tool.route.method !== 'DELETE') {
@@ -181,6 +186,7 @@ async function callToolRemote(baseUrl, name, args) {
 }
 
 module.exports = {
+  authHeaders,
   tools,
   toolMap,
   buildTools,

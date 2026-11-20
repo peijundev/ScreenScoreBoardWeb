@@ -2,7 +2,7 @@
 
 完整的 HTTP 管理接口，覆盖项目、人员、团队、分数、设置、运行态、主题库、主题子资源、主题草稿、导入导出、上传、备份与低层 `op` 逃生通道。
 
-> **安全提示：当前版本没有任何鉴权。** `/api/v1` 等价于把全部读写权限开放给能访问该端口的任何设备。只应部署在可信局域网，或由本机 Electron 绑定 `127.0.0.1`。远程化前请阅读 [security-notes.md](security-notes.md)。
+> **安全提示：本版本已启用鉴权。** 公开读取仅限健康检查、版本、全量状态与主题详情；其余读接口至少需要 `viewer`，写接口按角色限制。Cookie 写请求需要 `X-CSRF-Token`，自动化建议使用 API 令牌。详见 [authentication.md](authentication.md)。
 
 - 基地址：`http://<host>:<port>/api/v1`
 - 内容类型：除上传/下载外均为 `application/json; charset=utf-8`
@@ -67,6 +67,35 @@ curl -X PATCH http://localhost:3000/api/v1/themes/th_x/layers \
 ```
 
 草稿首次保存不需要 revision；已有草稿后必须带，否则 `428`。
+
+## 鉴权
+
+| 方法 | 路径 | 访问 | 说明 |
+|---|---|---|---|
+| GET | `/auth/status` | 公开 | 登录状态、初始化状态；已登录时会补发 `ssb_csrf` |
+| POST | `/auth/setup` | 公开（仅零用户 + 直接 loopback） | 创建首个管理员并登录 |
+| POST | `/auth/login` | 公开 | `{ username, password, remember }` |
+| POST | `/auth/logout` | 公开 | 吊销当前会话并清 Cookie |
+| GET | `/auth/me` | 登录 | 当前用户 |
+| POST | `/auth/password` | 登录 | 修改自己的密码 |
+| GET | `/auth/sessions` | 登录 | 自己的会话；admin 可 `?userId=` |
+| DELETE | `/auth/sessions/:id` | 登录 | 吊销会话 |
+| POST | `/auth/logout-all` | 登录 | 退出其他设备 |
+| GET/POST | `/auth/tokens` | 登录 | 自己的令牌（创建时明文只返回一次） |
+| DELETE | `/auth/tokens/:id` | 登录 | 吊销令牌 |
+| GET/POST | `/auth/users` | admin | 用户列表 / 创建用户 |
+| PATCH/DELETE | `/auth/users/:id` | admin | 更新（角色/显示名/停用）或删除 |
+| POST | `/auth/users/:id/password` | admin | 重置密码并吊销该用户全部会话/令牌 |
+| GET | `/auth/users/:id/sessions` | admin | 用户会话 |
+| DELETE | `/auth/users/:id/sessions/:sessionId` | admin | 吊销用户会话 |
+| GET/POST | `/auth/users/:id/tokens` | admin | 用户令牌 |
+| DELETE | `/auth/users/:id/tokens/:tokenId` | admin | 吊销用户令牌 |
+
+- 会话 Cookie：`ssb_session`，HttpOnly、`SameSite=Lax`、`Path=/`；CSRF Cookie：`ssb_csrf`（JS 可读）。
+- 非 GET 的 Cookie 请求需要 `X-CSRF-Token`；`Authorization: Bearer ssb_...` 豁免。
+- 公开读：`/health`、`/version`、`/state`、`/themes/:themeId`。
+- 其余 GET 至少需要 `viewer`；写操作默认需要 `admin`；记分相关写接口允许 `operator`。
+- `/mcp` 仅管理员。
 
 ## 端点
 

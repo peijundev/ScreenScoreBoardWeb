@@ -2,7 +2,7 @@
 
 计分板把全部 REST 管理能力暴露为 MCP 工具，供 Claude Desktop、Claude Code、自研 AI 客户端等直接操控项目、人员、分数、设置、主题与数据。
 
-> **安全提示：MCP 没有鉴权。** 能调用 HTTP MCP 的客户端等价于拥有全部读写权限；stdio 形态也只适合本机。不要把 `3000` 端口暴露到不可信网络。详见 [security-notes.md](security-notes.md)。
+> **安全提示：MCP 需要管理员身份。** HTTP MCP 接受管理员 Cookie（需 CSRF）或 `Authorization: Bearer` API 令牌；stdio 形态通过 `SCOREBOARD_TOKEN` 携带令牌。建议为自动化单独创建令牌，不要复用管理员密码。详见 [authentication.md](authentication.md)。
 
 - 协议版本：`2025-06-18`（手写 JSON-RPC 2.0 核心，不依赖官方 SDK 运行时）
 - 两种传输：**stdio**（本机进程）与 **HTTP**（`POST /mcp`）
@@ -17,8 +17,10 @@ stdio 形态是一个**REST 客户端**：它不启动第二个服务实例，�
 # 先启动计分板
 npm start
 
-# 另开终端验证
-SCOREBOARD_URL=http://127.0.0.1:3000 node bin/screenscoreboard-mcp.js
+# 另开终端验证（需要管理员 API 令牌）
+SCOREBOARD_URL=http://127.0.0.1:3000 \
+SCOREBOARD_TOKEN=ssb_xxx \
+node bin/screenscoreboard-mcp.js
 ```
 
 然后按行写入 JSON-RPC：
@@ -29,8 +31,11 @@ SCOREBOARD_URL=http://127.0.0.1:3000 node bin/screenscoreboard-mcp.js
 ```
 
 - `SCOREBOARD_URL` 默认 `http://127.0.0.1:3000`
+- `SCOREBOARD_TOKEN` 为管理员 API 令牌；没有令牌时只能读取公开接口，写工具会失败
 - 启动时先请求 `/api/v1/health`；服务未启动会在 stderr 明确报错并以非 0 退出
 - 适合 Claude Desktop / Claude Code 等通过子进程拉起 MCP 的宿主
+
+Claude Desktop 配置里同时设置 `SCOREBOARD_URL` 与 `SCOREBOARD_TOKEN`。
 
 Claude Desktop 配置示例（`claude_desktop_config.json`）：
 
@@ -61,16 +66,20 @@ claude mcp add screenscoreboard \
 ```
 POST http://<host>:3000/mcp
 Content-Type: application/json
+Authorization: Bearer ssb_xxx
 ```
 
+- **仅管理员**：匿名 401，操作员/只读令牌 403
 - 无状态：每个请求独立处理，可批量（JSON-RPC batch）
 - `initialize` 响应会带 `Mcp-Session-Id` 响应头；当前实现不要求后续请求回传
 - 通知（无 `id`）返回 `202 No Content`
 - Origin 校验沿用 WebSocket 规则：无 `Origin` 放行；浏览器来源必须与 `Host` 同源或命中 `ALLOWED_ORIGINS`
+- 使用 Cookie 时还必须带 `X-CSRF-Token`；自动化建议 Bearer
 
 ```bash
 curl -s http://localhost:3000/mcp \
   -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer ssb_xxx' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 ```
 

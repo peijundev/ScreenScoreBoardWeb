@@ -2,14 +2,14 @@
 // stdio MCP：作为 REST 客户端连接已运行的计分板服务，不启动第二实例
 const readline = require('readline');
 const { handleMessage } = require('./protocol');
-const { callToolRemote } = require('./tools');
+const { callToolRemote, authHeaders } = require('./tools');
 
 function baseUrl() {
   return process.env.SCOREBOARD_URL || 'http://127.0.0.1:3000';
 }
 
 async function getData(url) {
-  const res = await fetch(url, { headers: { Accept: 'application/json' } });
+  const res = await fetch(url, { headers: { Accept: 'application/json', ...authHeaders() } });
   const text = await res.text();
   let parsed = null;
   try { parsed = text ? JSON.parse(text) : null; } catch (_) { /* ignore */ }

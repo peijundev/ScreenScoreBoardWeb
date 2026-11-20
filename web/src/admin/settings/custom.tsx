@@ -8,6 +8,7 @@ import {
   type Asset,
 } from '../../shared/api';
 import { SOUND_PRESETS, playPresetSound, playSoundFile } from '../../shared/sound';
+import { authFetch } from '../../shared/auth';
 import { useAppStore } from '../../shared/store';
 import { toast } from '../../shared/ui';
 import { confirm } from '../components/dialogs';
@@ -487,7 +488,7 @@ function DataTools(ctx: Ctx): JSX.Element {
               if (!file) return;
               try {
                 const text = await file.text();
-                const res = await fetch('/api/import', {
+                const res = await authFetch('/api/import', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: text,
@@ -506,7 +507,7 @@ function DataTools(ctx: Ctx): JSX.Element {
           type="button"
           onClick={async () => {
             try {
-              const res = await fetch('/api/backups/run', { method: 'POST' });
+              const res = await authFetch('/api/backups/run', { method: 'POST' });
               const data = (await res.json().catch(() => ({}))) as { error?: string; file?: string };
               if (!res.ok) throw new Error(data.error || '备份失败');
               setStatus('已备份：' + (data.file ?? ''));
@@ -523,7 +524,7 @@ function DataTools(ctx: Ctx): JSX.Element {
           type="button"
           onClick={async () => {
             try {
-              const data = (await (await fetch('/api/orphans')).json()) as {
+              const data = (await (await authFetch('/api/orphans')).json()) as {
                 avatars: { count: number };
               };
               setStatus('头像孤儿 ' + data.avatars.count + ' 个（音效库文件永久保留，不参与清理）');
@@ -546,7 +547,7 @@ function DataTools(ctx: Ctx): JSX.Element {
             });
             if (!ok) return;
             try {
-              const res = await fetch('/api/orphans/cleanup', {
+              const res = await authFetch('/api/orphans/cleanup', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: '{}',

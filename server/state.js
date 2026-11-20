@@ -13,6 +13,8 @@ const {
   needString, needAvatar, needBio, needScore, needLayout, intRange,
 } = require('./validation');
 const { DEFAULT_SETTINGS, THEME_SETTING_KEYS, SETTINGS_VALIDATORS } = require('./settings');
+const { currentActor } = require('./auth/context');
+const { assertCanOp } = require('./auth/policy');
 const {
   THEME_FORMAT, THEME_VERSION, LIMITS,
   genThemeId, normalizeTheme, normalizeDraft, themeBytes, themeSummary,
@@ -414,7 +416,8 @@ function getThemeDraft(projectId) {
 }
 
 // ---------- op 全集 ----------
-function applyOp(op, payload) {
+function applyOp(op, payload, actor = currentActor()) {
+  assertCanOp(actor, op);
   payload = payload || {};
 
   // 项目级操作（不需要 projectId）

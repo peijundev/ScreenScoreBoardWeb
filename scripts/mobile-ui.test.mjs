@@ -56,6 +56,38 @@ async function waitUrl(url, attempts = 100) {
   return null;
 }
 
+function sessionFromResponse(res) {
+  const list = typeof res.headers.getSetCookie === 'function'
+    ? res.headers.getSetCookie()
+    : [res.headers.get('set-cookie')].filter(Boolean);
+  const pairs = list.filter(Boolean).map((line) => line.split(';')[0].trim());
+  const find = (name) => {
+    const pair = pairs.find((item) => item.startsWith(name + '='));
+    return pair ? pair.slice(name.length + 1) : '';
+  };
+  return { cookie: pairs.join('; '), csrf: find('ssb_csrf') };
+}
+
+async function createOperator() {
+  const loginRes = await fetch(BASE + '/api/v1/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: 'admin', password: 'test-admin-pass' }),
+  });
+  assert.ok(loginRes.ok, '管理员登录失败');
+  const session = sessionFromResponse(loginRes);
+  const res = await fetch(BASE + '/api/v1/auth/users', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Cookie: session.cookie,
+      'X-CSRF-Token': session.csrf,
+    },
+    body: JSON.stringify({ username: 'mobile-op', password: 'operator-pass', role: 'operator' }),
+  });
+  assert.equal(res.status, 200, '创建操作员失败');
+}
+
 const skipReason = !chromiumPath()
   ? '未找到 Chromium（设置 CHROME_PATH 或安装 chromium / google-chrome）'
   : !existsSync(path.join(ROOT, 'public/v2/admin.html'))
@@ -67,7 +99,22 @@ test('手机管理端：全屏对话框与主要流程', { skip: skipReason }, a
   const profile = mkdtempSync(path.join(tmpdir(), 'sb-chrome-'));
   const server = spawn(process.execPath, ['server/index.js'], {
     cwd: ROOT,
-    env: { ...process.env, PORT: String(PORT), DATA_DIR: dataDir, STORAGE: 'json', LOG_LEVEL: 'error' },
+    env: {
+      ...process.env,
+      PORT: String(PORT),
+      DATA_DIR: dataDir,
+      STORAGE: 'json',
+      LOG_LEVEL: 'error',
+      ADMIN_USERNAME: 'admin',
+      ADMIN_PASSWORD: 'test-admin-pass',
+      ADMIN_PASSWORD_FILE: '',
+      SESSION_TTL_HOURS: '',
+      SESSION_REMEMBER_DAYS: '',
+      COOKIE_SECURE: '',
+      TRUST_PROXY: '',
+      TLS_CERT_FILE: '',
+      TLS_KEY_FILE: '',
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   const chrome = spawn(chromiumPath(), [
@@ -82,6 +129,7 @@ test('手机管理端：全屏对话框与主要流程', { skip: skipReason }, a
   });
 
   assert.ok(await waitUrl(BASE + '/api/health'), '服务未启动');
+  await createOperator();
   const cdpPort = await waitCdpPort(profile);
   assert.ok(cdpPort, 'Chromium 未启动');
   assert.ok(await waitUrl(`http://127.0.0.1:${cdpPort}/json/version`), 'CDP 未就绪');
@@ -116,6 +164,19 @@ test('手机管理端：全屏对话框与主要流程', { skip: skipReason }, a
   const expression = `(async () => {
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const byText = (text) => [...document.querySelectorAll('button, a')].find((b) => b.textContent.trim() === text);
+    const setValue = (el, value) => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+      setter.call(el, value);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+    for (let i = 0; i < 100 && !document.querySelector('#login-username') && !document.querySelector('.mobile-topbar'); i++) await sleep(100);
+    const loginUser = document.querySelector('#login-username');
+    const loginPass = document.querySelector('#login-password');
+    if (loginUser && loginPass) {
+      setValue(loginUser, 'admin');
+      setValue(loginPass, 'test-admin-pass');
+      document.querySelector('.login-submit')?.click();
+    }
     for (let i = 0; i < 100 && !document.querySelector('.mobile-topbar'); i++) await sleep(100);
     const out = {
       width: innerWidth,
@@ -180,6 +241,38 @@ test('手机管理端：全屏对话框与主要流程', { skip: skipReason }, a
     await sleep(600);
     const settings = document.querySelector('.settings-dialog');
     out.settingsMobile = settings?.classList.contains('dialog-mobile') || false;
+    byText('关闭')?.click();
+    await sleep(300);
+    byText('更多')?.click();
+    await sleep(200);
+    const accountBtn = [...document.querySelectorAll('button')]
+      .find((b) => b.textContent.includes('admin · 管理员'));
+    accountBtn?.click();
+    await sleep(500);
+    out.accountDialog = Boolean(document.querySelector('.account-dialog'));
+    out.accountTabs = [...document.querySelectorAll('.account-tabs button')].map((b) => b.textContent.trim());
+    byText('关闭')?.click();
+    await sleep(200);
+    byText('更多')?.click();
+    await sleep(200);
+    byText('退出登录')?.click();
+    for (let i = 0; i < 100 && !document.querySelector('#login-username'); i++) await sleep(100);
+    const opUser = document.querySelector('#login-username');
+    const opPass = document.querySelector('#login-password');
+    if (opUser && opPass) {
+      setValue(opUser, 'mobile-op');
+      setValue(opPass, 'operator-pass');
+      document.querySelector('.login-submit')?.click();
+    }
+    for (let i = 0; i < 100 && !document.querySelector('.mobile-topbar'); i++) await sleep(100);
+    out.opTabs = [...document.querySelectorAll('.mobile-tab')].map((b) => b.textContent.trim());
+    out.opHasAddForm = Boolean(document.querySelector('.add-form'));
+    out.opHasRemote = Boolean(document.querySelector('.remote-pad .remote-plus'));
+    byText('更多')?.click();
+    await sleep(200);
+    out.opHasNewProject = Boolean(byText('新建项目'));
+    out.opHasDataTools = Boolean(byText('数据导入 / 导出 / 备份'));
+    out.opHasLogout = Boolean(byText('退出登录'));
     return out;
   })()`;
 
@@ -201,4 +294,12 @@ test('手机管理端：全屏对话框与主要流程', { skip: skipReason }, a
   assert.equal(out.studioTabs.length, 8);
   assert.equal(out.vector, true);
   assert.equal(out.settingsMobile, true);
+  assert.equal(out.accountDialog, true, '账号与安全对话框可打开');
+  assert.deepEqual(out.accountTabs, ['用户管理', '会话', 'API 令牌', '修改密码']);
+  assert.deepEqual(out.opTabs, ['预览', '人员', '团队', '更多'], '操作员没有主题标签');
+  assert.equal(out.opHasAddForm, false, '操作员不能新增人员');
+  assert.equal(out.opHasRemote, true, '操作员保留遥控记分');
+  assert.equal(out.opHasNewProject, false, '操作员不能新建项目');
+  assert.equal(out.opHasDataTools, false, '操作员不能导入导出');
+  assert.equal(out.opHasLogout, true, '操作员可退出登录');
 });

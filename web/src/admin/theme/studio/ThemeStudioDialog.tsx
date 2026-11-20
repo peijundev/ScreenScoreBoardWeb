@@ -8,6 +8,7 @@ import VectorTab from './VectorTab';
 import WidgetsTab from './WidgetsTab';
 import { detectFormat, parseThemeText, stringifyTheme, type ThemeTextFormat } from '../codec';
 import { projectOp } from '../../../shared/store';
+import { authFetch } from '../../../shared/auth';
 import { toast } from '../../../shared/ui';
 import { confirm } from '../../components/dialogs';
 import type { Project, Settings } from '../../../shared/types';
@@ -44,14 +45,14 @@ function safeName(name: string): string {
 }
 
 async function fetchThemes(): Promise<ThemeSummary[]> {
-  const res = await fetch('/api/themes');
+  const res = await authFetch('/api/themes');
   if (!res.ok) throw new Error('读取主题库失败');
   const data = (await res.json()) as { themes?: ThemeSummary[] };
   return Array.isArray(data.themes) ? data.themes : [];
 }
 
 async function fetchTheme(id: string): Promise<ThemeV2> {
-  const res = await fetch('/api/themes/' + encodeURIComponent(id));
+  const res = await authFetch('/api/themes/' + encodeURIComponent(id));
   const data = (await res.json()) as { theme?: ThemeV2; error?: string };
   if (!res.ok || !data.theme) throw new Error(data.error || '读取主题失败');
   return data.theme;
@@ -233,7 +234,7 @@ export default function ThemeStudioDialog({
   async function loadDraft(): Promise<void> {
     setBusy(true);
     try {
-      const res = await fetch('/api/projects/' + encodeURIComponent(project.id) + '/theme-draft');
+      const res = await authFetch('/api/projects/' + encodeURIComponent(project.id) + '/theme-draft');
       const data = (await res.json()) as { theme?: ThemeV2 | null; error?: string };
       if (!res.ok) throw new Error(data.error || '读取草稿失败');
       if (!data.theme) {

@@ -5,6 +5,11 @@ const { applyOp, save, OpError, publicState } = require('./state');
 const runtime = require('./runtime');
 const { config } = require('./config');
 const { logger } = require('./logger');
+const authStore = require('./auth/store');
+const authHttp = require('./auth/http');
+const { assertCanOp } = require('./auth/policy');
+const { SYSTEM, ANONYMOUS } = require('./auth/context');
+const { isDirectLoopbackRequest, effectiveHost } = require('./security');
 
 const MAX_MSG = 64 * 1024;
 let broadcastImpl = null;
@@ -21,6 +26,22 @@ function attachWSS(server, opts = {}) {
     perMessageDeflate: cfg.permessageDeflate
       ? { threshold: cfg.deflateThreshold, zlibDeflateOptions: { level: 6 } }
       : false,
+  });
+
+  // 会话/令牌/用户被吊销时，主动关闭对应连接
+  authStore.setRevocationListener((payload) => {
+    for (const client of wss.clients) {
+      const auth = /** @type {any} */ (client).auth;
+      if (!auth) continue;
+      let match = false;
+      if (payload.sessionId) match = auth.sessionId === payload.sessionId;
+      else if (payload.tokenId) match = auth.tokenId === payload.tokenId;
+      else if (payload.userId) match = auth.userId === payload.userId;
+      if (!match) continue;
+      const code = payload.reason === 'role' ? 4403 : 4401;
+      const reason = payload.reason === 'role' ? 'role changed' : 'session revoked';
+      try { client.close(code, reason); } catch (_) {}
+    }
   });
 
   function stateMessage() {
@@ -94,7 +115,8 @@ function attachWSS(server, opts = {}) {
       let allowed = false;
       try {
         const parsed = new URL(origin);
-        allowed = parsed.host === req.headers.host ||
+        const host = effectiveHost(req);
+        allowed = parsed.host === host ||
           cfg.allowedOrigins.includes(origin) ||
           cfg.allowedOrigins.includes(parsed.host);
       } catch (_) {}
@@ -110,6 +132,15 @@ function attachWSS(server, opts = {}) {
       try { ws.close(1013, 'too many connections'); } catch (_) {}
       return;
     }
+
+    const auth = authStore.isEnabled()
+      ? authHttp.resolveRequest(req)
+      : (isDirectLoopbackRequest(req) ? SYSTEM : ANONYMOUS);
+    if (auth.kind === 'invalid') {
+      try { ws.close(4401, 'session expired'); } catch (_) {}
+      return;
+    }
+    ws.auth = auth;
 
     ws.isAlive = true;
     ws.on('pong', () => { ws.isAlive = true; });
@@ -134,9 +165,29 @@ function attachWSS(server, opts = {}) {
         });
       }
 
+      if (
+        ws.auth &&
+        ws.auth.kind !== 'anonymous' &&
+        ws.auth.kind !== 'system' &&
+        !authHttp.validateActor(ws.auth)
+      ) {
+        try { ws.close(4401, 'session expired'); } catch (_) {}
+        return;
+      }
+      try {
+        assertCanOp(ws.auth, msg.op);
+      } catch (e) {
+        return safeSend(ws, {
+          type: 'ack',
+          reqId: msg.reqId || null,
+          ok: false,
+          error: e.message || '没有权限执行该操作',
+        });
+      }
+
       const started = process.hrtime.bigint();
       try {
-        const result = applyOp(msg.op, msg.payload);
+        const result = applyOp(msg.op, msg.payload, ws.auth);
         save();
         broadcast();
         safeSend(ws, { type: 'ack', reqId: msg.reqId || null, ok: true, result });
@@ -157,6 +208,15 @@ function attachWSS(server, opts = {}) {
   const interval = setInterval(() => {
     for (const client of wss.clients) {
       const socket = /** @type {any} */ (client);
+      if (
+        socket.auth &&
+        socket.auth.kind !== 'anonymous' &&
+        socket.auth.kind !== 'system' &&
+        !authHttp.validateActor(socket.auth)
+      ) {
+        try { socket.close(4401, 'session expired'); } catch (_) {}
+        continue;
+      }
       if (!socket.isAlive) {
         try { socket.terminate(); } catch (_) {}
         continue;

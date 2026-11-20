@@ -4,7 +4,7 @@
 
 > ## 版本 1.5.2 — 完整 API、MCP 与手机管理端
 >
-> - **新增**：REST API v1（92 条端点 + OpenAPI 3.1）、MCP（HTTP / stdio，87 个工具）、手机全功能管理端
+> - **新增**：REST API v1（90+ 条端点，含鉴权 + OpenAPI 3.1）、MCP（HTTP / stdio，87 个业务工具）、手机全功能管理端
 > - **1.4.0 已封存**：原技术栈（零构建、原生 DOM 前端）的最终版本，不再更新，历史说明见 [CHANGELOG.md](CHANGELOG.md)。
 > - **1.5.0 起**：前端为 React 19 + Vite + TypeScript（源码 `web/`，构建产物 `public/v2/`）；后端仍为 Node 原生 http + WebSocket。
 > - `data/` 数据格式、存储后端与 WS 协议与 1.5.0 兼容，可直接升级；首次运行 `npm start` 会自动构建前端。
@@ -20,8 +20,10 @@ npm install
 npm start          # prestart 会自动构建 React 前端，然后启动服务
 ```
 
-- 显示端（大屏）：http://localhost:3000/display
-- 管理端（控制台）：http://localhost:3000/admin
+- 显示端（大屏）：http://localhost:3000/display（公开只读）
+- 管理端（控制台）：http://localhost:3000/admin（需要登录）
+
+首次启动请设置 `ADMIN_PASSWORD='至少 8 位的密码' npm start`，或只在本机打开管理端完成初始化。远程部署请阅读 [docs/authentication.md](docs/authentication.md)。
 
 也可以分开执行：`npm run build:web` 构建前端，`npm run start:build` 一步构建并启动。
 
@@ -75,13 +77,13 @@ npm rebuild better-sqlite3
 # REST 冒烟
 curl http://localhost:3000/api/v1/health
 
-# stdio MCP（需先启动服务）
-SCOREBOARD_URL=http://127.0.0.1:3000 node bin/screenscoreboard-mcp.js
+# stdio MCP（需先启动服务，并创建管理员 API 令牌）
+SCOREBOARD_URL=http://127.0.0.1:3000 SCOREBOARD_TOKEN=ssb_xxx node bin/screenscoreboard-mcp.js
 ```
 
 文档：[API v1](docs/api-v1.md) · [MCP](docs/mcp.md) · [手机管理端](docs/mobile-admin.md) · [安全说明](docs/security-notes.md)
 
-> **安全提示：** 当前版本没有鉴权，只适合可信局域网或本机。HTTP MCP 等价于开放全部写权限。远程化前请先补齐安全系统，详见 [docs/security-notes.md](docs/security-notes.md)。
+> **安全提示：** 本版本已内置账号、角色、会话与 API 令牌鉴权。首次启动请设置 `ADMIN_PASSWORD`，或只在本机打开管理端完成初始化；远程部署请置于 HTTPS 反向代理之后。完整说明见 [docs/authentication.md](docs/authentication.md)。应用内明确不做 WS/HTTP 限流。
 
 ## 存储后端
 
@@ -124,8 +126,21 @@ STORAGE=mysql MYSQL_URL=mysql://user:pass@localhost:3306/scoreboard npm start
 | `STATE_FILE_PRETTY` | `0` | JSON 存盘是否使用缩进（默认 compact） |
 | `SHUTDOWN_FLUSH_TIMEOUT_MS` | `10000` | 退出时落盘超时 |
 | `MAX_IMPORT_BYTES` | `67108864` | 项目导入请求体上限 |
-| `ALLOWED_ORIGINS` | 空 | 额外允许的 WebSocket Origin（逗号分隔；同源始终允许） |
+| `ALLOWED_ORIGINS` | 空 | 额外允许的 Origin（逗号分隔；同源始终允许） |
 | `ALLOW_MULTI_INSTANCE` | `0` | `1` 时跳过单实例锁（可能导致数据覆盖，仅调试用） |
+| `ADMIN_USERNAME` | `admin` | 首次用环境变量创建管理员时的用户名 |
+| `ADMIN_PASSWORD` | 空 | 仅在没有任何用户时创建首个管理员；已有用户时忽略 |
+| `ADMIN_PASSWORD_FILE` | 空 | 从文件读取初始密码（适合 systemd/Docker secret，优先于 `ADMIN_PASSWORD`） |
+| `SESSION_TTL_HOURS` | `24` | 普通会话有效期 |
+| `SESSION_REMEMBER_DAYS` | `30` | 「记住我」有效期 |
+| `COOKIE_SECURE` | `auto` | `auto` / `true` / `false`；auto 按 TLS 或反代协议判断 |
+| `TRUST_PROXY` | `0` | 置于 HTTPS 反向代理后设为 `1`，读取 `X-Forwarded-*` |
+| `TLS_CERT_FILE` | 空 | 可选，Node 内置 HTTPS 证书 |
+| `TLS_KEY_FILE` | 空 | 可选，Node 内置 HTTPS 私钥 |
+| `TLS_PASSPHRASE` | 空 | 可选，私钥口令 |
+| `SCOREBOARD_TOKEN` | 空 | stdio MCP / 自动化客户端使用的 API 令牌 |
+| `SCOREBOARD_MODE` | `local` | Electron：`local` / `remote` |
+| `SCOREBOARD_REMOTE_URL` | 空 | Electron 远程模式服务器地址（兼容 `SCOREBOARD_URL`） |
 
 - 健康检查：`GET /api/health` 返回版本、运行时长、存储类型与 WS 连接数，不返回全量状态
 - 单实例锁：默认拒绝两个进程同时使用同一 `DATA_DIR`；陈旧锁（进程已退出）会自动清理
@@ -206,22 +221,25 @@ STORAGE=mysql MYSQL_URL=mysql://user:pass@localhost:3306/scoreboard npm start
 | `ORPHAN_CLEANUP_ENABLED` | `0` | `1` 开启每天自动清理孤儿文件 |
 | `ORPHAN_CLEANUP_GRACE_HOURS` | `24` | 文件至少存在多少小时才可被自动清理 |
 
-> 安全提示：当前版本没有管理端登录与权限校验，导出/导入/清理接口与现有管理端一样，只适合部署在可信局域网或反向代理鉴权之后。
+> 安全提示：导出、导入、备份与清理接口需要管理员登录；显示端仍然公开只读。远程部署请使用 HTTPS，详见 [docs/authentication.md](docs/authentication.md)。
 
 ## 部署（Docker / systemd）
 
 Docker：
 
 ```bash
-docker compose up -d --build
-# 数据与备份持久化在 ./data，服务暴露 3000 端口
+# 首次启动必须提供管理员密码（容器内请求不是 loopback，网页初始化会被拒绝）
+ADMIN_PASSWORD='至少 8 位的强密码' docker compose up -d --build
+# 数据、备份与 auth.json 持久化在 ./data，服务暴露 3000 端口
 ```
 
 也可以直接使用：
 
 ```bash
 docker build -t screen-scoreboard .
-docker run -d -p 3000:3000 -v ./data:/data screen-scoreboard
+docker run -d -p 3000:3000 -v ./data:/data \
+  -e ADMIN_PASSWORD='至少 8 位的强密码' \
+  screen-scoreboard
 ```
 
 systemd：
@@ -229,18 +247,26 @@ systemd：
 ```bash
 sudo useradd -r -s /usr/sbin/nologin scoreboard
 sudo mkdir -p /opt/screenscoreboard /var/lib/screenscoreboard
-sudo cp -r server public package*.json /opt/screenscoreboard/
+sudo cp -r server public bin package*.json /opt/screenscoreboard/
 # 前端构建需要 devDependencies（Vite）；构建完成后再裁掉
 cd /opt/screenscoreboard && sudo npm ci && sudo npm run build:web && sudo npm prune --omit=dev
 sudo cp deploy/screenscoreboard.service /etc/systemd/system/
 sudo systemctl daemon-reload && sudo systemctl enable --now screenscoreboard
 ```
 
-环境变量可写入 `/etc/screenscoreboard/env`（systemd 单元已通过 `EnvironmentFile` 读取）。
+环境变量可写入 `/etc/screenscoreboard/env`（systemd 单元已通过 `EnvironmentFile` 读取）。首次启动前请写入 `ADMIN_PASSWORD`，并把文件权限设为 0600：
 
-## Electron 管理端
+```bash
+sudo install -m 600 /dev/null /etc/screenscoreboard/env
+echo "ADMIN_PASSWORD=至少8位的强密码" | sudo tee /etc/screenscoreboard/env >/dev/null
+```
 
-Electron 应用只承载**管理端**；显示端有两种打开方式：
+## Electron 管理端（本地 / 远程双模式）
+
+Electron 应用同时承载**管理端**和可选的显示端窗口，支持两种模式：
+
+- **本地模式（默认，原行为）**：内嵌启动同一个 HTTP/WS 服务，自动选择空闲端口，只绑定 `127.0.0.1`；本地模式关闭鉴权，管理端与显示端都无需登录。
+- **远程模式**：不启动本地服务，窗口加载已部署的远程计分板服务。远程管理端显示登录页，登录由远程服务处理；显示端保持公开只读。应用只保存服务器 URL，不保存账号、密码或令牌。
 
 ```bash
 npm run electron        # 开发模式启动 Electron（preelectron 会先构建前端）
@@ -248,13 +274,19 @@ npm run electron        # 开发模式启动 Electron（preelectron 会先构建
 
 启动后在应用菜单：
 
+- **服务器 → 本地模式（内置服务端）** / **远程模式…**：切换模式并重启应用
+- **服务器 → 服务器设置…**：填写远程地址、测试连接
 - **文件 → 打开显示端窗口**：新建一个显示端窗口（可再开多个，支持 F11 全屏）
-- **文件 → 在系统浏览器中打开显示端**：用默认浏览器打开显示端
-- **文件 → 新建管理端窗口**：同时管理多个项目/屏幕
+- **文件 → 在系统浏览器中打开显示端**
+- **文件 → 新建管理端窗口**
 
-Electron 会内嵌启动同一个 HTTP/WS 服务（自动选择空闲端口），管理员在管理端里的「打开显示端」链接也会被拦截为新的显示端窗口。
+远程模式要求非本机地址使用 HTTPS；自签证书需要先在操作系统/Electron 信任链中安装。也可用环境变量配置：
 
-数据目录改到系统用户数据目录，不再使用项目里的 `data/`：
+```bash
+SCOREBOARD_MODE=remote SCOREBOARD_REMOTE_URL=https://score.example.com npm run electron
+```
+
+本地模式的数据目录在系统用户数据目录，不使用项目里的 `data/`：
 
 - Linux：`~/.config/ScreenScoreBoard/data`
 - Windows：`%APPDATA%\ScreenScoreBoard\data`
@@ -284,11 +316,12 @@ npm run verify       # 端到端：HTTP/上传/WS 同步/多项目/SQLite/主题
 npm run typecheck    # 前端 TypeScript
 npm run typecheck:server
 npm run lint
-npm run test:api     # REST v1：CRUD、revision、422、旧 API 兼容
-npm run test:mcp     # HTTP / stdio MCP 工具一致性与实际调用
+npm run test:api     # REST v1：CRUD、revision、422、旧 API 兼容、鉴权
+npm run test:mcp     # HTTP / stdio MCP 工具一致性与实际调用、管理员令牌
 npm run test:mobile  # 390×844 手机布局（无 Chromium 自动 skip）
+npm run test:auth    # 角色矩阵、CSRF、setup、会话吊销、Electron 模式
 npm run test:theme
-npm run test:all     # 聚合 API / MCP / 主题 / 手机端
+npm run test:all     # 聚合 API / MCP / 主题 / 手机端 / 鉴权
 ```
 
 ## 数据

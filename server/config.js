@@ -12,7 +12,32 @@ function bool(name, fallback) {
   return v !== '0' && String(v).toLowerCase() !== 'false';
 }
 
+function posInt(name, fallback) {
+  const raw = process.env[name];
+  if (raw == null || raw === '') return fallback;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n <= 0) {
+    console.warn('[config] ' + name + ' 必须是正整数，已回退为 ' + fallback);
+    return fallback;
+  }
+  return n;
+}
+
+function oneOf(name, fallback, allowed) {
+  const raw = (process.env[name] || '').trim().toLowerCase();
+  if (!raw) return fallback;
+  if (allowed.includes(raw)) return raw;
+  console.warn('[config] ' + name + ' 只能是 ' + allowed.join(' / ') + '，已回退为 ' + fallback);
+  return fallback;
+}
+
 function load() {
+  const cookieSecure = oneOf('COOKIE_SECURE', 'auto', ['auto', 'true', 'false']);
+  const tlsCertFile = process.env.TLS_CERT_FILE || '';
+  const tlsKeyFile = process.env.TLS_KEY_FILE || '';
+  if (Boolean(tlsCertFile) !== Boolean(tlsKeyFile)) {
+    throw new Error('TLS_CERT_FILE 与 TLS_KEY_FILE 必须同时设置');
+  }
   return {
     host: process.env.HOST || '0.0.0.0',
     logLevel: process.env.LOG_LEVEL || 'info', // debug | info | warn | error
@@ -22,6 +47,20 @@ function load() {
     maxImportBytes: num('MAX_IMPORT_BYTES', 64 * 1024 * 1024),
     stateFilePretty: bool('STATE_FILE_PRETTY', false),
     allowMultiInstance: bool('ALLOW_MULTI_INSTANCE', false),
+    auth: {
+      adminUsername: process.env.ADMIN_USERNAME || 'admin',
+      adminPassword: process.env.ADMIN_PASSWORD || '',
+      adminPasswordFile: process.env.ADMIN_PASSWORD_FILE || '',
+      sessionTtlHours: posInt('SESSION_TTL_HOURS', 24),
+      sessionRememberDays: posInt('SESSION_REMEMBER_DAYS', 30),
+      cookieSecure,
+      trustProxy: bool('TRUST_PROXY', false),
+    },
+    tls: {
+      certFile: tlsCertFile,
+      keyFile: tlsKeyFile,
+      passphrase: process.env.TLS_PASSPHRASE || '',
+    },
     broadcast: {
       coalesceMs: num('BROADCAST_COALESCE_MS', 50),
       largeCoalesceMs: num('BROADCAST_LARGE_COALESCE_MS', 250),

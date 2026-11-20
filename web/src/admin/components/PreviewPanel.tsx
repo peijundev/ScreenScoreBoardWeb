@@ -22,7 +22,13 @@ function readNumber(key: string, fallback: number): number {
   return Number.isFinite(raw) && raw > 0 ? raw : fallback;
 }
 
-export default function PreviewPanel({ project }: { project: Project }): JSX.Element {
+export default function PreviewPanel({
+  project,
+  isAdmin,
+}: {
+  project: Project;
+  isAdmin: boolean;
+}): JSX.Element {
   const frame = useRef<HTMLIFrameElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const stage = useRef<HTMLDivElement>(null);
@@ -34,10 +40,11 @@ export default function PreviewPanel({ project }: { project: Project }): JSX.Ele
   const [fit, setFit] = useState(1);
   const [panMode, setPanMode] = useState(false);
   const pan = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
+  const canEdit = isAdmin && edit;
 
   const src = useMemo(
-    () => '/display-v2?project=' + encodeURIComponent(project.id) + (edit ? '&edit=1' : ''),
-    [project.id, edit],
+    () => '/display-v2?project=' + encodeURIComponent(project.id) + (canEdit ? '&edit=1' : ''),
+    [project.id, canEdit],
   );
 
   const size = useMemo(() => {
@@ -156,7 +163,7 @@ export default function PreviewPanel({ project }: { project: Project }): JSX.Ele
         </div>
       </div>
 
-      <QuickBar project={project} edit={edit} onEditChange={setEdit} />
+      {isAdmin && <QuickBar project={project} edit={canEdit} onEditChange={setEdit} />}
 
       <div
         className={'preview-frame-wrap' + (panMode ? ' pan-mode' : '')}
@@ -184,7 +191,9 @@ export default function PreviewPanel({ project }: { project: Project }): JSX.Ele
         </div>
       </div>
       <p className="preview-hint">
-        预览与显示端 1:1 复刻；勾选「编辑布局」后可拖动卡片、拉右下角调整大小；按住 Alt 或开启「平移」后拖动可移动画面。
+        {isAdmin
+          ? '预览与显示端 1:1 复刻；勾选「编辑布局」后可拖动卡片、拉右下角调整大小；按住 Alt 或开启「平移」后拖动可移动画面。'
+          : '当前为只读预览；布局与设置需要管理员权限。'}
       </p>
     </section>
   );

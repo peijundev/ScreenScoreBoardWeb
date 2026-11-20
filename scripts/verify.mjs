@@ -12,6 +12,22 @@ import WebSocket from 'ws';
 const PORT = 3456;
 const BASE = `http://127.0.0.1:${PORT}`;
 const DATA_DIR = mkdtempSync(path.join(tmpdir(), 'sb-verify-'));
+const TEST_ADMIN = 'admin';
+const TEST_PASSWORD = 'test-admin-pass';
+const AUTH_ENV = {
+  ADMIN_USERNAME: TEST_ADMIN,
+  ADMIN_PASSWORD: TEST_PASSWORD,
+  ADMIN_PASSWORD_FILE: '',
+  SESSION_TTL_HOURS: '',
+  SESSION_REMEMBER_DAYS: '',
+  COOKIE_SECURE: '',
+  TRUST_PROXY: '',
+  TLS_CERT_FILE: '',
+  TLS_KEY_FILE: '',
+  TLS_PASSPHRASE: '',
+};
+
+let adminSession = null;
 
 let passed = 0, failed = 0;
 let currentServer = null;
@@ -31,7 +47,7 @@ const PNG = Buffer.from(
 function startServer(extraEnv = {}) {
   // 用运行测试的同一个 Node，避免多版本 Node 下原生模块 ABI 不一致
   const proc = spawn(process.execPath, ['server/index.js'], {
-    env: { ...process.env, PORT: String(PORT), DATA_DIR, ...extraEnv },
+    env: { ...process.env, ...AUTH_ENV, PORT: String(PORT), DATA_DIR, ...extraEnv },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   proc.stderr.on('data', (d) => process.stderr.write('[server] ' + d));
@@ -39,11 +55,50 @@ function startServer(extraEnv = {}) {
   return proc;
 }
 
-async function waitServer() {
+function sessionFromResponse(res) {
+  const list = typeof res.headers.getSetCookie === 'function'
+    ? res.headers.getSetCookie()
+    : [res.headers.get('set-cookie')].filter(Boolean);
+  const pairs = list.filter(Boolean).map((line) => line.split(';')[0].trim());
+  const find = (name) => {
+    const pair = pairs.find((item) => item.startsWith(name + '='));
+    return pair ? pair.slice(name.length + 1) : '';
+  };
+  return { cookie: pairs.join('; '), csrf: find('ssb_csrf') };
+}
+
+async function login(base = BASE, username = TEST_ADMIN, password = TEST_PASSWORD) {
+  const res = await fetch(base + '/api/v1/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+  if (!res.ok) throw new Error('登录失败：HTTP ' + res.status);
+  return sessionFromResponse(res);
+}
+
+function authFetch(pathname, options = {}) {
+  const headers = new Headers(options.headers || {});
+  if (adminSession) {
+    headers.set('Cookie', adminSession.cookie);
+    const method = String(options.method || 'GET').toUpperCase();
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+      headers.set('X-CSRF-Token', adminSession.csrf);
+    }
+  }
+  const url = pathname.startsWith('http') ? pathname : BASE + pathname;
+  return fetch(url, { ...options, headers });
+}
+
+async function waitServer(options = {}) {
+  const autoLogin = options.login !== false;
   for (let i = 0; i < 80; i++) {
     try {
       const r = await fetch(BASE + '/api/state');
-      if (r.ok) return;
+      if (r.ok) {
+        if (autoLogin) adminSession = await login();
+        return;
+      }
     } catch (_) {}
     await new Promise((r) => setTimeout(r, 200));
   }
@@ -55,8 +110,11 @@ async function stopServer(proc) {
   await new Promise((r) => proc.once('exit', r));
 }
 
-function wsClient(name) {
-  const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
+function wsClient(name, session = null) {
+  const ws = new WebSocket(
+    `ws://127.0.0.1:${PORT}/ws`,
+    session ? { headers: { Cookie: session.cookie } } : {},
+  );
   const client = {
     ws, name, states: [], runtimes: [], acks: new Map(), seq: 0,
     ready: new Promise((res, rej) => { ws.on('open', res); ws.on('error', rej); }),
@@ -196,14 +254,14 @@ async function main() {
   assert(verData.frontend === 'react' || verData.frontend === 'missing', '版本接口返回当前前端类型');
 
   console.log('头像上传:');
-  r = await fetch(BASE + '/api/avatar', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: PNG });
+  r = await authFetch('/api/avatar', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: PNG });
   const up = await r.json();
   assert(r.ok && /^avatars\/[^/]+\.png$/.test(up.path), '上传合法 PNG 返回 path');
   r = await fetch(BASE + '/' + up.path);
   assert(r.ok && Buffer.from(await r.arrayBuffer()).equals(PNG), '上传头像可取回且一致');
-  r = await fetch(BASE + '/api/avatar', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: Buffer.alloc(3 * 1024 * 1024) });
+  r = await authFetch('/api/avatar', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: Buffer.alloc(3 * 1024 * 1024) });
   assert(r.status === 413, '3MB 上传返回 413');
-  r = await fetch(BASE + '/api/avatar', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: Buffer.from('nope') });
+  r = await authFetch('/api/avatar', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: Buffer.from('nope') });
   assert(r.status === 415, '伪造图片返回 415');
 
   console.log('自定义音效上传:');
@@ -212,32 +270,32 @@ async function main() {
   WAV.writeUInt32LE(56, 4);
   WAV.write('WAVE', 8, 'ascii');
   WAV.write('fmt ', 12, 'ascii');
-  r = await fetch(BASE + '/api/sound', { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: WAV });
+  r = await authFetch('/api/sound', { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: WAV });
   const soundUp = await r.json();
   assert(r.ok && /^sounds\/[^/]+\.wav$/.test(soundUp.path), '上传 WAV 音效返回 path');
   r = await fetch(BASE + '/' + soundUp.path);
   assert(r.ok && Buffer.from(await r.arrayBuffer()).equals(WAV), '音效文件可取回且一致');
-  r = await fetch(BASE + '/api/sound', { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: Buffer.from('not audio') });
+  r = await authFetch('/api/sound', { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: Buffer.from('not audio') });
   assert(r.status === 415, '伪造音频返回 415');
 
   // 导入时保留原始文件名（含中文），同名自动追加序号
   const namedHeaders = { 'Content-Type': 'audio/wav', 'X-File-Name': encodeURIComponent('测试音效') };
-  r = await fetch(BASE + '/api/sound', { method: 'POST', headers: namedHeaders, body: WAV });
+  r = await authFetch('/api/sound', { method: 'POST', headers: namedHeaders, body: WAV });
   const namedSound = await r.json();
   assert(r.ok && namedSound.path === 'sounds/测试音效.wav', '导入音频保留原始文件名');
   r = await fetch(BASE + '/' + namedSound.path);
   assert(r.ok && Buffer.from(await r.arrayBuffer()).equals(WAV), '中文文件名音频可访问');
-  r = await fetch(BASE + '/api/sound', { method: 'POST', headers: namedHeaders, body: WAV });
+  r = await authFetch('/api/sound', { method: 'POST', headers: namedHeaders, body: WAV });
   const namedSound2 = await r.json();
   assert(r.ok && namedSound2.path === 'sounds/测试音效-1.wav', '同名音频自动追加序号');
   const namedImageHeaders = { 'Content-Type': 'image/png', 'X-File-Name': encodeURIComponent('背景 图') };
-  r = await fetch(BASE + '/api/avatar', { method: 'POST', headers: namedImageHeaders, body: PNG });
+  r = await authFetch('/api/avatar', { method: 'POST', headers: namedImageHeaders, body: PNG });
   const namedImage = await r.json();
   assert(r.ok && namedImage.path === 'avatars/背景-图.png', '导入图片保留原始文件名');
 
   console.log('WebSocket 同步:');
   const viewer = wsClient('viewer');
-  const admin = wsClient('admin');
+  const admin = wsClient('admin', adminSession);
   await Promise.all([viewer.ready, admin.ready]);
   await viewer.waitState((s) => s.projects && s.projects[projectId]);
   assert(viewer.states.length >= 1, 'viewer 连接即收到初始状态');
@@ -393,7 +451,7 @@ async function main() {
     themeId, theme: v2Theme('验证主题 v2', '#445566'),
   });
   assert(updatedTheme.result.theme && updatedTheme.result.theme.revision === 2, 'themeUpdate revision +1');
-  const themeListRes = await fetch(BASE + '/api/themes');
+  const themeListRes = await authFetch('/api/themes');
   const themeList = await themeListRes.json();
   assert(themeListRes.ok && themeList.themes.some((t) => t.id === themeId), '主题库接口返回摘要');
   const themeRes = await fetch(BASE + '/api/themes/' + themeId);
@@ -431,7 +489,7 @@ async function main() {
     '主题脚本源码随主题保存并读取');
 
   await adminOp('draftSave', { projectId, theme: v2Theme('项目草稿', '#778899') });
-  const draftRes = await fetch(BASE + '/api/projects/' + projectId + '/theme-draft');
+  const draftRes = await authFetch('/api/projects/' + projectId + '/theme-draft');
   const draftData = await draftRes.json();
   assert(draftRes.ok && draftData.theme && draftData.theme.meta.name === '项目草稿' &&
     draftData.theme.settings.accent === '#778899', '项目草稿保存与读取');
@@ -940,7 +998,7 @@ async function main() {
   await adminOp('setScore', { personId: batchIds[1], score: 8 });
 
   const csvFetch = async () => {
-    const res = await fetch(BASE + '/api/scores.csv?project=' + projectId + '&scope=people');
+    const res = await authFetch('/api/scores.csv?project=' + projectId + '&scope=people');
     const buf = Buffer.from(await res.arrayBuffer());
     return { res, buf, text: buf.toString('utf8') };
   };
@@ -992,11 +1050,11 @@ async function main() {
   assert(P(s).settings.bgmVolume === 0.6 && P(s).settings.bgmLoop === false, '背景音乐设置同步');
 
   console.log('导出 / 导入 / 备份 / 清理:');
-  const exportRes = await fetch(BASE + '/api/export?project=' + projectId + '&assets=1');
+  const exportRes = await authFetch('/api/export?project=' + projectId + '&assets=1');
   const exportData = await exportRes.json();
   assert(exportRes.ok && exportData.format === 'screenscoreboard.project' && exportData.assets[up.path],
     '项目导出包含资产');
-  const importRes = await fetch(BASE + '/api/import', {
+  const importRes = await authFetch('/api/import', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(exportData),
   });
   const importData = await importRes.json();
@@ -1014,7 +1072,7 @@ async function main() {
 
   const badImport = JSON.parse(JSON.stringify(exportData));
   badImport.project.settings.columns = 99;
-  const badImportRes = await fetch(BASE + '/api/import', {
+  const badImportRes = await authFetch('/api/import', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(badImport),
   });
   assert(badImportRes.status === 400, '非法设置导入被拒绝');
@@ -1022,7 +1080,7 @@ async function main() {
   await viewer.waitState((st) => !st.projects[importData.projectId]);
   assert(Object.keys((await getState()).projects).length === 1, '导入项目可删除');
 
-  const backupRes = await fetch(BASE + '/api/backups/run', { method: 'POST' });
+  const backupRes = await authFetch('/api/backups/run', { method: 'POST' });
   const backupData = await backupRes.json();
   assert(backupRes.ok && existsSync(path.join(backupData.dir, backupData.file)), '手动备份生成文件');
 
@@ -1031,9 +1089,9 @@ async function main() {
   writeFileSync(orphanPath, PNG);
   const oldTime = new Date(Date.now() - 48 * 3600 * 1000);
   utimesSync(orphanPath, oldTime, oldTime);
-  const orphanScan = await (await fetch(BASE + '/api/orphans')).json();
+  const orphanScan = await (await authFetch('/api/orphans')).json();
   assert(orphanScan.avatars.count >= 1, '扫描到孤儿头像');
-  const cleanupRes = await fetch(BASE + '/api/orphans/cleanup', {
+  const cleanupRes = await authFetch('/api/orphans/cleanup', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
   });
   await cleanupRes.json();
@@ -1041,23 +1099,23 @@ async function main() {
   assert(existsSync(path.join(DATA_DIR, up.path)), '引用的头像未被清理');
 
   // 音效库：导入的文件永久保留，删除前需解除引用
-  r = await fetch(BASE + '/api/sound', { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: WAV });
+  r = await authFetch('/api/sound', { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: WAV });
   const libSound = await r.json();
   assert(r.ok && /^sounds\/[^/]+\.wav$/.test(libSound.path), '音效库可导入新音效');
   const libPath = path.join(DATA_DIR, libSound.path);
   const libName = libSound.path.split('/')[1];
   utimesSync(libPath, oldTime, oldTime);
-  const libScan = await (await fetch(BASE + '/api/orphans')).json();
+  const libScan = await (await authFetch('/api/orphans')).json();
   assert(libScan.sounds.count === 0, '音效库文件不算孤儿');
-  const libCleanup = await fetch(BASE + '/api/orphans/cleanup', {
+  const libCleanup = await authFetch('/api/orphans/cleanup', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
   });
   await libCleanup.json();
   assert(libCleanup.ok && existsSync(libPath), '音效库文件不被孤儿清理');
   await adminOp('updateSettings', { patch: { customSound: libSound.path } });
-  let delRes = await fetch(BASE + '/api/v1/assets/sounds/' + libName, { method: 'DELETE' });
+  let delRes = await authFetch('/api/v1/assets/sounds/' + libName, { method: 'DELETE' });
   assert(delRes.status === 422, '被引用的音效不可删除');
-  delRes = await fetch(BASE + '/api/v1/assets/sounds/' + libName + '?force=1', { method: 'DELETE' });
+  delRes = await authFetch('/api/v1/assets/sounds/' + libName + '?force=1', { method: 'DELETE' });
   const delData = await delRes.json().catch(() => ({}));
   let libState = await getState();
   assert(delRes.ok && delData.data?.removed === libSound.path && delData.data?.cleared >= 1 &&
@@ -1066,25 +1124,25 @@ async function main() {
   await adminOp('updateSettings', { patch: { customSound: soundUp.path } });
 
   // 图片资源：被引用时需强制删除并清空引用
-  r = await fetch(BASE + '/api/avatar', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: PNG });
+  r = await authFetch('/api/avatar', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: PNG });
   const libImage = await r.json();
   assert(r.ok && /^avatars\/[^/]+\.png$/.test(libImage.path), '资源库可导入新图片');
   const libImagePath = path.join(DATA_DIR, libImage.path);
   const libImageName = libImage.path.split('/')[1];
   await adminOp('setAvatar', { kind: 'person', id: pid, avatar: libImage.path });
-  delRes = await fetch(BASE + '/api/v1/assets/avatars/' + libImageName, { method: 'DELETE' });
+  delRes = await authFetch('/api/v1/assets/avatars/' + libImageName, { method: 'DELETE' });
   assert(delRes.status === 422, '被引用的图片不可删除');
-  delRes = await fetch(BASE + '/api/v1/assets/avatars/' + libImageName + '?force=1', { method: 'DELETE' });
+  delRes = await authFetch('/api/v1/assets/avatars/' + libImageName + '?force=1', { method: 'DELETE' });
   const imgDelData = await delRes.json().catch(() => ({}));
   libState = await getState();
   assert(delRes.ok && imgDelData.data?.removed === libImage.path && imgDelData.data?.cleared >= 1 &&
     !existsSync(libImagePath) && P(libState).people[pid].avatar === null,
     '强制删除图片并移除头像引用');
   await adminOp('setAvatar', { kind: 'person', id: pid, avatar: up.path });
-  const assetsRes = await (await fetch(BASE + '/api/v1/assets')).json();
+  const assetsRes = await (await authFetch('/api/v1/assets')).json();
   assert(Array.isArray(assetsRes.data?.sounds) && assetsRes.data.sounds.some((a) => a.path === soundUp.path),
     '资源库列表包含已上传音效');
-  r = await fetch(BASE + '/api/v1/assets/sounds/..%2F..%2Fetc%2Fpasswd', { method: 'DELETE' });
+  r = await authFetch('/api/v1/assets/sounds/..%2F..%2Fetc%2Fpasswd', { method: 'DELETE' });
   assert(r.status === 404 || r.status === 422, '资源删除拒绝路径穿越');
 
   await adminOp('setScore', { personId: pid, score: 7 });
@@ -1204,7 +1262,7 @@ async function main() {
   let sqlState = await getState();
   const sqlProjectId = Object.keys(sqlState.projects)[0];
   assert(Boolean(sqlProjectId), 'SQLite 后端启动并初始化');
-  const sqlClient = wsClient('sqlite-admin');
+  const sqlClient = wsClient('sqlite-admin', adminSession);
   await sqlClient.ready;
   await sqlClient.waitState((st) => st.projects && st.projects[sqlProjectId]);
   const sqlAck = await sqlClient.sendOp('addPerson', { projectId: sqlProjectId, name: '持久化测试' });
@@ -1243,7 +1301,7 @@ async function main() {
     await waitServer();
     let st = await getState();
     const pid = Object.keys(st.projects)[0];
-    const client = wsClient(label + '-admin');
+    const client = wsClient(label + '-admin', adminSession);
     await client.ready;
     await client.waitState((x) => x.projects && x.projects[pid]);
     const ack = await client.sendOp('addPerson', { projectId: pid, name: label + '测试' });

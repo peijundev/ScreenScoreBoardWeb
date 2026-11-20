@@ -13,14 +13,53 @@ const WebSocket = require('ws');
 const PORT = 3467;
 const BASE = `http://127.0.0.1:${PORT}`;
 const DATA_DIR = mkdtempSync(path.join(tmpdir(), 'sb-api-'));
+const ADMIN_PASSWORD = 'test-admin-pass';
 let server = null;
+let session = null;
 
 function startServer() {
   return spawn(process.execPath, ['server/index.js'], {
     cwd: path.join(path.dirname(fileURLToPath(import.meta.url)), '..'),
-    env: { ...process.env, PORT: String(PORT), DATA_DIR, STORAGE: 'json', LOG_LEVEL: 'error' },
+    env: {
+      ...process.env,
+      PORT: String(PORT),
+      DATA_DIR,
+      STORAGE: 'json',
+      LOG_LEVEL: 'error',
+      ADMIN_USERNAME: 'admin',
+      ADMIN_PASSWORD,
+      ADMIN_PASSWORD_FILE: '',
+      SESSION_TTL_HOURS: '',
+      SESSION_REMEMBER_DAYS: '',
+      COOKIE_SECURE: '',
+      TRUST_PROXY: '',
+      TLS_CERT_FILE: '',
+      TLS_KEY_FILE: '',
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
+}
+
+function sessionFromResponse(res) {
+  const list = typeof res.headers.getSetCookie === 'function'
+    ? res.headers.getSetCookie()
+    : [res.headers.get('set-cookie')].filter(Boolean);
+  const pairs = list.filter(Boolean).map((line) => line.split(';')[0].trim());
+  const find = (name) => {
+    const pair = pairs.find((item) => item.startsWith(name + '='));
+    return pair ? pair.slice(name.length + 1) : '';
+  };
+  return { cookie: pairs.join('; '), csrf: find('ssb_csrf') };
+}
+
+async function loginAs(username, password) {
+  const res = await fetch(BASE + '/api/v1/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+  if (!res.ok) throw new Error('登录失败：HTTP ' + res.status);
+  return sessionFromResponse(res);
 }
 
 async function stopProcess(proc) {
@@ -34,29 +73,38 @@ async function waitServer() {
   for (let i = 0; i < 100; i += 1) {
     try {
       const res = await fetch(BASE + '/api/health');
-      if (res.ok) return;
+      if (res.ok) {
+        session = await loginAs('admin', ADMIN_PASSWORD);
+        return;
+      }
     } catch (_) { /* retry */ }
     await new Promise((r) => setTimeout(r, 100));
   }
   throw new Error('服务未启动');
 }
 
-async function api(pathname, options = {}) {
-  const res = await fetch(BASE + '/api/v1' + pathname, {
-    ...options,
-    headers: {
-      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(options.headers || {}),
-    },
-  });
+async function api(pathname, options = {}, authSession = session) {
+  const method = String(options.method || 'GET').toUpperCase();
+  const headers = {
+    ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+    ...(options.headers || {}),
+  };
+  if (authSession) {
+    headers.Cookie = authSession.cookie;
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) headers['X-CSRF-Token'] = authSession.csrf;
+  }
+  const res = await fetch(BASE + '/api/v1' + pathname, { ...options, headers });
   const text = await res.text();
   let json = null;
   try { json = text ? JSON.parse(text) : null; } catch (_) { /* not json */ }
   return { status: res.status, json, text, headers: res.headers };
 }
 
-async function wsClient() {
-  const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
+async function wsClient(authSession = session) {
+  const ws = new WebSocket(
+    `ws://127.0.0.1:${PORT}/ws`,
+    authSession ? { headers: { Cookie: authSession.cookie } } : {},
+  );
   await new Promise((resolve, reject) => { ws.once('open', resolve); ws.once('error', reject); });
   const states = [];
   ws.on('message', (buf) => {
@@ -103,6 +151,20 @@ test('REST v1 全量资源、revision 与旧 API 兼容', async (t) => {
   const health = await api('/health');
   assert.equal(health.status, 200);
   assert.equal(health.json.data.ok, true);
+
+  const anonymousState = await fetch(BASE + '/api/v1/state');
+  assert.equal(anonymousState.status, 200, '公开状态无需登录');
+  const anonymousWrite = await api('/projects', {
+    method: 'POST', body: JSON.stringify({ name: '匿名' }),
+  }, null);
+  assert.equal(anonymousWrite.status, 401, '匿名写操作被拒绝');
+  const noCsrf = await fetch(BASE + '/api/v1/projects', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: session.cookie },
+    body: JSON.stringify({ name: '缺少 CSRF' }),
+  });
+  assert.equal(noCsrf.status, 403, '缺少 CSRF 头被拒绝');
+  assert.equal((await noCsrf.json()).error.code, 'CSRF_FAILED');
 
   const openapi = await api('/openapi.json');
   assert.equal(openapi.status, 200);
@@ -279,6 +341,37 @@ test('REST v1 全量资源、revision 与旧 API 兼容', async (t) => {
   });
   assert.equal(escape.status, 200);
   assert.equal(escape.json.data.score, 7);
+
+  const createdOp = await api('/auth/users', {
+    method: 'POST',
+    body: JSON.stringify({ username: 'op1', password: 'operator-pass', role: 'operator' }),
+  });
+  assert.equal(createdOp.status, 200);
+  const opSession = await loginAs('op1', 'operator-pass');
+  const opScore = await api(
+    `/projects/${projectId}/people/${personId}/score/add`,
+    { method: 'POST', body: JSON.stringify({ delta: 1 }) },
+    opSession,
+  );
+  assert.equal(opScore.status, 200, '操作员可以记分');
+  const opSettings = await api(
+    `/projects/${projectId}/settings`,
+    { method: 'PATCH', body: JSON.stringify({ patch: { accent: '#000000' } }) },
+    opSession,
+  );
+  assert.equal(opSettings.status, 403, '操作员不能改设置');
+  const opEscape = await api(
+    '/ops',
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        op: 'updateSettings',
+        payload: { projectId, patch: { accent: '#000000' } },
+      }),
+    },
+    opSession,
+  );
+  assert.equal(opEscape.status, 403, '操作员不能借 /ops 提权');
 
   const missing = await api('/projects/pr_missing');
   assert.equal(missing.status, 404);

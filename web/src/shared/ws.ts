@@ -12,6 +12,11 @@ export interface Connection {
   close: () => void;
 }
 
+export interface ConnectOptions {
+  /** 4401 会话失效 / 4403 权限变化时回调；调用后不再自动重连 */
+  onAuthLost?: (reason: 'expired' | 'forbidden') => void;
+}
+
 interface Pending {
   resolve: (value: unknown) => void;
   reject: (reason: Error) => void;
@@ -34,6 +39,7 @@ interface AckMessage {
 export function connectWS(
   onState: (snapshot: Snapshot, runtime: RuntimeSnapshot | null) => void,
   onStatus?: (status: ConnStatus) => void,
+  options: ConnectOptions = {},
 ): Connection {
   let delay = 1000;
   let ws: WebSocket | null = null;
@@ -71,10 +77,15 @@ export function connectWS(
         else p.reject(new Error(msg.error || '操作失败'));
       }
     };
-    ws.onclose = () => {
+    ws.onclose = (ev: CloseEvent) => {
       for (const p of pending.values()) p.reject(new Error('连接已断开'));
       pending.clear();
       if (closedByUser) return;
+      if (ev.code === 4401 || ev.code === 4403) {
+        closedByUser = true;
+        options.onAuthLost?.(ev.code === 4401 ? 'expired' : 'forbidden');
+        return;
+      }
       onStatus?.('connecting');
       setTimeout(connect, delay);
       delay = Math.min(delay * 2, 15000);

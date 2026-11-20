@@ -8,17 +8,25 @@ import FeaturesDialog from './components/FeaturesDialog';
 import AssetLibraryDialog from './components/AssetLibraryDialog';
 import ThemeEditorDialog from './components/ThemeEditorDialog';
 import ThemeStudioDialog from './theme/studio/ThemeStudioDialog';
+import AccountDialog from './components/AccountDialog';
 import MobileNav, { type MobileTab } from './components/MobileNav';
 import { DialogHost } from './components/dialogs';
 import Toasts from './components/Toasts';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import { projectOf, projectsOf, useAppStore } from '../shared/store';
+import { useAuthStore } from '../shared/auth';
 
-type DialogKind = 'settings' | 'features' | 'assets' | 'theme' | 'studio' | null;
+type DialogKind = 'settings' | 'features' | 'assets' | 'theme' | 'studio' | 'account' | null;
 
 export default function App(): JSX.Element {
   const snapshot = useAppStore((s) => s.snapshot);
   const connected = useAppStore((s) => s.connected);
+  const authStatus = useAuthStore((s) => s.status);
+  const user = authStatus?.user ?? null;
+  const authEnabled = authStatus?.authEnabled !== false;
+  const role = user?.role ?? 'viewer';
+  const isAdmin = role === 'admin';
+  const canScore = role === 'admin' || role === 'operator';
   const projects = useMemo(() => projectsOf(snapshot), [snapshot]);
   const [dialog, setDialog] = useState<DialogKind>(null);
   const [projectId, setProjectId] = useState<string | null>(
@@ -52,12 +60,17 @@ export default function App(): JSX.Element {
           project={project}
           projects={projects}
           connected={connected}
+          user={user}
+          authEnabled={authEnabled}
+          isAdmin={isAdmin}
+          canScore={canScore}
           onSelectProject={setProjectId}
           onOpenSettings={() => setDialog('settings')}
           onOpenFeatures={() => setDialog('features')}
           onOpenAssets={() => setDialog('assets')}
           onOpenTheme={() => setDialog('theme')}
           onOpenStudio={() => setDialog('studio')}
+          onOpenAccount={() => setDialog('account')}
         />
       )}
       <Toasts />
@@ -70,6 +83,10 @@ export default function App(): JSX.Element {
             project={project}
             projects={projects}
             connected={connected}
+            user={user}
+            authEnabled={authEnabled}
+            isAdmin={isAdmin}
+            canScore={canScore}
             tab={mobileTab}
             onTab={setMobileTab}
             onSelectProject={setProjectId}
@@ -78,40 +95,44 @@ export default function App(): JSX.Element {
             onOpenAssets={() => setDialog('assets')}
             onOpenTheme={() => setDialog('theme')}
             onOpenStudio={() => setDialog('studio')}
+            onOpenAccount={() => setDialog('account')}
           />
           {/* 三个面板常驻挂载、仅隐藏，避免切 tab 丢失输入与预览状态 */}
           <div className={'mobile-panel' + (mobileTab === 'preview' ? '' : ' is-hidden')}>
-            <PreviewPanel project={project} />
+            <PreviewPanel project={project} isAdmin={isAdmin} />
           </div>
           <div className={'mobile-panel' + (mobileTab === 'people' ? '' : ' is-hidden')}>
-            <PeoplePanel project={project} />
+            <PeoplePanel project={project} canScore={canScore} isAdmin={isAdmin} />
           </div>
           <div className={'mobile-panel' + (mobileTab === 'teams' ? '' : ' is-hidden')}>
-            <TeamsPanel project={project} />
+            <TeamsPanel project={project} canScore={canScore} isAdmin={isAdmin} />
           </div>
         </>
       ) : (
         <main className="panels">
-          <PreviewPanel project={project} />
-          <PeoplePanel project={project} />
-          <TeamsPanel project={project} />
+          <PreviewPanel project={project} isAdmin={isAdmin} />
+          <PeoplePanel project={project} canScore={canScore} isAdmin={isAdmin} />
+          <TeamsPanel project={project} canScore={canScore} isAdmin={isAdmin} />
         </main>
       )}
 
-      {project && dialog === 'settings' && (
+      {project && isAdmin && dialog === 'settings' && (
         <SettingsDialog project={project} onClose={() => setDialog(null)} />
       )}
-      {project && dialog === 'features' && (
+      {project && isAdmin && dialog === 'features' && (
         <FeaturesDialog project={project} onClose={() => setDialog(null)} />
       )}
-      {project && dialog === 'assets' && (
+      {project && isAdmin && dialog === 'assets' && (
         <AssetLibraryDialog onClose={() => setDialog(null)} />
       )}
-      {project && dialog === 'theme' && (
+      {project && isAdmin && dialog === 'theme' && (
         <ThemeEditorDialog project={project} onClose={() => setDialog(null)} />
       )}
-      {project && dialog === 'studio' && (
+      {project && isAdmin && dialog === 'studio' && (
         <ThemeStudioDialog project={project} onClose={() => setDialog(null)} />
+      )}
+      {authEnabled && dialog === 'account' && (
+        <AccountDialog onClose={() => setDialog(null)} />
       )}
       <DialogHost />
     </>

@@ -1398,3 +1398,140 @@ select:focus-visible {
   .data-buttons,
   .feature-grid { grid-template-columns: 1fr; }
 }
+
+/* ---- 鉴权：登录 / 初始化 ---- */
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--bg);
+}
+.auth-card {
+  width: min(420px, 100%);
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+}
+.auth-brand {
+  color: var(--accent);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.auth-card h1 { font-size: 20px; font-weight: 600; }
+.auth-field { display: flex; flex-direction: column; gap: 6px; }
+.auth-field span { color: var(--text-dim); font-size: 12px; }
+.auth-field input {
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  color: var(--text);
+  padding: 10px 12px;
+  font-size: 14px;
+}
+.auth-field input:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+.auth-check { display: flex; align-items: center; gap: 8px; color: var(--text-dim); font-size: 12px; }
+.auth-error {
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  padding: 8px 10px;
+  font-size: 12px;
+}
+.auth-notice {
+  color: var(--text);
+  background: var(--subcard);
+  border-left: 3px solid var(--accent);
+  padding: 8px 10px;
+  font-size: 12px;
+}
+.auth-submit { width: 100%; padding: 10px 14px; font-size: 14px; }
+.auth-loading { color: var(--text-dim); text-align: center; }
+.auth-foot { margin-top: 4px; }
+.auth-card code {
+  background: var(--subcard);
+  padding: 1px 4px;
+  border: 1px solid var(--card-border);
+}
+
+/* ---- 账号与安全 ---- */
+.account-dialog { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.account-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--card-border);
+  padding: 0 8px;
+  flex: 0 0 auto;
+}
+.account-tabs button {
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--text-dim);
+  padding: 9px 12px;
+  cursor: pointer;
+  font: inherit;
+}
+.account-tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
+.account-panel {
+  padding: 12px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+.account-panel h3 { font-size: 13px; font-weight: 600; }
+.account-form-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.account-form-row input, .account-form-row select,
+.account-toolbar input, .account-toolbar select {
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  color: var(--text);
+  padding: 6px 8px;
+  font: inherit;
+}
+.account-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.account-days { width: 72px; }
+.account-list { display: flex; flex-direction: column; gap: 6px; }
+.account-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+  border: 1px solid var(--card-border);
+  background: var(--subcard);
+  padding: 9px 10px;
+}
+.account-row.is-disabled { opacity: 0.62; }
+.account-row-main { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; min-width: 0; }
+.account-row-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.account-row-actions select {
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  color: var(--text);
+  padding: 4px 6px;
+  font: inherit;
+}
+.account-row .tag {
+  font-size: 11px;
+  border: 1px solid var(--card-border);
+  padding: 0 5px;
+  color: var(--text-dim);
+}
+.account-row .tag.danger { color: var(--danger); border-color: var(--danger); }
+.account-token-once {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid var(--accent);
+  background: var(--subcard);
+  padding: 8px;
+}
+.account-token-once code { word-break: break-all; flex: 1 1 260px; font-size: 12px; }
+.account-password { max-width: 420px; }

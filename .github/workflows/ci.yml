@@ -69,3 +69,12 @@ jobs:
 
       - name: End-to-end verify
         run: npm run verify
+
+      - name: REST v1 tests
+        run: npm run test:api
+
+      - name: MCP tests
+        run: npm run test:mcp
+
+      - name: Auth tests
+        run: npm run test:auth

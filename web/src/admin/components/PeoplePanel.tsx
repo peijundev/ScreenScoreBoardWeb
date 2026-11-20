@@ -9,9 +9,11 @@ import { confirm, prompt } from './dialogs';
 
 interface Props {
   project: Project;
+  canScore: boolean;
+  isAdmin: boolean;
 }
 
-export default function PeoplePanel({ project }: Props): JSX.Element {
+export default function PeoplePanel({ project, canScore, isAdmin }: Props): JSX.Element {
   const [query, setQuery] = useState('');
   const [name, setName] = useState('');
   const [avatar, setAvatar] = useState<string | null>(null);
@@ -79,12 +81,12 @@ export default function PeoplePanel({ project }: Props): JSX.Element {
         </div>
       )}
       <div className="panel-subbar">
-        {settings.featureBatchAdd !== false && (
+        {isAdmin && settings.featureBatchAdd !== false && (
           <button className="btn small" type="button" onClick={() => setBatchOpen(true)}>
             批量添加
           </button>
         )}
-        {settings.featureResetScores !== false && (
+        {isAdmin && settings.featureResetScores !== false && (
           <button
             className="btn small danger"
             type="button"
@@ -111,35 +113,37 @@ export default function PeoplePanel({ project }: Props): JSX.Element {
         </span>
       </div>
 
-      <form className="add-form" onSubmit={onAdd}>
-        <img
-          className="avatar-preview"
-          src={avatarURL({ name: name || '?', avatar })}
-          alt="头像预览"
-        />
-        <input
-          type="text"
-          maxLength={20}
-          placeholder="姓名"
-          aria-label="姓名"
-          required
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <label className="file-btn">
-          选择头像
-          <input
-            ref={avatarInput}
-            type="file"
-            accept="image/png,image/jpeg,image/webp,image/gif"
-            hidden
-            onChange={onPickAvatar}
+      {isAdmin && (
+        <form className="add-form" onSubmit={onAdd}>
+          <img
+            className="avatar-preview"
+            src={avatarURL({ name: name || '?', avatar })}
+            alt="头像预览"
           />
-        </label>
-        <button type="submit" className="btn primary">
-          添加
-        </button>
-      </form>
+          <input
+            type="text"
+            maxLength={20}
+            placeholder="姓名"
+            aria-label="姓名"
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <label className="file-btn">
+            选择头像
+            <input
+              ref={avatarInput}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              hidden
+              onChange={onPickAvatar}
+            />
+          </label>
+          <button type="submit" className="btn primary">
+            添加
+          </button>
+        </form>
+      )}
 
       <div className="people-list">
         {allPeople.length === 0 && (
@@ -161,6 +165,8 @@ export default function PeoplePanel({ project }: Props): JSX.Element {
             quickScore={Boolean(settings.featureQuickScore)}
             avatarEdit={settings.featureAvatarEdit !== false}
             mobile={mobile}
+            canScore={canScore}
+            isAdmin={isAdmin}
           />
         ))}
       </div>
@@ -181,6 +187,8 @@ interface RowProps {
   quickScore: boolean;
   avatarEdit: boolean;
   mobile: boolean;
+  canScore: boolean;
+  isAdmin: boolean;
 }
 
 function PersonRowBase({
@@ -193,6 +201,8 @@ function PersonRowBase({
   quickScore,
   avatarEdit,
   mobile,
+  canScore,
+  isAdmin,
 }: RowProps): JSX.Element {
   const [delta, setDelta] = useState('1');
 
@@ -251,27 +261,29 @@ function PersonRowBase({
 
   return (
     <div className="person-row" data-id={person.id}>
-      <span className="move-btns">
-        <button
-          className="btn small move-up"
-          title="上移"
-          disabled={!canUp}
-          onClick={() => projectOp(projectId, 'movePerson', { personId: person.id, direction: 'up' })}
-        >
-          ↑
-        </button>
-        <button
-          className="btn small move-down"
-          title="下移"
-          disabled={!canDown}
-          onClick={() => projectOp(projectId, 'movePerson', { personId: person.id, direction: 'down' })}
-        >
-          ↓
-        </button>
-      </span>
+      {isAdmin && (
+        <span className="move-btns">
+          <button
+            className="btn small move-up"
+            title="上移"
+            disabled={!canUp}
+            onClick={() => projectOp(projectId, 'movePerson', { personId: person.id, direction: 'up' })}
+          >
+            ↑
+          </button>
+          <button
+            className="btn small move-down"
+            title="下移"
+            disabled={!canDown}
+            onClick={() => projectOp(projectId, 'movePerson', { personId: person.id, direction: 'down' })}
+          >
+            ↓
+          </button>
+        </span>
+      )}
       <img src={avatarURL(person, 48)} alt="" />
 
-      {avatarEdit && (
+      {isAdmin && avatarEdit && (
         <>
           <label className="btn small file-mini" title="更换头像">
             头像
@@ -305,20 +317,24 @@ function PersonRowBase({
       <span className="p-name" title={person.name}>
         {person.name}
       </span>
-      <button className="btn small" type="button" title="修改姓名" onClick={() => { void rename(); }}>
-        改名
-      </button>
-      <button
-        className="btn small bio-btn"
-        type="button"
-        title={person.bio ? '简介：' + person.bio : '设置简介'}
-        onClick={() => { void editBio(); }}
-      >
-        简介
-      </button>
+      {isAdmin && (
+        <>
+          <button className="btn small" type="button" title="修改姓名" onClick={() => { void rename(); }}>
+            改名
+          </button>
+          <button
+            className="btn small bio-btn"
+            type="button"
+            title={person.bio ? '简介：' + person.bio : '设置简介'}
+            onClick={() => { void editBio(); }}
+          >
+            简介
+          </button>
+        </>
+      )}
       <span className={'p-score ' + scoreClass(person.score)}>{person.score}</span>
 
-      {quickScore && (mobile ? (
+      {canScore && quickScore && (mobile ? (
         <span className="remote-pad">
           <button className="remote-btn remote-plus" type="button" onClick={() => addScore(1)}>
             +1
@@ -338,7 +354,7 @@ function PersonRowBase({
         </span>
       ))}
 
-      {(!mobile || !quickScore) && (
+      {canScore && (!mobile || !quickScore) && (
         <span className="score-ctl">
           <input
             type="number"
@@ -368,69 +384,73 @@ function PersonRowBase({
         </span>
       )}
 
-      <select
-        className="team-select"
-        value={person.teamId ?? ''}
-        onChange={(e) =>
-          projectOp(projectId, 'assignTeam', { personId: person.id, teamId: e.target.value || null }).catch(
-            (err: Error) => toast(err.message),
-          )
-        }
-      >
-        <option value="">无团队</option>
-        {teams.map((t) => (
-          <option key={t.id} value={t.id}>
-            {t.name}
-          </option>
-        ))}
-      </select>
+      {isAdmin && (
+        <>
+          <select
+            className="team-select"
+            value={person.teamId ?? ''}
+            onChange={(e) =>
+              projectOp(projectId, 'assignTeam', { personId: person.id, teamId: e.target.value || null }).catch(
+                (err: Error) => toast(err.message),
+              )
+            }
+          >
+            <option value="">无团队</option>
+            {teams.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
 
-      <label className="btn small file-mini" title="卡片背景图（也用于团队内小卡片）">
-        卡面
-        <input
-          type="file"
-          className="card-img-input"
-          accept="image/png,image/jpeg,image/webp,image/gif"
-          hidden
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) uploadCardImage(f);
-            e.target.value = '';
-          }}
-        />
-      </label>
-      {person.cardImage && (
-        <button
-          className="btn small card-img-clear"
-          onClick={() =>
-            projectOp(projectId, 'setCardImage', { kind: 'person', id: person.id, image: null }).catch(
-              (err: Error) => toast(err.message),
-            )
-          }
-        >
-          清卡面
-        </button>
+          <label className="btn small file-mini" title="卡片背景图（也用于团队内小卡片）">
+            卡面
+            <input
+              type="file"
+              className="card-img-input"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) uploadCardImage(f);
+                e.target.value = '';
+              }}
+            />
+          </label>
+          {person.cardImage && (
+            <button
+              className="btn small card-img-clear"
+              onClick={() =>
+                projectOp(projectId, 'setCardImage', { kind: 'person', id: person.id, image: null }).catch(
+                  (err: Error) => toast(err.message),
+                )
+              }
+            >
+              清卡面
+            </button>
+          )}
+
+          <button
+            className="btn small danger person-del"
+            onClick={() => {
+              void (async () => {
+                const ok = await confirm({
+                  title: '删除人员',
+                  message: '确定删除「' + person.name + '」？',
+                  confirmText: '删除',
+                  danger: true,
+                });
+                if (!ok) return;
+                projectOp(projectId, 'removePerson', { personId: person.id }).catch((err: Error) =>
+                  toast(err.message),
+                );
+              })();
+            }}
+          >
+            删除
+          </button>
+        </>
       )}
-
-      <button
-        className="btn small danger person-del"
-        onClick={() => {
-          void (async () => {
-            const ok = await confirm({
-              title: '删除人员',
-              message: '确定删除「' + person.name + '」？',
-              confirmText: '删除',
-              danger: true,
-            });
-            if (!ok) return;
-            projectOp(projectId, 'removePerson', { personId: person.id }).catch((err: Error) =>
-              toast(err.message),
-            );
-          })();
-        }}
-      >
-        删除
-      </button>
     </div>
   );
 }

@@ -14,15 +14,84 @@ const { listRoutes } = require(path.join(ROOT, 'server/api'));
 const PORT = 3468;
 const BASE = `http://127.0.0.1:${PORT}`;
 const DATA_DIR = mkdtempSync(path.join(tmpdir(), 'sb-mcp-'));
+const ADMIN_PASSWORD = 'test-admin-pass';
 let server = null;
 let rpcId = 0;
+let adminToken = '';
 
 function startServer() {
   return spawn(process.execPath, ['server/index.js'], {
     cwd: ROOT,
-    env: { ...process.env, PORT: String(PORT), DATA_DIR, STORAGE: 'json', LOG_LEVEL: 'error' },
+    env: {
+      ...process.env,
+      PORT: String(PORT),
+      DATA_DIR,
+      STORAGE: 'json',
+      LOG_LEVEL: 'error',
+      ADMIN_USERNAME: 'admin',
+      ADMIN_PASSWORD,
+      ADMIN_PASSWORD_FILE: '',
+      SESSION_TTL_HOURS: '',
+      SESSION_REMEMBER_DAYS: '',
+      COOKIE_SECURE: '',
+      TRUST_PROXY: '',
+      TLS_CERT_FILE: '',
+      TLS_KEY_FILE: '',
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
+}
+
+function sessionFromResponse(res) {
+  const list = typeof res.headers.getSetCookie === 'function'
+    ? res.headers.getSetCookie()
+    : [res.headers.get('set-cookie')].filter(Boolean);
+  const pairs = list.filter(Boolean).map((line) => line.split(';')[0].trim());
+  const find = (name) => {
+    const pair = pairs.find((item) => item.startsWith(name + '='));
+    return pair ? pair.slice(name.length + 1) : '';
+  };
+  return { cookie: pairs.join('; '), csrf: find('ssb_csrf') };
+}
+
+async function loginAdmin() {
+  const res = await fetch(BASE + '/api/v1/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: 'admin', password: ADMIN_PASSWORD }),
+  });
+  if (!res.ok) throw new Error('登录失败：HTTP ' + res.status);
+  return sessionFromResponse(res);
+}
+
+async function createToken(session, userId = '') {
+  const pathname = userId
+    ? '/api/v1/auth/users/' + encodeURIComponent(userId) + '/tokens'
+    : '/api/v1/auth/tokens';
+  const res = await fetch(BASE + pathname, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Cookie: session.cookie,
+      'X-CSRF-Token': session.csrf,
+    },
+    body: JSON.stringify({ name: 'mcp-test' }),
+  });
+  if (!res.ok) throw new Error('创建令牌失败：HTTP ' + res.status);
+  return (await res.json()).data.token;
+}
+
+async function createTokenWithAdmin(userId) {
+  const res = await fetch(BASE + '/api/v1/auth/users/' + encodeURIComponent(userId) + '/tokens', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + adminToken,
+    },
+    body: JSON.stringify({ name: 'operator-token' }),
+  });
+  if (!res.ok) throw new Error('创建用户令牌失败：HTTP ' + res.status);
+  return (await res.json()).data.token;
 }
 
 async function stopProcess(proc) {
@@ -36,7 +105,11 @@ async function waitServer() {
   for (let i = 0; i < 100; i += 1) {
     try {
       const res = await fetch(BASE + '/api/health');
-      if (res.ok) return;
+      if (res.ok) {
+        const session = await loginAdmin();
+        adminToken = await createToken(session);
+        return;
+      }
     } catch (_) { /* retry */ }
     await new Promise((r) => setTimeout(r, 100));
   }
@@ -46,7 +119,11 @@ async function waitServer() {
 async function rpc(method, params) {
   const res = await fetch(BASE + '/mcp', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      Authorization: 'Bearer ' + adminToken,
+    },
     body: JSON.stringify({ jsonrpc: '2.0', id: ++rpcId, method, params }),
   });
   assert.equal(res.status, 200);
@@ -58,6 +135,8 @@ async function rest(pathname, options = {}) {
     ...options,
     headers: {
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+      Accept: 'application/json',
+      Authorization: 'Bearer ' + adminToken,
       ...(options.headers || {}),
     },
   });
@@ -67,7 +146,12 @@ async function rest(pathname, options = {}) {
 function startStdio() {
   const proc = spawn(process.execPath, [path.join(ROOT, 'bin/screenscoreboard-mcp.js')], {
     cwd: ROOT,
-    env: { ...process.env, SCOREBOARD_URL: BASE, LOG_LEVEL: 'error' },
+    env: {
+      ...process.env,
+      SCOREBOARD_URL: BASE,
+      SCOREBOARD_TOKEN: adminToken,
+      LOG_LEVEL: 'error',
+    },
     stdio: ['pipe', 'pipe', 'pipe'],
   });
   const pending = new Map();
@@ -104,6 +188,34 @@ test('MCP HTTP 与 stdio 工具一致且可调用', async (t) => {
     await stopProcess(server);
     rmSync(DATA_DIR, { recursive: true, force: true });
   });
+
+  const anonymous = await fetch(BASE + '/mcp', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' }),
+  });
+  assert.equal(anonymous.status, 401, 'MCP 需要登录');
+
+  const opUserRes = await fetch(BASE + '/api/v1/auth/users', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + adminToken,
+    },
+    body: JSON.stringify({ username: 'mcp-op', password: 'operator-pass', role: 'operator' }),
+  });
+  assert.equal(opUserRes.status, 200);
+  const opUser = (await opUserRes.json()).data.user;
+  const opToken = await createTokenWithAdmin(opUser.id);
+  const operatorMcp = await fetch(BASE + '/mcp', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + opToken,
+    },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'ping' }),
+  });
+  assert.equal(operatorMcp.status, 403, '操作员令牌不能使用 MCP');
 
   const init = await rpc('initialize', {
     protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '1' },

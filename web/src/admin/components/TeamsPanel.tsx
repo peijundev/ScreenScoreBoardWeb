@@ -6,7 +6,15 @@ import { quickPresets, toast } from '../../shared/ui';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { confirm, prompt } from './dialogs';
 
-export default function TeamsPanel({ project }: { project: Project }): JSX.Element {
+export default function TeamsPanel({
+  project,
+  canScore,
+  isAdmin,
+}: {
+  project: Project;
+  canScore: boolean;
+  isAdmin: boolean;
+}): JSX.Element {
   const [query, setQuery] = useState('');
   const [name, setName] = useState('');
   const [avatar, setAvatar] = useState<string | null>(null);
@@ -61,31 +69,33 @@ export default function TeamsPanel({ project }: { project: Project }): JSX.Eleme
         </div>
       )}
 
-      <form className="add-form" onSubmit={onCreate}>
-        <img className="avatar-preview" src={avatarURL({ name: name || '?', avatar })} alt="头像预览" />
-        <input
-          type="text"
-          maxLength={20}
-          placeholder="团队名"
-          aria-label="团队名"
-          required
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <label className="file-btn">
-          选择头像
+      {isAdmin && (
+        <form className="add-form" onSubmit={onCreate}>
+          <img className="avatar-preview" src={avatarURL({ name: name || '?', avatar })} alt="头像预览" />
           <input
-            ref={avatarInput}
-            type="file"
-            accept="image/png,image/jpeg,image/webp,image/gif"
-            hidden
-            onChange={onPickAvatar}
+            type="text"
+            maxLength={20}
+            placeholder="团队名"
+            aria-label="团队名"
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
           />
-        </label>
-        <button type="submit" className="btn primary">
-          创建
-        </button>
-      </form>
+          <label className="file-btn">
+            选择头像
+            <input
+              ref={avatarInput}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              hidden
+              onChange={onPickAvatar}
+            />
+          </label>
+          <button type="submit" className="btn primary">
+            创建
+          </button>
+        </form>
+      )}
 
       <div className="teams-list">
         {allTeams.length === 0 && (
@@ -106,6 +116,8 @@ export default function TeamsPanel({ project }: { project: Project }): JSX.Eleme
             teamScore={Boolean(project.settings.featureTeamScore)}
             avatarEdit={project.settings.featureAvatarEdit !== false}
             mobile={mobile}
+            canScore={canScore}
+            isAdmin={isAdmin}
           />
         ))}
       </div>
@@ -123,6 +135,8 @@ interface BlockProps {
   teamScore: boolean;
   avatarEdit: boolean;
   mobile: boolean;
+  canScore: boolean;
+  isAdmin: boolean;
 }
 
 function TeamBlock({
@@ -134,6 +148,8 @@ function TeamBlock({
   teamScore,
   avatarEdit,
   mobile,
+  canScore,
+  isAdmin,
 }: BlockProps): JSX.Element {
   const members = useMemo(
     () =>
@@ -193,27 +209,29 @@ function TeamBlock({
   return (
     <div className="team-block" data-id={team.id}>
       <div className="team-top">
-        <span className="move-btns">
-          <button
-            className="btn small move-up"
-            title="上移"
-            disabled={!canUp}
-            onClick={() => projectOp(project.id, 'moveTeam', { teamId: team.id, direction: 'up' })}
-          >
-            ↑
-          </button>
-          <button
-            className="btn small move-down"
-            title="下移"
-            disabled={!canDown}
-            onClick={() => projectOp(project.id, 'moveTeam', { teamId: team.id, direction: 'down' })}
-          >
-            ↓
-          </button>
-        </span>
+        {isAdmin && (
+          <span className="move-btns">
+            <button
+              className="btn small move-up"
+              title="上移"
+              disabled={!canUp}
+              onClick={() => projectOp(project.id, 'moveTeam', { teamId: team.id, direction: 'up' })}
+            >
+              ↑
+            </button>
+            <button
+              className="btn small move-down"
+              title="下移"
+              disabled={!canDown}
+              onClick={() => projectOp(project.id, 'moveTeam', { teamId: team.id, direction: 'down' })}
+            >
+              ↓
+            </button>
+          </span>
+        )}
         <img src={avatarURL(team, 48)} alt="" />
 
-        {avatarEdit && (
+        {isAdmin && avatarEdit && (
           <>
             <label className="btn small file-mini" title="更换团队头像">
               头像
@@ -247,20 +265,24 @@ function TeamBlock({
         <span className="t-name" title={team.name}>
           {team.name}
         </span>
-        <button className="btn small" type="button" title="修改团队名" onClick={() => { void rename(); }}>
-          改名
-        </button>
-        <button
-          className="btn small bio-btn"
-          type="button"
-          title={team.bio ? '简介：' + team.bio : '设置简介'}
-          onClick={() => { void editBio(); }}
-        >
-          简介
-        </button>
+        {isAdmin && (
+          <>
+            <button className="btn small" type="button" title="修改团队名" onClick={() => { void rename(); }}>
+              改名
+            </button>
+            <button
+              className="btn small bio-btn"
+              type="button"
+              title={team.bio ? '简介：' + team.bio : '设置简介'}
+              onClick={() => { void editBio(); }}
+            >
+              简介
+            </button>
+          </>
+        )}
         <span className="t-total">{total} 分</span>
 
-        {teamScore && (mobile ? (
+        {canScore && teamScore && (mobile ? (
           <span className="remote-pad">
             <button className="remote-btn remote-plus" type="button" onClick={() => addAll(1)}>
               +1
@@ -285,52 +307,56 @@ function TeamBlock({
           </span>
         ))}
 
-        <label className="btn small file-mini" title="团队卡片背景图">
-          卡面
-          <input
-            type="file"
-            className="card-img-input"
-            accept="image/png,image/jpeg,image/webp,image/gif"
-            hidden
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) uploadCardImage(f);
-              e.target.value = '';
-            }}
-          />
-        </label>
-        {team.cardImage && (
-          <button
-            className="btn small card-img-clear"
-            onClick={() =>
-              projectOp(project.id, 'setCardImage', { kind: 'team', id: team.id, image: null }).catch(
-                (err: Error) => toast(err.message),
-              )
-            }
-          >
-            清卡面
-          </button>
-        )}
+        {isAdmin && (
+          <>
+            <label className="btn small file-mini" title="团队卡片背景图">
+              卡面
+              <input
+                type="file"
+                className="card-img-input"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                hidden
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) uploadCardImage(f);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+            {team.cardImage && (
+              <button
+                className="btn small card-img-clear"
+                onClick={() =>
+                  projectOp(project.id, 'setCardImage', { kind: 'team', id: team.id, image: null }).catch(
+                    (err: Error) => toast(err.message),
+                  )
+                }
+              >
+                清卡面
+              </button>
+            )}
 
-        <button
-          className="btn small danger team-del"
-          onClick={() => {
-            void (async () => {
-              const ok = await confirm({
-                title: '删除团队',
-                message: '确定删除团队「' + team.name + '」？成员会被移出但不会删除。',
-                confirmText: '删除',
-                danger: true,
-              });
-              if (!ok) return;
-              projectOp(project.id, 'removeTeam', { teamId: team.id }).catch((err: Error) =>
-                toast(err.message),
-              );
-            })();
-          }}
-        >
-          删除团队
-        </button>
+            <button
+              className="btn small danger team-del"
+              onClick={() => {
+                void (async () => {
+                  const ok = await confirm({
+                    title: '删除团队',
+                    message: '确定删除团队「' + team.name + '」？成员会被移出但不会删除。',
+                    confirmText: '删除',
+                    danger: true,
+                  });
+                  if (!ok) return;
+                  projectOp(project.id, 'removeTeam', { teamId: team.id }).catch((err: Error) =>
+                    toast(err.message),
+                  );
+                })();
+              }}
+            >
+              删除团队
+            </button>
+          </>
+        )}
       </div>
 
       <div className="chips">
@@ -343,19 +369,21 @@ function TeamBlock({
           <span className="chip" key={m.id}>
             <img src={avatarURL(m, 24)} alt="" />
             {m.name}
-            <button
-              className="x"
-              type="button"
-              data-person={m.id}
-              title="移出团队"
-              onClick={() =>
-                projectOp(project.id, 'assignTeam', { personId: m.id, teamId: null }).catch((err: Error) =>
-                  toast(err.message),
-                )
-              }
-            >
-              ×
-            </button>
+            {isAdmin && (
+              <button
+                className="x"
+                type="button"
+                data-person={m.id}
+                title="移出团队"
+                onClick={() =>
+                  projectOp(project.id, 'assignTeam', { personId: m.id, teamId: null }).catch((err: Error) =>
+                    toast(err.message),
+                  )
+                }
+              >
+                ×
+              </button>
+            )}
           </span>
         ))}
       </div>

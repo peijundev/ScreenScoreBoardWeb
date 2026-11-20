@@ -21,6 +21,22 @@ class FeatureDisabledError extends OpError {
     this.name = 'FeatureDisabledError';
   }
 }
+/** 未登录 / 凭据无效（API 层映射为 401） */
+class UnauthorizedError extends OpError {
+  constructor(message = '请先登录') {
+    super(message);
+    this.name = 'UnauthorizedError';
+    this.status = 401;
+  }
+}
+/** 已登录但权限不足（API 层映射为 403） */
+class ForbiddenError extends OpError {
+  constructor(message = '没有权限执行该操作') {
+    super(message);
+    this.name = 'ForbiddenError';
+    this.status = 403;
+  }
+}
 
 function needString(v, field, max = 40) {
   if (typeof v !== 'string' || !v.trim()) throw new OpError(`${field}不能为空`);
@@ -102,7 +118,7 @@ function fontChoice(label) {
 }
 
 module.exports = {
-  OpError, NotFoundError, FeatureDisabledError,
+  OpError, NotFoundError, FeatureDisabledError, UnauthorizedError, ForbiddenError,
   needString, needAvatar, needSoundPath, needBio, needScore, needLayout,
   HEX_COLOR, hexOrEmpty, intRange, boolStrict, fontNameOrEmpty, fontChoice,
 };

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type JSX } from 'react';
 import type { Project } from '../../shared/types';
 import { useAppStore } from '../../shared/store';
+import { useAuthStore, type AuthUser } from '../../shared/auth';
 import { toast } from '../../shared/ui';
 import { confirm, prompt } from './dialogs';
 import SoundQuickMenu from './SoundQuickMenu';
@@ -9,13 +10,24 @@ interface Props {
   project: Project | null;
   projects: Project[];
   connected: boolean;
+  user: AuthUser | null;
+  authEnabled: boolean;
+  isAdmin: boolean;
+  canScore: boolean;
   onSelectProject: (id: string) => void;
   onOpenSettings: () => void;
   onOpenFeatures: () => void;
   onOpenAssets: () => void;
   onOpenTheme: () => void;
   onOpenStudio: () => void;
+  onOpenAccount: () => void;
 }
+
+const roleLabel: Record<string, string> = {
+  admin: '管理员',
+  operator: '操作员',
+  viewer: '只读',
+};
 
 interface VersionInfo {
   version: string;
@@ -27,14 +39,20 @@ export default function Toolbar({
   project,
   projects,
   connected,
+  user,
+  authEnabled,
+  isAdmin,
+  canScore,
   onSelectProject,
   onOpenSettings,
   onOpenFeatures,
   onOpenAssets,
   onOpenTheme,
   onOpenStudio,
+  onOpenAccount,
 }: Props): JSX.Element {
   const sendOp = useAppStore((s) => s.sendOp);
+  const logout = useAuthStore((s) => s.logout);
   const undoCount = useAppStore((s) =>
     project ? (s.runtime?.undoCounts[project.id] ?? 0) : 0,
   );
@@ -118,43 +136,66 @@ export default function Toolbar({
           </option>
         ))}
       </select>
-      <button className="btn small" type="button" onClick={() => { void addProject(); }}>
-        新建项目
-      </button>
-      <button className="btn small" type="button" onClick={() => { void renameProject(); }} disabled={!project}>
-        重命名
-      </button>
-      <button className="btn small danger" type="button" onClick={() => { void deleteProject(); }} disabled={!project}>
-        删除项目
-      </button>
-      <button className="btn small" type="button" onClick={onOpenSettings} disabled={!project}>
-        排版设置
-      </button>
-      <button className="btn small" type="button" onClick={onOpenTheme} disabled={!project}>
-        主题编辑器
-      </button>
-      <button className="btn small" type="button" onClick={onOpenStudio} disabled={!project}>
-        主题工作室
-      </button>
-      <button className="btn small" type="button" onClick={onOpenFeatures} disabled={!project}>
-        功能
-      </button>
-      <button className="btn small" type="button" onClick={onOpenAssets} disabled={!project}>
-        资源库
-      </button>
-      {project && <SoundQuickMenu project={project} />}
-      <button
-        className="btn small"
-        type="button"
-        title="撤销上一步记分"
-        disabled={!project || undoCount === 0 || project.settings.featureUndo === false}
-        onClick={() => {
-          if (!project) return;
-          sendOp('undoScore', { projectId: project.id }).catch((err: Error) => toast(err.message));
-        }}
-      >
-        撤销记分
-      </button>
+      {isAdmin && (
+        <>
+          <button className="btn small" type="button" onClick={() => { void addProject(); }}>
+            新建项目
+          </button>
+          <button className="btn small" type="button" onClick={() => { void renameProject(); }} disabled={!project}>
+            重命名
+          </button>
+          <button className="btn small danger" type="button" onClick={() => { void deleteProject(); }} disabled={!project}>
+            删除项目
+          </button>
+          <button className="btn small" type="button" onClick={onOpenSettings} disabled={!project}>
+            排版设置
+          </button>
+          <button className="btn small" type="button" onClick={onOpenTheme} disabled={!project}>
+            主题编辑器
+          </button>
+          <button className="btn small" type="button" onClick={onOpenStudio} disabled={!project}>
+            主题工作室
+          </button>
+          <button className="btn small" type="button" onClick={onOpenFeatures} disabled={!project}>
+            功能
+          </button>
+          <button className="btn small" type="button" onClick={onOpenAssets} disabled={!project}>
+            资源库
+          </button>
+          {project && <SoundQuickMenu project={project} />}
+        </>
+      )}
+      {canScore && (
+        <button
+          className="btn small"
+          type="button"
+          title="撤销上一步记分"
+          disabled={!project || undoCount === 0 || project.settings.featureUndo === false}
+          onClick={() => {
+            if (!project) return;
+            sendOp('undoScore', { projectId: project.id }).catch((err: Error) => toast(err.message));
+          }}
+        >
+          撤销记分
+        </button>
+      )}
+      {authEnabled && user && (
+        <>
+          <button className="btn small" type="button" onClick={onOpenAccount} title="账号与安全">
+            {user.username} · {roleLabel[user.role] || user.role}
+          </button>
+          <button
+            className="btn small"
+            type="button"
+            onClick={() => {
+              void logout().catch((err: Error) => toast(err.message));
+            }}
+          >
+            退出
+          </button>
+        </>
+      )}
+      {!authEnabled && <span className="hint">本机模式</span>}
       <span
         id="conn-dot"
         className={'dot' + (connected ? '' : ' connecting')}

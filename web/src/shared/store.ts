@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { connectWS, type SendOp } from './ws';
+import { connectWS, type Connection, type SendOp } from './ws';
 import type { OpName } from './ops.generated';
 import type { Project, RuntimeSnapshot, Snapshot } from './types';
 
@@ -94,19 +94,46 @@ function stabilizeSnapshot(prev: Snapshot | null, next: Snapshot): Snapshot {
 
 let prevSnapshot: Snapshot | null = null;
 let started = false;
+let conn: Connection | null = null;
+
+export interface StartConnectionOptions {
+  onAuthLost?: (reason: 'expired' | 'forbidden') => void;
+}
 
 /** 建立唯一一条 WS 连接；重复调用无副作用 */
-export function startConnection(): void {
+export function startConnection(options: StartConnectionOptions = {}): void {
   if (started) return;
   started = true;
-  const conn = connectWS(
+  prevSnapshot = null;
+  conn = connectWS(
     (snapshot, runtime) => {
       prevSnapshot = stabilizeSnapshot(prevSnapshot, snapshot);
       useAppStore.setState({ snapshot: prevSnapshot, runtime });
     },
     (status) => useAppStore.setState({ connected: status === 'connected' }),
+    {
+      onAuthLost: (reason) => {
+        stopConnection();
+        options.onAuthLost?.(reason);
+      },
+    },
   );
   useAppStore.setState({ sendOp: conn.sendOp });
+}
+
+/** 停止连接并清空快照；登出/会话失效时调用 */
+export function stopConnection(): void {
+  started = false;
+  const current = conn;
+  conn = null;
+  if (current) current.close();
+  prevSnapshot = null;
+  useAppStore.setState({
+    connected: false,
+    snapshot: null,
+    runtime: null,
+    sendOp: notConnected,
+  });
 }
 
 /** 按创建时间升序的项目列表 */

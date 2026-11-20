@@ -4,6 +4,7 @@ const { publicState, storageKind } = require('../../state');
 const { clientCount } = require('../../wss');
 const runtime = require('../../runtime');
 const { buildOpenApi } = require('../openapi');
+const { effectiveHost, effectiveProtocol } = require('../../security');
 
 function health() {
   return {
@@ -40,7 +41,8 @@ function createSystemRoutes(getRoutes) {
     {
       method: 'GET', path: '/endpoints', mcp: 'get_endpoints', summary: '发现 REST 与 MCP 端点',
       handler: (ctx) => {
-        const origin = (ctx.req.headers.host ? 'http://' + ctx.req.headers.host : '');
+        const host = effectiveHost(ctx.req);
+        const origin = host ? effectiveProtocol(ctx.req) + '://' + host : '';
         return {
           data: {
             rest: '/api/v1',

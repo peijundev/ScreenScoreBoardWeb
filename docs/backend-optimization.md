@@ -89,8 +89,9 @@
 
 - ✅ WebSocket Origin 校验：同源放行，跨站拒绝（`ALLOWED_ORIGINS` 可追加）。
 - ✅ `HOST` 可配置；Electron 内嵌服务固定 `127.0.0.1`；基础安全响应头。
-- ⏳ 按使用场景（本地投屏）明确不做：Token 鉴权、HTTP/WS 限流。
-- ⏳ 未做：CSP/HSTS、README 独立安全章节。
+- ✅ 账号/角色/会话/API 令牌鉴权、CSRF、HTTPS（反代或 Node 内置）、HSTS（HTTPS 下）。
+- ⏳ 按使用场景明确不做：HTTP/WS 限流。
+- ⏳ 未做：完整审计、严格 CSP。
 
 ## Phase 4（多实例）— 已完成单写者保护
 
@@ -106,7 +107,7 @@
 - ✅ OpenAPI 3.1 由路由表动态生成，避免文档与实现漂移。
 - ✅ MCP：手写 JSON-RPC 2.0（`initialize` / `ping` / `tools/list` / `tools/call` / `resources/*`），HTTP `POST /mcp` 与 stdio 共用路由派生工具；stdio 作为 REST 客户端连接已运行服务，不启动第二实例、不碰单实例锁。
 - ✅ 测试：`scripts/api-v1.test.mjs`（CRUD、revision、422、WS 广播、旧 API 兼容）、`scripts/mcp.test.mjs`（HTTP/stdio 工具表一致、实际调用、resources）、`scripts/mobile-ui.test.mjs`（CDP 390×844）。
-- ⏳ 鉴权/授权/限流/审计/CSP 仍不做，见 `docs/security-notes.md` 的后续清单。
+- ✅ 鉴权/授权已补齐；⏳ 限流/审计/CSP 仍不做/未做，见 `docs/security-notes.md`。
 
 ## 明确不做
 

@@ -2,6 +2,32 @@
 
 本项目遵循语义化版本。1.4.0 起，版本号在管理端顶栏与启动日志中显示。
 
+## 未发布 — 鉴权与远程部署
+
+### 新增
+
+- **完整多用户鉴权**：`admin` / `operator` / `viewer`，账号密码（scrypt）、HttpOnly 会话 Cookie、CSRF 双提交、会话持久化、逐个吊销、最后一个管理员保护
+- **API 令牌**：`Authorization: Bearer`，只存 SHA-256，可随时吊销；HTTP MCP 与 stdio MCP（`SCOREBOARD_TOKEN`）均支持
+- **初始化**：`ADMIN_PASSWORD` / `ADMIN_PASSWORD_FILE`，或仅 loopback 的首次网页初始化；公网/反代请求被拒绝
+- **服务端强制**：`applyOp` actor 校验、REST route 权限、旧 `/api/*` 集中守卫、WS 按 op 鉴权、MCP 进程内调用继承同一身份
+- **显示端公开只读**：匿名可收快照；`?edit=1` 布局编辑仅管理员登录后可用
+- **HTTPS**：反代（Caddy/Nginx）与 Node 内置 HTTPS（`TLS_CERT_FILE` / `TLS_KEY_FILE`），`TRUST_PROXY`、`X-Forwarded-*`、Secure Cookie
+- **Electron 双模式**：本地模式内嵌服务端并关闭鉴权（仅 loopback）；远程模式加载远程服务并由其登录/鉴权，只保存 URL，不保存凭据
+- `npm run auth:reset`：停止服务后本机重置密码/补建管理员；Docker/systemd 文档已补齐
+- 新文档：[docs/authentication.md](docs/authentication.md)
+
+### 安全
+
+- 明确**不做任何 WS/HTTP 限流**：无失败计数、锁定、退避、验证码或 429；现有 body/连接数/背压属于容量保护
+- 鉴权数据独立存于 `DATA_DIR/auth.json` 与 `sessions.json`（0600），不进入 state 快照、导出或项目备份
+- 匿名显示端快照仍包含全部项目，属于公开显示端的既有语义
+
+### 兼容性
+
+- 升级后管理端需要登录；脚本/MCP 需要先登录或配置 API 令牌
+- 首次启动若未设置 `ADMIN_PASSWORD`，只允许本机完成初始化
+- 多实例部署的用户/会话不共享，本期按单实例设计
+
 ## 1.5.2 — 完整 API、MCP 与手机管理端
 
 ### 新增

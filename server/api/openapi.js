@@ -1,6 +1,7 @@
 'use strict';
 // 由路由表生成 OpenAPI 3.1，避免手写与实现漂移
 const APP_VERSION = require('../../package.json').version;
+const { routeMinRole } = require('../auth/policy');
 
 const QUERY_PARAMS = {
   '/projects/:projectId/people': [
@@ -43,6 +44,7 @@ function buildOpenApi(routes) {
     const openPath = openApiPath(route.path);
     const tag = tagOf(route.path);
     tags.add(tag);
+    const access = routeMinRole(route);
     const operation = {
       operationId: route.mcp || (route.method.toLowerCase() + route.path.replace(/[^A-Za-z0-9]+/g, '_')),
       summary: route.summary || route.path,
@@ -50,7 +52,8 @@ function buildOpenApi(routes) {
       responses: {
         200: { description: '成功' },
         400: { description: '参数非法' },
-        403: { description: '功能关闭或 Origin 不被允许' },
+        401: { description: '未登录或凭据失效' },
+        403: { description: '权限不足、功能关闭或 Origin 不被允许' },
         404: { description: '资源不存在' },
         409: { description: '版本冲突（details.currentRevision 为当前版本）' },
         413: { description: '请求体超过上限' },
@@ -58,6 +61,12 @@ function buildOpenApi(routes) {
         428: { description: '缺少 revision（主题/草稿写操作）' },
       },
     };
+    if (access !== 'public') {
+      operation.security = [{ cookieAuth: [] }, { bearerAuth: [] }];
+      operation['x-required-role'] = access;
+    } else {
+      operation.security = [];
+    }
     const parameters = pathParams(route.path).map((name) => ({
       name, in: 'path', required: true, schema: { type: 'string' },
     }));
@@ -95,17 +104,23 @@ function buildOpenApi(routes) {
     info: {
       title: 'ScreenScoreBoard API',
       version: APP_VERSION,
-      description: '计分板 REST v1。所有写操作复用服务端 applyOp，并通过 WebSocket 广播最新状态。当前无鉴权，仅适合可信局域网。',
+      description: '计分板 REST v1。所有写操作复用服务端 applyOp，并通过 WebSocket 广播最新状态。写接口需要 Cookie + X-CSRF-Token 或 Bearer API 令牌；公开读取见各 operation 的 security。',
     },
     servers: [{ url: '/' }],
     tags: [...tags].sort().map((name) => ({ name })),
     paths,
     components: {
       securitySchemes: {
+        cookieAuth: {
+          type: 'apiKey',
+          in: 'cookie',
+          name: 'ssb_session',
+          description: '会话 Cookie；写请求还需 X-CSRF-Token。',
+        },
         bearerAuth: {
           type: 'http',
           scheme: 'bearer',
-          description: '预留：本期未启用；远程化部署时在此接入 Token。',
+          description: 'API 令牌，格式 ssb_...；在「账号与安全 → API 令牌」创建。',
         },
       },
     },

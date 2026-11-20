@@ -27,6 +27,7 @@ ENV NODE_ENV=production \
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json ./
 COPY server ./server
+COPY bin ./bin
 COPY public ./public
 COPY --from=web /app/public/v2 ./public/v2
 RUN mkdir -p /data && chown -R node:node /app /data

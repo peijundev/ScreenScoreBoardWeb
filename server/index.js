@@ -1,6 +1,7 @@
 'use strict';
 // 入口：http server、路由表、头像上传、挂载 WebSocket
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const {
@@ -37,6 +38,11 @@ const { handleMcpHttp } = require('./mcp/http');
 const runtime = require('./runtime');
 const { runBackup, listBackups, startBackupScheduler } = require('./backup');
 const { scanOrphans, cleanupOrphans, startCleanupScheduler } = require('./cleanup');
+const authStore = require('./auth/store');
+const authHttp = require('./auth/http');
+const { SYSTEM, ANONYMOUS, runAs } = require('./auth/context');
+const { guardLegacy } = require('./api/legacy-access');
+const { isLoopbackHost, isDirectLoopbackRequest, effectiveProtocol } = require('./security');
 
 const PORT = Number(process.env.PORT) || 3000;
 const cfg = config;
@@ -294,7 +300,7 @@ async function handleCleanup(req, res) {
   }
 }
 
-const server = http.createServer((req, res) => {
+function routeRequest(req, res) {
   const url = new URL(req.url, 'http://x');
   const p = url.pathname;
 
@@ -304,8 +310,16 @@ const server = http.createServer((req, res) => {
     return;
   }
   if (p === '/mcp') {
+    if (!authHttp.requireOrigin(req, res)) return;
+    if (!authHttp.requireRole(req, res, 'admin')) return;
+    if (!authHttp.requireCsrf(req, res, p)) return;
     void handleMcpHttp(req, res);
     return;
+  }
+
+  // 旧版 /api/* 统一守卫：未知路径默认 admin，避免新增旧路由漏保护
+  if (p === '/api' || p.startsWith('/api/')) {
+    if (!guardLegacy(req, res, p)) return;
   }
 
   if (req.method === 'GET' && p === '/') {
@@ -461,17 +475,64 @@ const server = http.createServer((req, res) => {
     return send(res, 404, 'Not Found');
   }
   send(res, 404, 'Not Found');
-});
+}
+
+let authEnabled = true;
+
+function requestAuth(req) {
+  if (!authEnabled) {
+    return isDirectLoopbackRequest(req) ? SYSTEM : ANONYMOUS;
+  }
+  return authHttp.resolveRequest(req);
+}
+
+function handleRequest(req, res) {
+  if (effectiveProtocol(req) === 'https') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000');
+  }
+  const auth = requestAuth(req);
+  req.auth = auth;
+  runAs(auth, () => routeRequest(req, res));
+}
+
+function createHttpServer() {
+  if (cfg.tls.certFile && cfg.tls.keyFile) {
+    const options = {
+      cert: fs.readFileSync(cfg.tls.certFile),
+      key: fs.readFileSync(cfg.tls.keyFile),
+      minVersion: /** @type {any} */ ('TLSv1.2'),
+    };
+    if (cfg.tls.passphrase) options.passphrase = cfg.tls.passphrase;
+    return https.createServer(options, handleRequest);
+  }
+  return http.createServer(handleRequest);
+}
+
+const server = createHttpServer();
+const SERVER_PROTOCOL = cfg.tls.certFile ? 'https' : 'http';
 
 // 启动服务；Electron 主进程也复用它（port 传 0 时由系统分配空闲端口）
 async function start(options = {}) {
+  const listenPort = options.port != null ? options.port : PORT;
+  const listenHost = options.host || cfg.host;
+  authEnabled = options.auth !== false;
+  if (!authEnabled && !isLoopbackHost(listenHost)) {
+    throw new Error('auth:false 仅允许绑定 loopback（127.0.0.1 / ::1 / localhost）');
+  }
+
   await initState();
+  authStore.init({ enabled: authEnabled });
   wssInstance = attachWSS(server, { log: logger.child({ scope: 'wss' }) });
   startBackupScheduler();
   startCleanupScheduler();
 
+  if (authEnabled && authStore.isSetupRequired()) {
+    logger.warn('管理员尚未初始化：请在本机打开管理端完成设置，或设置 ADMIN_PASSWORD / ADMIN_PASSWORD_FILE');
+  }
+
   // 优雅退出：先断开 WS、停止接受 HTTP 连接，再由 state 层落盘
   onShutdown(async () => {
+    authStore.flush();
     if (wssInstance) {
       for (const client of wssInstance.clients) {
         try { client.terminate(); } catch (_) {}
@@ -483,8 +544,6 @@ async function start(options = {}) {
     await Promise.race([closed, new Promise((resolve) => setTimeout(resolve, 3000))]);
   });
 
-  const listenPort = options.port != null ? options.port : PORT;
-  const listenHost = options.host || cfg.host;
   const actualPort = await new Promise((resolve, reject) => {
     const onError = (e) => reject(e);
     server.once('error', onError);
@@ -501,8 +560,11 @@ async function start(options = {}) {
     host: listenHost,
     port: actualPort,
   });
-  console.log(`  显示端  http://localhost:${actualPort}/display`);
-  console.log(`  管理端  http://localhost:${actualPort}/admin`);
+  console.log(`  显示端  ${SERVER_PROTOCOL}://localhost:${actualPort}/display`);
+  console.log(`  管理端  ${SERVER_PROTOCOL}://localhost:${actualPort}/admin`);
+  if (!authEnabled) {
+    console.log('  鉴权    已关闭（仅限 loopback 本机模式）');
+  }
   if (!REACT_BUILT) {
     console.log('  ※ 未检测到 React 构建产物，请先执行 npm run build:web');
   }

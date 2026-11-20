@@ -1,6 +1,7 @@
 import { useEffect, useState, type JSX } from 'react';
 import type { Project } from '../../shared/types';
 import { useAppStore } from '../../shared/store';
+import { useAuthStore, type AuthUser } from '../../shared/auth';
 import { toast } from '../../shared/ui';
 import { confirm, prompt } from './dialogs';
 
@@ -14,10 +15,20 @@ const TABS: Array<[MobileTab, string]> = [
   ['more', '更多'],
 ];
 
+const roleLabel: Record<string, string> = {
+  admin: '管理员',
+  operator: '操作员',
+  viewer: '只读',
+};
+
 interface Props {
   project: Project | null;
   projects: Project[];
   connected: boolean;
+  user: AuthUser | null;
+  authEnabled: boolean;
+  isAdmin: boolean;
+  canScore: boolean;
   tab: MobileTab;
   onTab: (tab: MobileTab) => void;
   onSelectProject: (id: string) => void;
@@ -26,12 +37,17 @@ interface Props {
   onOpenAssets: () => void;
   onOpenTheme: () => void;
   onOpenStudio: () => void;
+  onOpenAccount: () => void;
 }
 
 export default function MobileNav({
   project,
   projects,
   connected,
+  user,
+  authEnabled,
+  isAdmin,
+  canScore,
   tab,
   onTab,
   onSelectProject,
@@ -40,8 +56,11 @@ export default function MobileNav({
   onOpenAssets,
   onOpenTheme,
   onOpenStudio,
+  onOpenAccount,
 }: Props): JSX.Element {
   const sendOp = useAppStore((s) => s.sendOp);
+  const logout = useAuthStore((s) => s.logout);
+  const tabs = isAdmin ? TABS : TABS.filter(([value]) => value !== 'theme');
   const undoCount = useAppStore((s) => (project ? (s.runtime?.undoCounts[project.id] ?? 0) : 0));
   const [adminTheme, setAdminTheme] = useState<'dark' | 'light'>(() => {
     try {
@@ -54,6 +73,10 @@ export default function MobileNav({
   useEffect(() => {
     document.body.dataset.theme = adminTheme;
   }, [adminTheme]);
+
+  useEffect(() => {
+    if (!isAdmin && tab === 'theme') onTab('people');
+  }, [isAdmin, tab, onTab]);
 
   async function addProject(): Promise<void> {
     const name = await prompt({ title: '新建项目', label: '每个项目是一个独立积分榜', defaultValue: '新项目' });
@@ -114,17 +137,19 @@ export default function MobileNav({
             </option>
           ))}
         </select>
-        <button
-          className="btn small"
-          type="button"
-          disabled={!project || undoCount === 0 || project.settings.featureUndo === false}
-          onClick={() => {
-            if (!project) return;
-            sendOp('undoScore', { projectId: project.id }).catch((err: Error) => toast(err.message));
-          }}
-        >
-          撤销
-        </button>
+        {canScore && (
+          <button
+            className="btn small"
+            type="button"
+            disabled={!project || undoCount === 0 || project.settings.featureUndo === false}
+            onClick={() => {
+              if (!project) return;
+              sendOp('undoScore', { projectId: project.id }).catch((err: Error) => toast(err.message));
+            }}
+          >
+            撤销
+          </button>
+        )}
         <span
           className={'dot' + (connected ? '' : ' connecting')}
           title={connected ? '已连接' : '连接中…'}
@@ -132,7 +157,7 @@ export default function MobileNav({
       </header>
 
       <div className="mobile-content">
-        {tab === 'theme' && (
+        {tab === 'theme' && isAdmin && (
           <section className="mobile-card">
             <h2>主题与外观</h2>
             <button className="btn mobile-wide" type="button" onClick={onOpenSettings}>
@@ -152,23 +177,28 @@ export default function MobileNav({
 
         {tab === 'more' && (
           <section className="mobile-card">
-            <h2>项目</h2>
-            <button className="btn mobile-wide" type="button" onClick={() => void addProject()}>
-              新建项目
-            </button>
-            <button className="btn mobile-wide" type="button" disabled={!project} onClick={() => void renameProject()}>
-              重命名当前项目
-            </button>
-            <button className="btn mobile-wide danger" type="button" disabled={!project} onClick={() => void deleteProject()}>
-              删除当前项目
-            </button>
-            <h2>控制台</h2>
-            <button className="btn mobile-wide" type="button" onClick={onOpenFeatures}>
-              数据导入 / 导出 / 备份
-            </button>
-            <button className="btn mobile-wide" type="button" onClick={onOpenAssets} disabled={!project}>
-              资源库
-            </button>
+            {isAdmin && (
+              <>
+                <h2>项目</h2>
+                <button className="btn mobile-wide" type="button" onClick={() => void addProject()}>
+                  新建项目
+                </button>
+                <button className="btn mobile-wide" type="button" disabled={!project} onClick={() => void renameProject()}>
+                  重命名当前项目
+                </button>
+                <button className="btn mobile-wide danger" type="button" disabled={!project} onClick={() => void deleteProject()}>
+                  删除当前项目
+                </button>
+                <h2>控制台</h2>
+                <button className="btn mobile-wide" type="button" onClick={onOpenFeatures}>
+                  数据导入 / 导出 / 备份
+                </button>
+                <button className="btn mobile-wide" type="button" onClick={onOpenAssets} disabled={!project}>
+                  资源库
+                </button>
+              </>
+            )}
+            <h2>显示</h2>
             <button className="btn mobile-wide" type="button" onClick={toggleAdminTheme}>
               管理端主题：{adminTheme === 'light' ? '浅色' : '深色'}
             </button>
@@ -180,12 +210,30 @@ export default function MobileNav({
             >
               打开显示端
             </a>
+            {authEnabled && user && (
+              <>
+                <h2>账号</h2>
+                <button className="btn mobile-wide" type="button" onClick={onOpenAccount}>
+                  {user.username} · {roleLabel[user.role] || user.role}
+                </button>
+                <button
+                  className="btn mobile-wide danger"
+                  type="button"
+                  onClick={() => {
+                    void logout().catch((err: Error) => toast(err.message));
+                  }}
+                >
+                  退出登录
+                </button>
+              </>
+            )}
+            {!authEnabled && <p className="hint">本机模式（未启用鉴权）</p>}
           </section>
         )}
       </div>
 
       <nav className="mobile-tabbar">
-        {TABS.map(([value, label]) => (
+        {tabs.map(([value, label]) => (
           <button
             key={value}
             type="button"

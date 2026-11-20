@@ -26,6 +26,7 @@ import ThemeCanvas from './theme/ThemeCanvas';
 import ThemeScriptLayer from './theme/ThemeScriptLayer';
 import { Clock, Countdown, Marquee } from './components/Overlays';
 import { useInteractions } from './hooks/useInteractions';
+import { getAuthStatus } from '../shared/auth';
 
 const params = new URLSearchParams(location.search);
 const projectParam = params.get('project');
@@ -104,10 +105,35 @@ export default function App(): JSX.Element {
   );
   const [carouselIndex, setCarouselIndex] = useState(0);
   const lastAppearance = useRef('');
+  const [canEdit, setCanEdit] = useState(false);
 
   useEffect(() => {
-    document.body.classList.toggle('edit-mode', isEdit);
     document.body.classList.toggle('preview-embed', inPreviewFrame);
+  }, []);
+
+  useEffect(() => {
+    document.body.classList.toggle('edit-mode', canEdit);
+  }, [canEdit]);
+
+  useEffect(() => {
+    const lost = (): void => setCanEdit(false);
+    window.addEventListener('ssb:auth-lost', lost);
+    return () => window.removeEventListener('ssb:auth-lost', lost);
+  }, []);
+
+  useEffect(() => {
+    if (!isEdit) return;
+    let alive = true;
+    void getAuthStatus()
+      .then((status) => {
+        if (alive) setCanEdit(status.user?.role === 'admin');
+      })
+      .catch(() => {
+        if (alive) setCanEdit(false);
+      });
+    return () => {
+      alive = false;
+    };
   }, []);
 
   useLayoutEffect(() => {
@@ -143,7 +169,7 @@ export default function App(): JSX.Element {
     [items, ranked, tieMode],
   );
   const free = settings?.layoutMode === 'free';
-  const editable = isEdit && free;
+  const editable = isEdit && free && canEdit;
   const orderKey = useMemo(
     () => items.map((it) => it.kind + ':' + (it.person?.id ?? it.team?.id)).join('|'),
     [items],
@@ -154,7 +180,7 @@ export default function App(): JSX.Element {
     titleRef,
     settings,
     editable,
-    inPreview: inPreviewFrame,
+    inPreview: inPreviewFrame && canEdit,
     projectId: project?.id ?? '',
   });
 
@@ -446,7 +472,8 @@ export default function App(): JSX.Element {
         <h1 id="board-title" ref={titleRef}>
           {settings.title}
         </h1>
-        <span className="edit-hint">拖动卡片移动位置，右下角调整大小</span>
+        {canEdit && <span className="edit-hint">拖动卡片移动位置，右下角调整大小</span>}
+        {isEdit && !canEdit && <span className="edit-hint">编辑需要管理员登录</span>}
         <span id="conn-dot" className={'dot' + (connected ? '' : ' connecting')} title={connected ? '已连接' : '重连中…'} />
       </header>
 

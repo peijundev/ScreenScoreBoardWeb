@@ -1790,3 +1790,17 @@ body[data-style-free="on"] .card {
   pointer-events: none;
 }
 .sdk-widget { display: flex; align-items: center; justify-content: inherit; }
+
+/* 显示端：过期会话提示（正常投屏不会出现） */
+.display-auth-error {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.78);
+  color: #fff;
+  padding: 10px 16px;
+  font-size: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}

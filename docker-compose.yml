@@ -10,6 +10,18 @@ services:
       TZ: Asia/Shanghai
       BACKUP_INTERVAL_MINUTES: "30"
       BACKUP_KEEP: "20"
+      # 首次启动必须设置管理员密码；之后修改无效（用 npm run auth:reset）
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_PASSWORD_FILE: ${ADMIN_PASSWORD_FILE:-}
+      SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-24}
+      SESSION_REMEMBER_DAYS: ${SESSION_REMEMBER_DAYS:-30}
+      COOKIE_SECURE: ${COOKIE_SECURE:-auto}
+      TRUST_PROXY: ${TRUST_PROXY:-0}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      # Node 内置 HTTPS（可选；证书需要额外挂载到容器内）
+      # TLS_CERT_FILE: /certs/fullchain.pem
+      # TLS_KEY_FILE: /certs/privkey.pem
       # 使用 SQLite 时：
       # SQLITE_FILE: /data/scoreboard.db
       # 使用 PostgreSQL 时：
