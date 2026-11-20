@@ -428,7 +428,7 @@ async function main() {
     '主题应用：基础风格与视觉设置同步');
   await adminOp('applyTheme', { settings: { title: '不支持的键' } })
     .catch((e) => assert(/不支持的设置项/.test(e.message), '主题拒绝非视觉设置项'));
-  await adminOp('applyTheme', { baseStyle: 'xianxia' })
+  await adminOp('applyTheme', { baseStyle: 'trueage' })
     .catch((e) => assert(/显示风格/.test(e.message), '主题拒绝已删除的风格'));
   await adminOp('applyTheme', { settings: { accent: 'red' } })
     .catch((e) => assert(/强调色/.test(e.message), '主题拒绝非法值'));
@@ -598,7 +598,7 @@ async function main() {
   await adminOp('updateSettings', { patch: { displayStyle: 'hologram' } }).catch((e) => {
     assert(/显示风格/.test(e.message), '非法显示风格被拒绝');
   });
-  for (const style of ['guofeng', 'ink', 'xianxia', 'modern', 'neon', 'poster']) {
+  for (const style of ['guofeng', 'ink', 'trueage', 'modern', 'neon', 'poster']) {
     await adminOp('updateSettings', { patch: { displayStyle: style } });
     await viewer.waitState((st) => P(st).settings.displayStyle === style);
   }
@@ -1282,7 +1282,7 @@ async function main() {
     version: 1,
     people: { p_legacy: { id: 'p_legacy', name: '旧成员', score: 3, teamId: null, createdAt: 1, avatar: null } },
     teams: {},
-    settings: { title: '旧积分榜', displayStyle: 'xianxia' },
+    settings: { title: '旧积分榜', displayStyle: 'trueage' },
   }));
   server = startServer({ DATA_DIR: legacyDir });
   await waitServer();
@@ -1292,7 +1292,7 @@ async function main() {
   assert(legacyProjects[0].people.p_legacy && legacyProjects[0].people.p_legacy.score === 3, '旧人员数据保留');
   assert(legacyProjects[0].people.p_legacy.order === 0, '旧数据补齐排序序号');
   assert(legacyProjects[0].settings.title === '旧积分榜' && legacyProjects[0].settings.scoreEffect, '旧设置保留并补全新字段');
-  assert(legacyProjects[0].settings.displayStyle === 'xianxia', '旧的真·古风风格保留');
+  assert(legacyProjects[0].settings.displayStyle === 'trueage', '旧的真·古风风格保留');
   await stopServer(server);
 
   async function backendRoundtrip(label, env) {

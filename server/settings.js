@@ -7,7 +7,7 @@ const {
 
 const DEFAULT_SETTINGS = {
   title: '计分板',
-  displayStyle: 'guofeng',  // lecture | ppt | seewo | kde | guofeng | ink | xianxia | ...
+  displayStyle: 'guofeng',  // lecture | ppt | seewo | kde | guofeng | ink | trueage | ...
   columns: 4,
   density: 'comfortable',   // comfortable | compact
   sortBy: 'score',          // score | created | manual
@@ -228,7 +228,7 @@ const SETTINGS_VALIDATORS = {
   title: (v) => needString(v, '标题', 30),
   displayStyle: (v) =>
     (['lecture', 'ppt', 'seewo', 'kde', 'custom',
-      'guofeng', 'ink', 'xianxia', 'modern', 'neon', 'poster'].includes(v)
+      'guofeng', 'ink', 'trueage', 'modern', 'neon', 'poster'].includes(v)
       ? v
       : (() => { throw new OpError('显示风格非法'); })()),
   columns: (v) => {

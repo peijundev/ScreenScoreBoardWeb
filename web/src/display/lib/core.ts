@@ -73,7 +73,7 @@ export function applyAppearance(s: Settings): void {
   void s.adminTouchTargetSize;
 
   // 字体
-  const serifStyles = ['guofeng', 'ink', 'xianxia'];
+  const serifStyles = ['guofeng', 'ink', 'trueage'];
   if (s.fontFamily === 'custom' && s.fontFamilyCustom) {
     const name = String(s.fontFamilyCustom).replace(/["\\]/g, '');
     body.style.fontFamily = '"' + name + '", ' + FONT_STACKS.system;
@@ -389,7 +389,7 @@ export interface FxInfo {
 }
 
 export function fxInfo(s: Settings, delta: number | null | undefined): FxInfo {
-  if (s.displayStyle === 'xianxia') return { cls: '', badge: null };
+  if (s.displayStyle === 'trueage') return { cls: '', badge: null };
   if (delta == null || delta === 0 || s.scoreEffect === 'none') return { cls: '', badge: null };
   if (s.scoreEffectOnlyPositive && delta < 0) return { cls: '', badge: null };
   const color = s.scoreEffectColor || (delta > 0 ? '#6fbf7b' : '#e06c75');

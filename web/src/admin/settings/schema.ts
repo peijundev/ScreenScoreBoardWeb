@@ -14,7 +14,7 @@ export const DISPLAY_STYLES: Array<[string, string]> = [
   ['kde', 'KDE 桌面'],
   ['guofeng', '古风雅集'],
   ['ink', '水墨'],
-  ['xianxia', '真·古风'],
+  ['trueage', '真·古风'],
   ['modern', '现代极简'],
   ['neon', '赛博霓虹'],
   ['poster', '海报展板'],

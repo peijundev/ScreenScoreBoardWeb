@@ -190,7 +190,7 @@ export default function App(): JSX.Element {
     if (!board || !settings) return;
 
     // 只在「按分数排序 + 卡片顺序真的变化」时读布局，避免每次广播都强制 reflow
-    const canFlip = settings.sortAnimation && settings.displayStyle !== 'xianxia' &&
+    const canFlip = settings.sortAnimation && settings.displayStyle !== 'trueage' &&
       settings.sortBy === 'score' && items.length <= FLIP_MAX_ITEMS && !free && !prefersReducedMotion();
     if (!canFlip) {
       prevRects.current = new Map();
@@ -240,7 +240,7 @@ export default function App(): JSX.Element {
     if (!board) return;
 
     // 名次升降动画
-    if (settings.rankChangeAnimation && settings.displayStyle !== 'xianxia' && ranked && !prefersReducedMotion()) {
+    if (settings.rankChangeAnimation && settings.displayStyle !== 'trueage' && ranked && !prefersReducedMotion()) {
       items.forEach((it, i) => {
         const id = it.kind === 'person' && it.person ? it.person.id : it.team?.id;
         const rank = ranks[i];
@@ -261,7 +261,7 @@ export default function App(): JSX.Element {
     const totalDelta = Array.from(deltas.values()).reduce((a, b) => a + b, 0);
     if (totalDelta !== 0) playScoreSound(totalDelta, settings);
 
-    if (settings.displayStyle !== 'xianxia' && settings.scoreEffect === 'confetti') {
+    if (settings.displayStyle !== 'trueage' && settings.scoreEffect === 'confetti') {
       const colors = [
         settings.scoreEffectColor || settings.accent,
         '#6fbf7b', '#e06c75', '#e8a33d', '#4f8cff', '#ffffff',
@@ -278,7 +278,7 @@ export default function App(): JSX.Element {
       }
     }
 
-    if (settings.displayStyle !== 'xianxia' && settings.scoreEffect === 'spotlight') {
+    if (settings.displayStyle !== 'trueage' && settings.scoreEffect === 'spotlight') {
       const scope = String(settings.spotlightScope || 'person');
       const mode = String(settings.spotlightPlayMode || 'queue');
       const changed = Object.values(project.people).filter((p) => {
@@ -326,7 +326,7 @@ export default function App(): JSX.Element {
       }
     }
 
-    if (settings.displayStyle !== 'xianxia' && settings.scoreEffect === 'highlight') {
+    if (settings.displayStyle !== 'trueage' && settings.scoreEffect === 'highlight') {
       const changed = Object.values(project.people).filter((p) => {
         const d = deltas.get(p.id);
         return d && !(settings.scoreEffectOnlyPositive && d < 0);
@@ -341,7 +341,7 @@ export default function App(): JSX.Element {
       if (els.length && !prefersReducedMotion()) spawnHighlight(els, settings);
     }
 
-    if (settings.scoreRolling && settings.displayStyle !== 'xianxia' && !prefersReducedMotion()) {
+    if (settings.scoreRolling && settings.displayStyle !== 'trueage' && !prefersReducedMotion()) {
       for (const [personId, delta] of deltas) {
         if (!delta) continue;
         const el = board.querySelector<HTMLElement>('.score-num[data-person-score="' + personId + '"]');
@@ -412,7 +412,7 @@ export default function App(): JSX.Element {
       if (e.origin !== location.origin) return;
       if (!e.data || e.data.type !== 'preview-spotlight') return;
       const board = boardRef.current;
-      if (!board || !settings || settings.displayStyle === 'xianxia') return;
+      if (!board || !settings || settings.displayStyle === 'trueage') return;
       const scope = String(settings.spotlightScope || 'person');
       const teamCard = board.querySelector<HTMLElement>('.card[data-kind="team"]');
       const memberEl = board.querySelector<HTMLElement>('.member[data-person]');
