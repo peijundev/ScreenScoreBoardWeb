@@ -12,7 +12,7 @@
 - **服务端强制**：`applyOp` actor 校验、REST route 权限、旧 `/api/*` 集中守卫、WS 按 op 鉴权、MCP 进程内调用继承同一身份
 - **显示端公开只读**：匿名可收快照；`?edit=1` 布局编辑仅管理员登录后可用
 - **HTTPS**：反代（Caddy/Nginx）与 Node 内置 HTTPS（`TLS_CERT_FILE` / `TLS_KEY_FILE`），`TRUST_PROXY`、`X-Forwarded-*`、Secure Cookie
-- **Electron 双模式**：本地模式内嵌服务端并关闭鉴权（仅 loopback）；远程模式加载远程服务并由其登录/鉴权，只保存 URL，不保存凭据
+- **Electron 双模式**：启动时先选择本地/远程；本地模式内嵌服务端并关闭鉴权（仅 loopback）；远程模式填写服务器根地址 + 账号 + 密码登录，显示端填写完整网址并按无标签页浏览器加载；不保存密码；运行中可通过管理端「切换模式」按钮或菜单回到欢迎页重新选择
 - `npm run auth:reset`：停止服务后本机重置密码/补建管理员；Docker/systemd 文档已补齐
 - 新文档：[docs/authentication.md](docs/authentication.md)
 

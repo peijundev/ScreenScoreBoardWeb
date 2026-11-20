@@ -1588,7 +1588,7 @@ body[data-display-style="poster"] .score-bar { background: #111111; height: 6px;
 body[data-display-style="poster"] .member { background: #f1eee4; }
 
 /* ---------- 真·古风：宣纸卷轴、金线云纹、行楷标题（配色随强调色） ---------- */
-body[data-display-style="xianxia"][data-theme] {
+body[data-display-style="trueage"][data-theme] {
   --bg-fallback: #f2e8d2;
   --card: #faf3e2;
   --card-border: #c9a86a;
@@ -1605,7 +1605,7 @@ body[data-display-style="xianxia"][data-theme] {
   background-attachment: fixed;
   font-family: "Noto Serif CJK SC", "Source Han Serif SC", "Songti SC", "STSong", "SimSun", serif;
 }
-body[data-display-style="xianxia"] .topbar h1 {
+body[data-display-style="trueage"] .topbar h1 {
   font-family: "STXingkai", "Xingkai SC", "华文行楷", "Kaiti SC", "KaiTi", "STKaiti",
     "Noto Serif CJK SC", "Songti SC", serif;
   font-weight: 500;
@@ -1613,7 +1613,7 @@ body[data-display-style="xianxia"] .topbar h1 {
   color: var(--title-color, #3a2d20);
   text-shadow: 0 1px 0 rgba(255, 252, 244, 0.85);
 }
-body[data-display-style="xianxia"] .topbar::after {
+body[data-display-style="trueage"] .topbar::after {
   width: 170px;
   height: 6px;
   border-radius: 3px;
@@ -1623,25 +1623,25 @@ body[data-display-style="xianxia"] .topbar::after {
       rgba(220, 188, 126, 0.95) 50%, rgba(183, 143, 74, 0.55) 82%, transparent);
 }
 /* 卡片强制使用内置卷轴卡面（四色轮换），卡片样式/底色/圆角/边框一律让位 */
-body[data-display-style="xianxia"] .board > .card:nth-child(4n+1) {
-  --xcard-img: url("/img/xianxia/scroll-1.webp");
+body[data-display-style="trueage"] .board > .card:nth-child(4n+1) {
+  --xcard-img: url("/img/trueage/scroll-1.webp");
 }
-body[data-display-style="xianxia"] .board > .card:nth-child(4n+2) {
-  --xcard-img: url("/img/xianxia/scroll-2.webp");
+body[data-display-style="trueage"] .board > .card:nth-child(4n+2) {
+  --xcard-img: url("/img/trueage/scroll-2.webp");
 }
-body[data-display-style="xianxia"] .board > .card:nth-child(4n+3) {
-  --xcard-img: url("/img/xianxia/scroll-3.webp");
+body[data-display-style="trueage"] .board > .card:nth-child(4n+3) {
+  --xcard-img: url("/img/trueage/scroll-3.webp");
 }
-body[data-display-style="xianxia"] .board > .card:nth-child(4n) {
-  --xcard-img: url("/img/xianxia/scroll-4.webp");
+body[data-display-style="trueage"] .board > .card:nth-child(4n) {
+  --xcard-img: url("/img/trueage/scroll-4.webp");
 }
-body[data-display-style="xianxia"] .board > .card {
+body[data-display-style="trueage"] .board > .card {
   border: 0;
   border-radius: 10px;
   background-color: transparent;
   background-image:
     linear-gradient(180deg, rgba(250, 243, 226, 0.26) 0%, rgba(250, 243, 226, 0.56) 100%),
-    var(--xcard-img, url("/img/xianxia/scroll-1.webp"));
+    var(--xcard-img, url("/img/trueage/scroll-1.webp"));
   background-size: 100% 100%, 100% 100%;
   background-position: center, center;
   background-repeat: no-repeat, no-repeat;
@@ -1650,24 +1650,24 @@ body[data-display-style="xianxia"] .board > .card {
   backdrop-filter: none;
 }
 /* 本主题禁用记分特效（弹跳/发光/彩带/突显/聚光灯） */
-body[data-display-style="xianxia"] .fx-delta,
-body[data-display-style="xianxia"] .confetti-layer,
-body[data-display-style="xianxia"] .spotlight-overlay,
-body[data-display-style="xianxia"] .spotlight-return-overlay,
-body[data-display-style="xianxia"] .spotlight-parallel-overlay,
-body[data-display-style="xianxia"] .highlight-scrim {
+body[data-display-style="trueage"] .fx-delta,
+body[data-display-style="trueage"] .confetti-layer,
+body[data-display-style="trueage"] .spotlight-overlay,
+body[data-display-style="trueage"] .spotlight-return-overlay,
+body[data-display-style="trueage"] .spotlight-parallel-overlay,
+body[data-display-style="trueage"] .highlight-scrim {
   display: none !important;
 }
-body[data-display-style="xianxia"] .member {
+body[data-display-style="trueage"] .member {
   background: rgba(201, 168, 106, 0.12);
   border: 1px solid rgba(201, 168, 106, 0.35);
 }
-body[data-display-style="xianxia"] .score-bar {
+body[data-display-style="trueage"] .score-bar {
   background: linear-gradient(90deg,
     color-mix(in srgb, var(--accent) 55%, #7a5a34), var(--accent));
 }
-body[data-display-style="xianxia"] .rank { color: #b07d2b; }
-body[data-display-style="xianxia"] .lb-row {
+body[data-display-style="trueage"] .rank { color: #b07d2b; }
+body[data-display-style="trueage"] .lb-row {
   border-radius: 4px;
   box-shadow:
     inset 0 0 0 3px rgba(251, 246, 233, 0.92),

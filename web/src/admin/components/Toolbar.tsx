@@ -179,6 +179,22 @@ export default function Toolbar({
           撤销记分
         </button>
       )}
+      {window.ssbShell?.returnToLauncher && (
+        <button
+          className="btn small"
+          type="button"
+          title="关闭当前窗口，回到模式选择页"
+          onClick={() => {
+            void window.ssbShell?.returnToLauncher?.()
+              .then((res) => {
+                if (!res.ok) toast(res.error || '切换失败');
+              })
+              .catch(() => undefined);
+          }}
+        >
+          切换模式
+        </button>
+      )}
       {authEnabled && user && (
         <>
           <button className="btn small" type="button" onClick={onOpenAccount} title="账号与安全">

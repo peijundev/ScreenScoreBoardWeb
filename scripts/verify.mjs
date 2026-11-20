@@ -214,7 +214,7 @@ async function main() {
   assert(r.status === 400 || r.status === 404, '路径穿越被拒绝');
   r = await fetch(BASE + '/admin.css');
   assert(r.ok && (await r.text()).includes('--card'), '静态资源可访问');
-  r = await fetch(BASE + '/img/xianxia/scroll-1.webp');
+  r = await fetch(BASE + '/img/trueage/scroll-1.webp');
   assert(r.ok && (await r.arrayBuffer()).byteLength > 1000, '真·古风卷轴素材可访问');
   console.log('P1 后端健壮性:');
   r = await fetch(BASE + '/api/health');

@@ -193,7 +193,15 @@ CLI 会检查 `DATA_DIR/scoreboard.lock`，服务仍在运行时会拒绝，避�
 
 ## Electron
 
+Electron 每次启动先显示模式选择页：
+
 - **本地模式**：内嵌服务端，只绑定 `127.0.0.1`，关闭鉴权（原行为）。
-- **远程模式**：加载远程 `/admin`（由远程服务显示登录页）与 `/display`（公开），只保存服务器 URL；非本机地址必须 HTTPS。
-- 切换：应用菜单「服务器」或环境变量 `SCOREBOARD_MODE=remote` + `SCOREBOARD_REMOTE_URL=https://...`。
-- 远程模式的登录 Cookie 存在 Electron 默认会话中，重启后仍保持登录，直到服务端会话过期或登出。
+- **远程模式**：
+  - 管理端填写：远程服务器根地址、账号、密码。Electron 调用远程 `/api/v1/auth/login` 登录，把会话 Cookie 写入 Electron 默认会话，再加载远程 `/admin`。
+  - 显示端填写：完整显示端网址。显示端窗口是无标签页、无地址栏的浏览器，直接加载该网址；显示端仍是公开只读。
+  - 只保存服务器地址、账号、显示端网址，**不保存密码**；密码只用于本次登录。
+  - 非本机服务器地址必须 HTTPS；显示端网址允许 HTTP。
+  - 自签证书需要先让系统/Electron 信任；登录请求由 Node 发出，必要时通过 `NODE_EXTRA_CA_CERTS` 指向自签 CA。
+- 运行中切换：管理端顶栏「切换模式」按钮（手机端在「更多」里）或应用菜单「服务器 → 退出到欢迎页（切换模式）…」（`Ctrl/Cmd+Shift+M`）。当前管理/显示窗口会关闭，回到欢迎页重新选择；本地服务端会保留复用，不会丢数据。
+- 环境变量可预填启动页：`SCOREBOARD_MODE=remote`、`SCOREBOARD_REMOTE_URL`、`SCOREBOARD_USERNAME`、`SCOREBOARD_DISPLAY_URL`。
+- 登录 Cookie 存在 Electron 默认会话中，重启后仍保持登录，直到服务端会话过期或登出；启动页仍会要求输入密码以完成本次远程连接。

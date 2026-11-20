@@ -1,5 +1,5 @@
 'use strict';
-// Electron 主进程：本地模式内嵌服务端，远程模式连接已部署的计分板服务
+// Electron 主进程：启动时选择本地/远程模式；本地内嵌服务端，远程连接已部署服务
 const { app, BrowserWindow, Menu, shell, dialog, session, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -15,15 +15,22 @@ try {
 
 let serverPort = 0;
 let adminWindow = null;
-let settingsWindow = null;
+let launcherWindow = null;
 const displayWindows = new Set();
 let quitting = false;
+let launching = false;
 let mode = 'local';
 let remoteUrl = '';
+let remoteUsername = '';
+let remoteDisplayUrl = '';
 let embeddedServer = false;
 
+function localBaseURL() {
+  return 'http://127.0.0.1:' + serverPort;
+}
+
 function baseURL() {
-  return mode === 'remote' ? remoteUrl : 'http://127.0.0.1:' + serverPort;
+  return mode === 'remote' ? remoteUrl : localBaseURL();
 }
 
 function projectIdFromWindow(win) {
@@ -35,12 +42,33 @@ function projectIdFromWindow(win) {
   }
 }
 
-function displayURL(projectId) {
-  return modeUtils.displayUrl(baseURL(), projectId);
-}
-
 function adminURL(projectId) {
   return modeUtils.adminUrl(baseURL(), projectId);
+}
+
+/** 远程模式优先使用用户填写的完整显示端网址；本地模式用 127.0.0.1 + /display */
+function displayURL(projectId) {
+  if (mode === 'remote') {
+    return modeUtils.resolveDisplayUrl(remoteDisplayUrl, remoteUrl, projectId);
+  }
+  return modeUtils.displayUrl(localBaseURL(), projectId);
+}
+
+function isDisplayLink(raw) {
+  try {
+    const url = new URL(raw);
+    if (mode === 'remote' && remoteDisplayUrl) {
+      const configured = new URL(remoteDisplayUrl);
+      if (url.href === configured.href) return true;
+    }
+    const base = new URL(baseURL());
+    return (
+      url.origin === base.origin &&
+      (url.pathname === '/display' || url.pathname === '/display-v2')
+    );
+  } catch (_) {
+    return false;
+  }
 }
 
 function createAdminWindow(projectId) {
@@ -53,6 +81,7 @@ function createAdminWindow(projectId) {
     backgroundColor: '#1b1e20',
     autoHideMenuBar: false,
     webPreferences: {
+      preload: path.join(__dirname, 'admin-preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -61,7 +90,7 @@ function createAdminWindow(projectId) {
   win.loadURL(adminURL(projectId));
   // 管理端里的「打开显示端」链接（target=_blank）改为开独立显示端窗口
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith(baseURL() + '/display')) {
+    if (isDisplayLink(url)) {
       let pid = null;
       try { pid = new URL(url).searchParams.get('project'); } catch (_) {}
       openDisplayWindow(pid);
@@ -75,6 +104,7 @@ function createAdminWindow(projectId) {
   return win;
 }
 
+/** 显示端窗口：无标签页、无地址栏，只加载配置好的显示端网址 */
 function openDisplayWindow(projectId) {
   const win = new BrowserWindow({
     width: 1280,
@@ -98,30 +128,77 @@ function focusedProjectId(win) {
   return projectIdFromWindow(win) || projectIdFromWindow(adminWindow);
 }
 
-function openSettingsWindow() {
-  if (settingsWindow) {
-    if (settingsWindow.isMinimized()) settingsWindow.restore();
-    settingsWindow.show();
-    settingsWindow.focus();
+function openLauncherWindow() {
+  // 欢迎页只保留模式选择，不显示运行中的管理菜单
+  Menu.setApplicationMenu(null);
+  if (launcherWindow) {
+    if (launcherWindow.isMinimized()) launcherWindow.restore();
+    launcherWindow.show();
+    launcherWindow.focus();
     return;
   }
-  settingsWindow = new BrowserWindow({
-    width: 600,
-    height: 540,
-    minWidth: 480,
-    minHeight: 460,
-    title: APP_NAME + ' 服务器设置',
+  launcherWindow = new BrowserWindow({
+    width: 720,
+    height: 720,
+    minWidth: 560,
+    minHeight: 600,
+    title: APP_NAME + ' · 选择运行模式',
     backgroundColor: '#1b1e20',
     autoHideMenuBar: true,
     webPreferences: {
-      preload: path.join(__dirname, 'settings-preload.js'),
+      preload: path.join(__dirname, 'launcher-preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
     },
   });
-  settingsWindow.loadFile(path.join(__dirname, 'settings.html'));
-  settingsWindow.on('closed', () => { settingsWindow = null; });
+  launcherWindow.loadFile(path.join(__dirname, 'launcher.html'));
+  launcherWindow.on('closed', () => {
+    launcherWindow = null;
+    if (!adminWindow && displayWindows.size === 0) app.quit();
+  });
+}
+
+function finishLaunch() {
+  launching = false;
+  buildMenu();
+  createAdminWindow();
+  if (launcherWindow) {
+    const win = launcherWindow;
+    launcherWindow = null;
+    win.close();
+  }
+}
+
+/** 运行中返回欢迎页：关闭管理/显示窗口，保留已启动的本地服务端以便复用 */
+function returnToLauncher() {
+  if (launching) return false;
+  openLauncherWindow();
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (win === launcherWindow) continue;
+    try { win.close(); } catch (_) {}
+  }
+  adminWindow = null;
+  displayWindows.clear();
+  if (launcherWindow) {
+    launcherWindow.show();
+    launcherWindow.focus();
+  }
+  return true;
+}
+
+function isTrustedShellUrl(raw) {
+  try {
+    const origin = new URL(raw).origin;
+    return origin === new URL(baseURL()).origin;
+  } catch (_) {
+    return false;
+  }
+}
+
+function scheduleFinish() {
+  // 先让 IPC 把成功响应送回启动页，再关闭它
+  setTimeout(finishLaunch, 80);
 }
 
 async function fetchRemoteVersion(base) {
@@ -137,64 +214,133 @@ async function fetchRemoteVersion(base) {
   }
 }
 
-async function bootRemote() {
-  for (;;) {
-    try {
-      await fetchRemoteVersion(remoteUrl);
-      return true;
-    } catch (error) {
-      const choice = await dialog.showMessageBox({
-        type: 'error',
-        title: '无法连接服务器',
-        message: '无法连接远程计分板服务',
-        detail: remoteUrl + '\n' + (error && error.message ? error.message : ''),
-        buttons: ['重试', '服务器设置', '退出'],
-        defaultId: 0,
-        cancelId: 2,
-      });
-      if (choice.response === 0) continue;
-      if (choice.response === 1) {
-        openSettingsWindow();
-        return false;
-      }
-      app.quit();
-      return false;
-    }
+async function storeLoginCookies(origin, setCookieHeaders) {
+  let stored = 0;
+  for (const header of setCookieHeaders) {
+    const cookie = modeUtils.cookieFromSetCookie(origin, header);
+    if (!cookie) continue;
+    await session.defaultSession.cookies.set(cookie);
+    stored += 1;
+  }
+  if (!stored) throw new Error('登录成功但未收到会话 Cookie');
+  const sessionCookie = await session.defaultSession.cookies.get({
+    url: origin,
+    name: 'ssb_session',
+  });
+  if (!sessionCookie.length) throw new Error('登录成功但会话 Cookie 未能保存');
+}
+
+async function loginRemote(config) {
+  const checked = modeUtils.validateRemoteUrl(config.remoteUrl);
+  if (!checked.ok) throw new Error(checked.error);
+  const displayChecked = modeUtils.validateDisplayUrl(config.displayUrl);
+  if (!displayChecked.ok) throw new Error(displayChecked.error);
+  const username = String(config.username || '').trim();
+  const password = String(config.password || '');
+  if (!username) throw new Error('请填写账号');
+  if (!password) throw new Error('请填写密码');
+
+  await fetchRemoteVersion(checked.url);
+  const res = await fetch(checked.url + '/api/v1/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password, remember: true }),
+  });
+  const text = await res.text();
+  let body = null;
+  try { body = text ? JSON.parse(text) : null; } catch (_) { /* ignore */ }
+  if (!res.ok) {
+    const message = body && body.error && body.error.message
+      ? body.error.message
+      : '登录失败（HTTP ' + res.status + '）';
+    throw new Error(message);
+  }
+  const setCookies = typeof res.headers.getSetCookie === 'function'
+    ? res.headers.getSetCookie()
+    : [res.headers.get('set-cookie')].filter(Boolean);
+  const origin = new URL(checked.url).origin;
+  await storeLoginCookies(origin, setCookies);
+
+  remoteUrl = checked.url;
+  remoteUsername = username;
+  remoteDisplayUrl = displayChecked.url;
+  mode = 'remote';
+  try {
+    modeUtils.saveConfig(app.getPath('userData'), {
+      mode: 'remote',
+      remoteUrl,
+      username: remoteUsername,
+      displayUrl: remoteDisplayUrl,
+    });
+  } catch (error) {
+    console.warn('[electron] 保存远程模式配置失败：' + error.message);
   }
 }
 
-function registerConfigHandlers() {
-  ipcMain.handle('ssb:config:get', () => ({ mode, remoteUrl }));
-  ipcMain.handle('ssb:config:test', async (_event, rawUrl) => {
-    const check = modeUtils.validateRemoteUrl(rawUrl);
-    if (!check.ok) return { ok: false, error: check.error };
+async function startLocalMode() {
+  // 从运行中返回欢迎页后本地服务端仍在运行，直接复用，避免同一进程重复启动
+  if (!embeddedServer) await startEmbeddedServer();
+  mode = 'local';
+  try {
+    modeUtils.saveConfig(app.getPath('userData'), {
+      mode: 'local',
+      remoteUrl,
+      username: remoteUsername,
+      displayUrl: remoteDisplayUrl,
+    });
+  } catch (error) {
+    console.warn('[electron] 保存本地模式配置失败：' + error.message);
+  }
+}
+
+function registerLauncherHandlers() {
+  ipcMain.handle('ssb:launcher:get', () => ({
+    mode,
+    remoteUrl,
+    username: remoteUsername,
+    displayUrl: remoteDisplayUrl,
+  }));
+
+  ipcMain.handle('ssb:launcher:local', async () => {
+    if (launching) return { ok: false, error: '正在启动，请稍候' };
+    launching = true;
     try {
-      const info = await fetchRemoteVersion(check.url);
-      return { ok: true, url: check.url, version: info.version };
+      await startLocalMode();
+      scheduleFinish();
+      return { ok: true };
     } catch (error) {
-      return { ok: false, error: '无法连接：' + (error && error.message ? error.message : '') };
+      launching = false;
+      return { ok: false, error: '启动失败：' + (error && error.message ? error.message : '') };
     }
   });
-  ipcMain.handle('ssb:config:save', async (_event, config) => {
-    const nextMode = config && config.mode === 'remote' ? 'remote' : 'local';
-    let nextUrl = '';
-    if (nextMode === 'remote') {
-      const check = modeUtils.validateRemoteUrl(config && config.remoteUrl);
-      if (!check.ok) return { ok: false, error: check.error };
-      nextUrl = check.url;
-    } else if (config && typeof config.remoteUrl === 'string') {
-      nextUrl = config.remoteUrl.trim();
-    }
+
+  ipcMain.handle('ssb:launcher:remote', async (_event, config) => {
+    if (launching) return { ok: false, error: '正在连接，请稍候' };
+    launching = true;
     try {
-      modeUtils.saveConfig(app.getPath('userData'), { mode: nextMode, remoteUrl: nextUrl });
+      await loginRemote(config || {});
+      scheduleFinish();
+      return { ok: true };
     } catch (error) {
-      return { ok: false, error: '保存失败：' + error.message };
+      launching = false;
+      return { ok: false, error: error && error.message ? error.message : '连接失败' };
     }
-    setTimeout(() => {
-      app.relaunch();
-      app.quit();
-    }, 50);
+  });
+
+  ipcMain.handle('ssb:launcher:quit', () => {
+    app.quit();
     return { ok: true };
+  });
+
+  ipcMain.handle('ssb:shell:return-to-launcher', (event) => {
+    const rawUrl = event.senderFrame && event.senderFrame.url
+      ? event.senderFrame.url
+      : (event.sender && event.sender.getURL ? event.sender.getURL() : '');
+    if (!isTrustedShellUrl(rawUrl)) {
+      return { ok: false, error: '当前页面不允许切换模式' };
+    }
+    const ok = returnToLauncher();
+    return ok ? { ok: true } : { ok: false, error: '正在启动，请稍候' };
   });
 }
 
@@ -254,17 +400,16 @@ function buildMenu() {
         },
         { type: 'separator' },
         {
-          label: '本地模式（内置服务端）',
-          enabled: mode !== 'local',
+          label: '退出到欢迎页（切换模式）…',
+          accelerator: 'CmdOrCtrl+Shift+M',
+          click: () => returnToLauncher(),
+        },
+        {
+          label: '重启应用…',
           click: () => {
-            modeUtils.saveConfig(app.getPath('userData'), { mode: 'local', remoteUrl });
             app.relaunch();
             app.quit();
           },
-        },
-        {
-          label: '远程模式 / 服务器设置…',
-          click: () => openSettingsWindow(),
         },
         {
           label: '重新连接',
@@ -287,7 +432,8 @@ function buildMenu() {
               message: APP_NAME,
               detail: '计分板管理端（Electron）\n模式：' +
                 (mode === 'remote' ? '远程' : '本地（内置服务端）') +
-                '\n地址：' + baseURL() + '/admin',
+                '\n管理端：' + baseURL() + '/admin' +
+                '\n显示端：' + displayURL(null),
             });
           },
         },
@@ -317,53 +463,33 @@ if (!gotLock) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    if (settingsWindow) {
-      settingsWindow.focus();
+    if (launcherWindow) {
+      launcherWindow.show();
+      launcherWindow.focus();
       return;
     }
     if (adminWindow) {
       if (adminWindow.isMinimized()) adminWindow.restore();
       adminWindow.focus();
-    } else if (embeddedServer || (mode === 'remote' && remoteUrl)) {
-      createAdminWindow();
+    } else if (BrowserWindow.getAllWindows().length === 0) {
+      openLauncherWindow();
     }
   });
 
   app.whenReady().then(async () => {
-    // 只允许访问本地服务
+    // 拒绝摄像头/麦克风等权限请求；不影响 HTTP/WS
     session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
-    registerConfigHandlers();
+    registerLauncherHandlers();
 
     const config = modeUtils.loadConfig(app.getPath('userData'));
     mode = config.mode;
     remoteUrl = config.remoteUrl;
-
-    if (mode === 'remote') {
-      const checked = modeUtils.validateRemoteUrl(remoteUrl);
-      if (!checked.ok) {
-        dialog.showErrorBox('服务器地址无效', checked.error);
-        openSettingsWindow();
-        return;
-      }
-      remoteUrl = checked.url;
-      const ready = await bootRemote();
-      if (!ready) return;
-    } else {
-      try {
-        await startEmbeddedServer();
-      } catch (e) {
-        dialog.showErrorBox('启动失败', '内置服务启动失败：' + e.message);
-        app.quit();
-        return;
-      }
-    }
-
-    buildMenu();
-    createAdminWindow();
+    remoteUsername = config.username;
+    remoteDisplayUrl = config.displayUrl;
+    openLauncherWindow();
 
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length > 0) return;
-      if (embeddedServer || (mode === 'remote' && remoteUrl)) createAdminWindow();
+      if (BrowserWindow.getAllWindows().length === 0) openLauncherWindow();
     });
   });
 

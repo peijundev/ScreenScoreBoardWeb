@@ -228,6 +228,24 @@ export default function MobileNav({
               </>
             )}
             {!authEnabled && <p className="hint">本机模式（未启用鉴权）</p>}
+            {window.ssbShell?.returnToLauncher && (
+              <>
+                <h2>运行模式</h2>
+                <button
+                  className="btn mobile-wide"
+                  type="button"
+                  onClick={() => {
+                    void window.ssbShell?.returnToLauncher?.()
+                      .then((res) => {
+                        if (!res.ok) toast(res.error || '切换失败');
+                      })
+                      .catch(() => undefined);
+                  }}
+                >
+                  切换模式 / 返回欢迎页
+                </button>
+              </>
+            )}
           </section>
         )}
       </div>

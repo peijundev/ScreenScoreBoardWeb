@@ -34,7 +34,7 @@
 ## 2. 基础风格（baseStyle）
 
 ```
-lecture | ppt | seewo | kde | guofeng | ink | xianxia | modern | neon | poster | custom
+lecture | ppt | seewo | kde | guofeng | ink | trueage | modern | neon | poster | custom
 ```
 
 `custom` 表示“自由配置”，不套用内置皮肤，完全由主题设置决定外观。
@@ -123,7 +123,7 @@ lecture | ppt | seewo | kde | guofeng | ink | xianxia | modern | neon | poster |
 - 主题文件只接受 `format = screenscoreboard.theme`、`version = 1`
 - 未知键、非法值、非法基础风格会导致整份主题被拒绝，当前设置不变
 - 主题是“覆盖式”的：未提供的键保持项目原值；如需完全统一，可先重置项目再导入
-- 内置主题「真·古风」（`xianxia`）已恢复；使用该风格的旧项目与旧导出文件会原样保留，不再回落到 `lecture`
+- 内置主题「真·古风」（`trueage`）已恢复；使用该风格的旧项目与旧导出文件会原样保留，不再回落到 `lecture`
 
 ## 7. 示例
 
