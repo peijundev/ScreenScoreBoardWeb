@@ -88,15 +88,23 @@ export default function AssetLibraryDialog({ onClose }: { onClose: () => void })
       .finally(() => setBusy(false));
   };
 
-  const uploadAudio = (file: File): void => {
+  const uploadAudio = (files: File[]): void => {
+    if (!files.length) return;
     setBusy(true);
-    uploadSound(file)
-      .then(() => {
-        reload();
-        toast('音频已加入资源库');
-      })
-      .catch((err: Error) => toast(err.message))
-      .finally(() => setBusy(false));
+    void (async () => {
+      let added = 0;
+      for (const file of files) {
+        try {
+          await uploadSound(file);
+          added += 1;
+        } catch (err) {
+          toast(file.name + '：' + (err as Error).message);
+        }
+      }
+      reload();
+      if (added > 0) toast('已导入 ' + added + ' 个音频');
+      setBusy(false);
+    })();
   };
 
   const remove = async (kind: 'avatars' | 'sounds', asset: Asset): Promise<void> => {
@@ -217,10 +225,11 @@ export default function AssetLibraryDialog({ onClose }: { onClose: () => void })
               <input
                 type="file"
                 accept="audio/wav,audio/ogg,audio/mpeg,audio/mp4,.wav,.ogg,.mp3,.m4a"
+                multiple
                 hidden
                 onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) uploadAudio(file);
+                  const files = Array.from(e.target.files || []);
+                  if (files.length) uploadAudio(files);
                   e.target.value = '';
                 }}
               />

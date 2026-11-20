@@ -3,6 +3,7 @@ import type { Project, Team } from '../../shared/types';
 import { avatarURL, uploadAvatar } from '../../shared/api';
 import { projectOp } from '../../shared/store';
 import { quickPresets, toast } from '../../shared/ui';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import { confirm, prompt } from './dialogs';
 
 export default function TeamsPanel({ project }: { project: Project }): JSX.Element {
@@ -10,6 +11,8 @@ export default function TeamsPanel({ project }: { project: Project }): JSX.Eleme
   const [name, setName] = useState('');
   const [avatar, setAvatar] = useState<string | null>(null);
   const avatarInput = useRef<HTMLInputElement>(null);
+  const isSmall = useMediaQuery('(max-width: 860px)');
+  const mobile = isSmall && project.settings.featureMobileAdmin !== false;
 
   const allTeams = useMemo(
     () => Object.values(project.teams).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
@@ -102,6 +105,7 @@ export default function TeamsPanel({ project }: { project: Project }): JSX.Eleme
             presets={quickPresets(project.settings)}
             teamScore={Boolean(project.settings.featureTeamScore)}
             avatarEdit={project.settings.featureAvatarEdit !== false}
+            mobile={mobile}
           />
         ))}
       </div>
@@ -118,6 +122,7 @@ interface BlockProps {
   presets: number[];
   teamScore: boolean;
   avatarEdit: boolean;
+  mobile: boolean;
 }
 
 function TeamBlock({
@@ -128,6 +133,7 @@ function TeamBlock({
   presets,
   teamScore,
   avatarEdit,
+  mobile,
 }: BlockProps): JSX.Element {
   const members = useMemo(
     () =>
@@ -254,7 +260,16 @@ function TeamBlock({
         </button>
         <span className="t-total">{total} 分</span>
 
-        {teamScore && (
+        {teamScore && (mobile ? (
+          <span className="remote-pad">
+            <button className="remote-btn remote-plus" type="button" onClick={() => addAll(1)}>
+              +1
+            </button>
+            <button className="remote-btn remote-minus" type="button" onClick={() => addAll(-1)}>
+              −1
+            </button>
+          </span>
+        ) : (
           <span className="quick-scores">
             {presets.map((v) => (
               <button
@@ -268,7 +283,7 @@ function TeamBlock({
               </button>
             ))}
           </span>
-        )}
+        ))}
 
         <label className="btn small file-mini" title="团队卡片背景图">
           卡面

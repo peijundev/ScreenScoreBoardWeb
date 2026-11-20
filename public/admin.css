@@ -492,6 +492,87 @@ body {
 .panel-subbar input[type="text"] { flex: 1; min-width: 130px; }
 .quick-scores { display: inline-flex; gap: 2px; flex-wrap: wrap; }
 .quick-scores .btn { padding: 1px 6px; font-size: 11px; }
+
+/* 手机端记分“遥控器”：只有 +1 / −1 两个大按钮 */
+.remote-pad {
+  flex: 1 1 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  width: 100%;
+}
+.remote-btn {
+  min-height: calc(var(--touch-target, 44px) * 1.5);
+  padding: 10px 16px;
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  font: inherit;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform 80ms ease, filter 120ms ease;
+}
+.remote-btn:active { transform: scale(0.96); filter: brightness(1.15); }
+.remote-plus { background: var(--positive); border-color: var(--positive); color: #fff; }
+.remote-minus { background: var(--danger); border-color: var(--danger); color: #fff; }
+
+/* 顶部音效快捷菜单 */
+.sound-quick { position: relative; }
+.sound-quick-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 1200;
+  min-width: 210px;
+  max-height: 62vh;
+  overflow: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+.sound-quick-pop .check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+.sound-quick-group { display: flex; flex-direction: column; gap: 2px; }
+.sound-quick-title {
+  font-size: 11px;
+  color: var(--text-dim);
+  padding: 4px 8px 2px;
+}
+.sound-quick-item {
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sound-quick-item:hover { background: var(--hover); }
+.sound-quick-item.active {
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+}
 .countdown-btns { display: flex; gap: 4px; flex-wrap: wrap; }
 .countdown-style {
   display: grid;

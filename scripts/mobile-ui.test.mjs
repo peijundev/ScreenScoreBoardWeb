@@ -137,7 +137,8 @@ test('手机管理端：全屏对话框与主要流程', { skip: skipReason }, a
     const row = [...document.querySelectorAll('.person-row')].find((r) => r.textContent.includes('手机流程'));
     out.personAdded = Boolean(row);
     const before = row?.querySelector('.p-score')?.textContent;
-    row?.querySelector('.quick-scores .btn')?.click();
+    // 手机端使用遥控器式的 +1 / −1 大按钮
+    row?.querySelector('.remote-pad .remote-plus')?.click();
     await sleep(500);
     out.scoreChanged = before !== row?.querySelector('.p-score')?.textContent;
     out.rowOverflow = row ? row.scrollWidth > row.clientWidth + 1 : null;

@@ -189,16 +189,32 @@ function CustomSound(ctx: Ctx): JSX.Element {
     preview(v);
   };
 
-  const upload = (file: File): void => {
+  const upload = (files: File[]): void => {
+    if (!files.length) return;
     setBusy(true);
-    uploadSound(file)
-      .then(async (path) => {
-        await op('updateSettings', { patch: { customSound: path } });
-        reload();
-        playSoundFile(path, volume);
-      })
-      .catch((err: Error) => toast(err.message))
-      .finally(() => setBusy(false));
+    void (async () => {
+      let last = '';
+      let added = 0;
+      for (const file of files) {
+        try {
+          last = await uploadSound(file);
+          added += 1;
+        } catch (err) {
+          toast(file.name + '：' + (err as Error).message);
+        }
+      }
+      if (last) {
+        try {
+          await op('updateSettings', { patch: { customSound: last } });
+          reload();
+          playSoundFile(last, volume);
+          if (added > 1) toast('已导入 ' + added + ' 个音频，当前使用最后一个');
+        } catch (err) {
+          toast((err as Error).message);
+        }
+      }
+      setBusy(false);
+    })();
   };
 
   const remove = async (): Promise<void> => {
@@ -250,10 +266,11 @@ function CustomSound(ctx: Ctx): JSX.Element {
         <input
           type="file"
           accept="audio/wav,audio/ogg,audio/mpeg,audio/mp4,.wav,.ogg,.mp3,.m4a"
+          multiple
           hidden
           onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) upload(file);
+            const files = Array.from(e.target.files || []);
+            if (files.length) upload(files);
             e.target.value = '';
           }}
         />

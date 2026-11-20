@@ -3,6 +3,7 @@ import type { Person, Project, Team } from '../../shared/types';
 import { avatarURL, uploadAvatar } from '../../shared/api';
 import { projectOp } from '../../shared/store';
 import { quickPresets, scoreClass, toast } from '../../shared/ui';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import BatchAddDialog from './BatchAddDialog';
 import { confirm, prompt } from './dialogs';
 
@@ -18,6 +19,8 @@ export default function PeoplePanel({ project }: Props): JSX.Element {
   const avatarInput = useRef<HTMLInputElement>(null);
   const settings = project.settings;
   const presets = useMemo(() => quickPresets(settings), [settings]);
+  const isSmall = useMediaQuery('(max-width: 860px)');
+  const mobile = isSmall && settings.featureMobileAdmin !== false;
 
   const allPeople = useMemo(
     () => Object.values(project.people).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
@@ -157,6 +160,7 @@ export default function PeoplePanel({ project }: Props): JSX.Element {
             presets={presets}
             quickScore={Boolean(settings.featureQuickScore)}
             avatarEdit={settings.featureAvatarEdit !== false}
+            mobile={mobile}
           />
         ))}
       </div>
@@ -176,6 +180,7 @@ interface RowProps {
   presets: number[];
   quickScore: boolean;
   avatarEdit: boolean;
+  mobile: boolean;
 }
 
 function PersonRowBase({
@@ -187,6 +192,7 @@ function PersonRowBase({
   presets,
   quickScore,
   avatarEdit,
+  mobile,
 }: RowProps): JSX.Element {
   const [delta, setDelta] = useState('1');
 
@@ -312,7 +318,16 @@ function PersonRowBase({
       </button>
       <span className={'p-score ' + scoreClass(person.score)}>{person.score}</span>
 
-      {quickScore && (
+      {quickScore && (mobile ? (
+        <span className="remote-pad">
+          <button className="remote-btn remote-plus" type="button" onClick={() => addScore(1)}>
+            +1
+          </button>
+          <button className="remote-btn remote-minus" type="button" onClick={() => addScore(-1)}>
+            −1
+          </button>
+        </span>
+      ) : (
         <span className="quick-scores">
           {presets.map((v) => (
             <button key={v} className="btn small quick-score" data-delta={v} onClick={() => addScore(v)}>
@@ -321,35 +336,37 @@ function PersonRowBase({
             </button>
           ))}
         </span>
-      )}
+      ))}
 
-      <span className="score-ctl">
-        <input
-          type="number"
-          className="delta-input"
-          value={delta}
-          step={1}
-          onChange={(e) => setDelta(e.target.value)}
-        />
-        <button
-          className="btn small score-plus"
-          onClick={() => {
-            const d = readDelta();
-            if (d != null) addScore(d);
-          }}
-        >
-          +分
-        </button>
-        <button
-          className="btn small score-minus"
-          onClick={() => {
-            const d = readDelta();
-            if (d != null) addScore(-d);
-          }}
-        >
-          −分
-        </button>
-      </span>
+      {(!mobile || !quickScore) && (
+        <span className="score-ctl">
+          <input
+            type="number"
+            className="delta-input"
+            value={delta}
+            step={1}
+            onChange={(e) => setDelta(e.target.value)}
+          />
+          <button
+            className="btn small score-plus"
+            onClick={() => {
+              const d = readDelta();
+              if (d != null) addScore(d);
+            }}
+          >
+            +分
+          </button>
+          <button
+            className="btn small score-minus"
+            onClick={() => {
+              const d = readDelta();
+              if (d != null) addScore(-d);
+            }}
+          >
+            −分
+          </button>
+        </span>
+      )}
 
       <select
         className="team-select"

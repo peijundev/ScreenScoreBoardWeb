@@ -3,6 +3,7 @@ import type { Project } from '../../shared/types';
 import { useAppStore } from '../../shared/store';
 import { toast } from '../../shared/ui';
 import { confirm, prompt } from './dialogs';
+import SoundQuickMenu from './SoundQuickMenu';
 
 interface Props {
   project: Project | null;
@@ -141,6 +142,7 @@ export default function Toolbar({
       <button className="btn small" type="button" onClick={onOpenAssets} disabled={!project}>
         资源库
       </button>
+      {project && <SoundQuickMenu project={project} />}
       <button
         className="btn small"
         type="button"
