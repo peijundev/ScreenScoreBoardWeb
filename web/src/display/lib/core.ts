@@ -540,7 +540,9 @@ export function injectSpotDelta(clone: HTMLElement, delta: number | null | undef
 export function cloneCard(el: HTMLElement): HTMLElement {
   const clone = el.cloneNode(true) as HTMLElement;
   clone.querySelectorAll('.resize-handle, .fx-delta, .confetti-layer').forEach((n) => n.remove());
-  ['position', 'left', 'top', 'right', 'bottom', 'width', 'height', 'transform', 'animation', 'zoom'].forEach(
+  // visibility 必须清掉：特效播放期间原卡是内联 hidden，cloneNode 会把该内联样式一起复制，
+  // 导致同一张卡连续触发特效时新克隆卡不可见。
+  ['position', 'left', 'top', 'right', 'bottom', 'width', 'height', 'transform', 'animation', 'zoom', 'visibility'].forEach(
     (p) => clone.style.removeProperty(p),
   );
   clone.classList.remove('dragging');
