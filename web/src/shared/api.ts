@@ -72,3 +72,28 @@ export function uploadAvatar(file: File): Promise<string> {
 export function uploadSound(file: File): Promise<string> {
   return upload(file, '/api/sound');
 }
+
+export interface SoundAsset {
+  path: string;
+  bytes: number;
+  mtime: number;
+}
+
+/** 全局音效库：服务器 sounds/ 目录下的所有音频 */
+export async function listSoundAssets(): Promise<SoundAsset[]> {
+  const res = await fetch('/api/v1/assets');
+  const payload = (await res.json().catch(() => ({}))) as {
+    data?: { sounds?: SoundAsset[] };
+    error?: { message?: string };
+  };
+  if (!res.ok) throw new Error(payload.error?.message || '读取音效库失败');
+  const sounds = payload.data?.sounds;
+  return Array.isArray(sounds) ? sounds : [];
+}
+
+export async function deleteSound(path: string): Promise<void> {
+  const name = String(path || '').replace(/^sounds\//, '');
+  const res = await fetch('/api/v1/assets/sounds/' + encodeURIComponent(name), { method: 'DELETE' });
+  const payload = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+  if (!res.ok) throw new Error(payload.error?.message || '删除音效失败');
+}

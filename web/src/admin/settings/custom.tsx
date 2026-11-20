@@ -1,6 +1,13 @@
-import { useState, type JSX } from 'react';
+import { useCallback, useEffect, useState, type JSX } from 'react';
 import type { Ctx, CustomRenderer } from './types';
-import { uploadAvatar, uploadSound } from '../../shared/api';
+import {
+  deleteSound,
+  listSoundAssets,
+  uploadAvatar,
+  uploadSound,
+  type SoundAsset,
+} from '../../shared/api';
+import { SOUND_PRESETS, playPresetSound, playSoundFile } from '../../shared/sound';
 import { useAppStore } from '../../shared/store';
 import { toast } from '../../shared/ui';
 import { confirm } from '../components/dialogs';
@@ -146,35 +153,123 @@ function PreviewSpotlight(): JSX.Element {
   );
 }
 
+function soundAssetLabel(asset: SoundAsset): string {
+  const d = new Date(asset.mtime);
+  const p = (n: number): string => String(n).padStart(2, '0');
+  const name = asset.path.split('/').pop() || asset.path;
+  return (
+    '音效 ' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' +
+    p(d.getHours()) + ':' + p(d.getMinutes()) + ' · ' + name.slice(0, 4)
+  );
+}
+
 function CustomSound(ctx: Ctx): JSX.Element {
-  const { op } = ctx;
+  const { op, settings } = ctx;
+  const [assets, setAssets] = useState<SoundAsset[]>([]);
+  const [busy, setBusy] = useState(false);
+  const currentFile = String(settings.customSound || '');
+  const preset = String(settings.soundPreset || 'default');
+  const value = currentFile || 'preset:' + preset;
+  const volume = Number(settings.soundVolume);
+
+  const reload = useCallback(() => {
+    listSoundAssets()
+      .then((list) => setAssets([...list].sort((a, b) => b.mtime - a.mtime)))
+      .catch((err: Error) => toast(err.message));
+  }, []);
+
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
+  const preview = (v: string): void => {
+    if (v.startsWith('preset:')) playPresetSound(v.slice(7), 1, volume);
+    else if (v) playSoundFile(v, volume);
+  };
+
+  const choose = (v: string): void => {
+    const patch = v.startsWith('preset:')
+      ? { soundPreset: v.slice(7), customSound: '' }
+      : { customSound: v };
+    op('updateSettings', { patch }).catch((err: Error) => toast(err.message));
+    preview(v);
+  };
+
+  const upload = (file: File): void => {
+    setBusy(true);
+    uploadSound(file)
+      .then(async (path) => {
+        await op('updateSettings', { patch: { customSound: path } });
+        reload();
+        playSoundFile(path, volume);
+      })
+      .catch((err: Error) => toast(err.message))
+      .finally(() => setBusy(false));
+  };
+
+  const remove = async (): Promise<void> => {
+    if (!currentFile) return;
+    const ok = await confirm({
+      title: '删除音效',
+      message: '从全局音效库删除这个音效？正在使用它的项目需要先切换到其他音效。',
+      confirmText: '删除',
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await deleteSound(currentFile);
+      await op('updateSettings', { patch: { customSound: '' } });
+      reload();
+      toast('音效已删除');
+    } catch (err) {
+      toast((err as Error).message);
+    }
+  };
+
+  const missing = Boolean(currentFile) && !assets.some((a) => a.path === currentFile);
   return (
     <div className="sound-row">
+      <select value={value} disabled={busy} onChange={(e) => choose(e.target.value)}>
+        {missing && <option value={currentFile}>（音效文件缺失）</option>}
+        <optgroup label="内置音效">
+          {SOUND_PRESETS.map((p) => (
+            <option key={p.id} value={'preset:' + p.id}>
+              {p.name}
+            </option>
+          ))}
+        </optgroup>
+        {assets.length > 0 && (
+          <optgroup label="已导入音效">
+            {assets.map((a) => (
+              <option key={a.path} value={a.path}>
+                {soundAssetLabel(a)}
+              </option>
+            ))}
+          </optgroup>
+        )}
+      </select>
+      <button className="btn small" type="button" onClick={() => preview(value)}>
+        试听
+      </button>
       <label className="file-btn">
-        上传自定义音效
+        导入音效
         <input
           type="file"
           accept="audio/wav,audio/ogg,audio/mpeg,audio/mp4,.wav,.ogg,.mp3,.m4a"
           hidden
           onChange={(e) => {
             const file = e.target.files?.[0];
-            if (!file) return;
-            uploadSound(file)
-              .then((path) => op('updateSettings', { patch: { customSound: path } }))
-              .catch((err: Error) => toast(err.message));
+            if (file) upload(file);
             e.target.value = '';
           }}
         />
       </label>
-      <button
-        className="btn small"
-        type="button"
-        onClick={() =>
-          op('updateSettings', { patch: { customSound: '' } }).catch((err: Error) => toast(err.message))
-        }
-      >
-        清除
-      </button>
+      {currentFile && (
+        <button className="btn small danger" type="button" onClick={() => void remove()}>
+          删除
+        </button>
+      )}
+      <span className="hint">音效库全局共用，导入后一直保留</span>
     </div>
   );
 }
@@ -419,9 +514,8 @@ function DataTools(ctx: Ctx): JSX.Element {
             try {
               const data = (await (await fetch('/api/orphans')).json()) as {
                 avatars: { count: number };
-                sounds: { count: number };
               };
-              setStatus('头像孤儿 ' + data.avatars.count + ' 个，音效孤儿 ' + data.sounds.count + ' 个');
+              setStatus('头像孤儿 ' + data.avatars.count + ' 个（音效库文件永久保留，不参与清理）');
             } catch (err) {
               toast((err as Error).message);
             }
@@ -435,7 +529,7 @@ function DataTools(ctx: Ctx): JSX.Element {
           onClick={async () => {
             const ok = await confirm({
               title: '清理孤儿文件',
-              message: '删除超过宽限期且未被引用的上传文件？',
+              message: '删除超过宽限期且未被引用的头像文件？（音效库不参与清理）',
               confirmText: '清理',
               danger: true,
             });

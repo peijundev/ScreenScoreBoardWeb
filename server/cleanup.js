@@ -1,8 +1,9 @@
 'use strict';
-// 孤儿上传文件：扫描 avatars/ 与 sounds/，清理未被任何项目引用且超过宽限期的普通文件
+// 孤儿上传文件：扫描 avatars/，清理未被任何项目引用且超过宽限期的普通文件。
+// sounds/ 是全局音效库，用户导入后需永久保留在可选菜单中，不参与孤儿清理。
 const fs = require('fs');
 const path = require('path');
-const { state, AVATAR_DIR, SOUND_DIR } = require('./state');
+const { state, AVATAR_DIR } = require('./state');
 
 const FILE_RE = /^[\w.-]+\.(png|jpe?g|gif|webp|wav|ogg|mp3|m4a)$/i;
 
@@ -58,10 +59,10 @@ function scanOrphans() {
   const refs = collectReferences();
   const cfg = config();
   const avatars = listFiles(AVATAR_DIR, 'avatars').filter((f) => !refs.has(f.key));
-  const sounds = listFiles(SOUND_DIR, 'sounds').filter((f) => !refs.has(f.key));
   return {
     avatars: { count: avatars.length, bytes: avatars.reduce((s, f) => s + f.size, 0), items: avatars },
-    sounds: { count: sounds.length, bytes: sounds.reduce((s, f) => s + f.size, 0), items: sounds },
+    // 音效库文件永久保留
+    sounds: { count: 0, bytes: 0, items: [] },
     graceHours: cfg.graceHours,
     autoEnabled: cfg.autoEnabled,
   };
@@ -73,10 +74,9 @@ function cleanupOrphans(options = {}) {
   const cutoff = Date.now() - cfg.graceHours * 3600 * 1000;
   // 重新构建一次引用集合，降低并发上传时的误删概率
   const refs = collectReferences();
-  const candidates = [
-    ...listFiles(AVATAR_DIR, 'avatars').map((f) => ({ ...f, dir: AVATAR_DIR })),
-    ...listFiles(SOUND_DIR, 'sounds').map((f) => ({ ...f, dir: SOUND_DIR })),
-  ].filter((f) => !refs.has(f.key));
+  const candidates = listFiles(AVATAR_DIR, 'avatars')
+    .map((f) => ({ ...f, dir: AVATAR_DIR }))
+    .filter((f) => !refs.has(f.key));
 
   const removed = [];
   let bytes = 0;

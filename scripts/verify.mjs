@@ -503,11 +503,12 @@ async function main() {
     patch: {
       cardStyle: 'neon', glassBlur: 18, glassOpacity: 0.4,
       scoreEffect: 'confetti', scoreEffectDuration: 1200, scoreEffectColor: '#ff8800',
-      scoreEffectOnlyPositive: true, soundEnabled: true, soundVolume: 0.6,
+      scoreEffectOnlyPositive: true, soundEnabled: true, soundPreset: 'chime', soundVolume: 0.6,
     },
   });
   s = await viewer.waitState((st) => P(st).settings.cardStyle === 'neon');
-  assert(P(s).settings.scoreEffect === 'confetti' && P(s).settings.soundVolume === 0.6, '卡片样式/特效/音效同步');
+  assert(P(s).settings.scoreEffect === 'confetti' && P(s).settings.soundPreset === 'chime' &&
+    P(s).settings.soundVolume === 0.6, '卡片样式/特效/内置音效/音效同步');
 
   await adminOp('updateSettings', { patch: { displayStyle: 'seewo' } });
   s = await viewer.waitState((st) => P(st).settings.displayStyle === 'seewo');
@@ -1015,6 +1016,33 @@ async function main() {
   assert(cleanupRes.ok && !existsSync(orphanPath), '清理孤儿头像');
   assert(existsSync(path.join(DATA_DIR, up.path)), '引用的头像未被清理');
 
+  // 音效库：导入的文件永久保留，删除前需解除引用
+  r = await fetch(BASE + '/api/sound', { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: WAV });
+  const libSound = await r.json();
+  assert(r.ok && /^sounds\/[0-9a-f]+\.wav$/.test(libSound.path), '音效库可导入新音效');
+  const libPath = path.join(DATA_DIR, libSound.path);
+  const libName = libSound.path.split('/')[1];
+  utimesSync(libPath, oldTime, oldTime);
+  const libScan = await (await fetch(BASE + '/api/orphans')).json();
+  assert(libScan.sounds.count === 0, '音效库文件不算孤儿');
+  const libCleanup = await fetch(BASE + '/api/orphans/cleanup', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+  });
+  await libCleanup.json();
+  assert(libCleanup.ok && existsSync(libPath), '音效库文件不被孤儿清理');
+  await adminOp('updateSettings', { patch: { customSound: libSound.path } });
+  let delRes = await fetch(BASE + '/api/v1/assets/sounds/' + libName, { method: 'DELETE' });
+  assert(delRes.status === 422, '被引用的音效不可删除');
+  await adminOp('updateSettings', { patch: { customSound: soundUp.path } });
+  delRes = await fetch(BASE + '/api/v1/assets/sounds/' + libName, { method: 'DELETE' });
+  const delData = await delRes.json().catch(() => ({}));
+  assert(delRes.ok && delData.data?.removed === libSound.path && !existsSync(libPath), '未被引用的音效可删除');
+  const assetsRes = await (await fetch(BASE + '/api/v1/assets')).json();
+  assert(Array.isArray(assetsRes.data?.sounds) && assetsRes.data.sounds.some((a) => a.path === soundUp.path),
+    '音效库列表包含已上传音效');
+  r = await fetch(BASE + '/api/v1/assets/sounds/..%2F..%2Fetc%2Fpasswd', { method: 'DELETE' });
+  assert(r.status === 404 || r.status === 422, '音效删除拒绝路径穿越');
+
   await adminOp('setScore', { personId: pid, score: 7 });
   await adminOp('updateSettings', {
     patch: { featureRankTies: true, rankTieMode: 'competition', featureLeaderboard: true, displayView: 'leaderboard' },
@@ -1025,6 +1053,7 @@ async function main() {
   await adminOp('updateSettings', { patch: { cardStyle: 'hologram' } }).catch((e) => assert(/卡片样式/.test(e.message), '非法卡片样式被拒绝'));
   await adminOp('updateSettings', { patch: { scoreEffect: 'sparkle' } }).catch((e) => assert(/特效类型/.test(e.message), '非法特效类型被拒绝'));
   await adminOp('updateSettings', { patch: { soundVolume: 2 } }).catch((e) => assert(/音量/.test(e.message), '音效音量越界被拒绝'));
+  await adminOp('updateSettings', { patch: { soundPreset: 'nope' } }).catch((e) => assert(/内置音效/.test(e.message), '非法内置音效被拒绝'));
 
   // 广播收敛（先等上一轮合并广播落地）
   await new Promise((r) => setTimeout(r, 150));
@@ -1096,6 +1125,7 @@ async function main() {
   assert(rp.settings.titleFree === true && rp.settings.titleX === 30 && rp.settings.titleY === 20,
     '重启后标题自由位置恢复');
   assert(rp.settings.scoreEffect === 'highlight' && rp.settings.customSound === soundUp.path &&
+    rp.settings.soundPreset === 'chime' &&
     rp.settings.spotlightScope === 'person_team' && rp.settings.spotlightWidth === 700 &&
     rp.settings.spotlightHeight === 420 && rp.settings.spotlightTheme === 'squeeze' &&
     rp.settings.spotlightReturnDuration === 2200 && rp.settings.spotlightScrimEnabled === true &&

@@ -59,8 +59,9 @@ const DEFAULT_SETTINGS = {
   themeScriptFps: 8,         // 主题脚本刷新率 1–30 fps
   themeScriptTimeoutMs: 120, // 单帧执行超时 20–500 ms
   soundEnabled: false,      // 记分音效
+  soundPreset: 'default',   // 内置音效：default | chime | rise | coin | drum | soft
   soundVolume: 0.5,         // 音效音量 0–1
-  customSound: '',          // '' = 内置合成音；否则 sounds/xxx.mp3
+  customSound: '',          // '' = 使用内置音效；否则 sounds/xxx.mp3
 
   // ---- 高级外观 ----
   fontFamily: 'system',     // system | serif | kai | custom
@@ -347,6 +348,10 @@ const SETTINGS_VALIDATORS = {
   themeScriptFps: (v) => intRange(v, 1, 30, '主题脚本帧率须为 1–30'),
   themeScriptTimeoutMs: (v) => intRange(v, 20, 500, '主题脚本单帧超时须为 20–500 ms'),
   soundEnabled: (v) => Boolean(v),
+  soundPreset: (v) =>
+    (['default', 'chime', 'rise', 'coin', 'drum', 'soft'].includes(v)
+      ? v
+      : (() => { throw new OpError('内置音效非法'); })()),
   soundVolume: (v) => {
     const n = Number(v);
     if (!Number.isFinite(n) || n < 0 || n > 1) throw new OpError('音效音量须在 0–1 之间');

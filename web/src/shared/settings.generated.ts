@@ -52,6 +52,7 @@ export interface SettingsFields {
   themeScriptFps: number;
   themeScriptTimeoutMs: number;
   soundEnabled: boolean;
+  soundPreset: string;
   soundVolume: number;
   customSound: string;
   fontFamily: string;

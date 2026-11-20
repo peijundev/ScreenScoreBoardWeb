@@ -1,5 +1,6 @@
 // 显示端核心：外观变量、排序、名次、排行榜、特效（移植自 public/display.js）
 import type { Layout, Person, Project, Settings, Team } from '../../shared/types';
+import { playPresetSound, playSoundFile } from '../../shared/sound';
 
 export const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, v));
 export const round2 = (v: number): number => Math.round(v * 100) / 100;
@@ -463,46 +464,14 @@ export function rollNumber(el: HTMLElement | null, from: number, to: number): vo
   requestAnimationFrame(step);
 }
 
-let audioCtx: AudioContext | null = null;
-
 export function playScoreSound(delta: number, s: Settings): void {
   if (!s.soundEnabled) return;
   if (s.scoreEffectOnlyPositive && delta < 0) return;
   if (s.customSound) {
-    try {
-      const audio = new Audio('/' + s.customSound);
-      audio.volume = Math.max(0, Math.min(1, Number(s.soundVolume)));
-      void audio.play().catch(() => {});
-    } catch {
-      // ignore
-    }
+    playSoundFile(String(s.customSound), Number(s.soundVolume));
     return;
   }
-  try {
-    if (!audioCtx) audioCtx = new AudioContext();
-    if (audioCtx.state === 'suspended') void audioCtx.resume();
-    if (audioCtx.state !== 'running') return;
-    const t = audioCtx.currentTime;
-    const vol = Math.max(0.0001, Number(s.soundVolume));
-    const gain = audioCtx.createGain();
-    gain.gain.setValueAtTime(0.25 * vol, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
-    gain.connect(audioCtx.destination);
-    const osc = audioCtx.createOscillator();
-    osc.type = 'sine';
-    if (delta > 0) {
-      osc.frequency.setValueAtTime(880, t);
-      osc.frequency.setValueAtTime(1318.5, t + 0.08);
-    } else {
-      osc.frequency.setValueAtTime(320, t);
-      osc.frequency.exponentialRampToValueAtTime(150, t + 0.22);
-    }
-    osc.connect(gain);
-    osc.start(t);
-    osc.stop(t + 0.36);
-  } catch {
-    // ignore
-  }
+  playPresetSound(String(s.soundPreset || 'default'), delta, Number(s.soundVolume));
 }
 
 export function spawnConfetti(el: HTMLElement, colors: string[], duration: number): void {

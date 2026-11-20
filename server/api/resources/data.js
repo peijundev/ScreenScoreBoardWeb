@@ -235,6 +235,28 @@ const routes = [
     handler: async (ctx) => ({ data: await upload(ctx, 'sounds'), status: 201 }),
   },
   {
+    method: 'DELETE', path: '/assets/sounds/:name', mcp: 'delete_sound', summary: '从音效库删除音频',
+    mutates: true, destructive: true,
+    handler: (ctx) => {
+      const name = String(ctx.params.name || '');
+      if (!/^[\w.-]+\.(wav|ogg|mp3|m4a)$/i.test(name) || name !== path.basename(name)) {
+        throw new ApiUnprocessableError('音效文件名非法');
+      }
+      const key = 'sounds/' + name;
+      for (const project of Object.values(state.projects)) {
+        if (project.settings.customSound === key || project.settings.bgmFile === key) {
+          throw new ApiUnprocessableError('该音效正在被项目使用，请先切换到其他音效');
+        }
+      }
+      const full = path.join(SOUND_DIR, name);
+      let stat = null;
+      try { stat = fs.statSync(full); } catch (_) {}
+      if (!stat || !stat.isFile()) throw new ApiUnprocessableError('音效不存在');
+      fs.unlinkSync(full);
+      return { data: { removed: key } };
+    },
+  },
+  {
     method: 'GET', path: '/assets', mcp: 'list_assets', summary: '列出已上传资产',
     handler: () => {
       const list = (dir, prefix) => {
