@@ -1,7 +1,7 @@
 'use strict';
 // 设置默认值、主题白名单与逐项校验（前后端契约的单一来源）
 const {
-  OpError, needString, needAvatar,
+  OpError, needString, needAvatar, needSoundPath,
   HEX_COLOR, hexOrEmpty, intRange, boolStrict, fontNameOrEmpty, fontChoice,
 } = require('./validation');
 
@@ -357,12 +357,7 @@ const SETTINGS_VALIDATORS = {
     if (!Number.isFinite(n) || n < 0 || n > 1) throw new OpError('音效音量须在 0–1 之间');
     return Math.round(n * 100) / 100;
   },
-  customSound: (v) => {
-    if (v === '' || v == null) return '';
-    return typeof v === 'string' && /^sounds\/[\w.-]+$/.test(v)
-      ? v
-      : (() => { throw new OpError('音效文件路径非法'); })();
-  },
+  customSound: (v) => needSoundPath(v),
 
   // ---- 高级外观 ----
   fontFamily: (v) =>
@@ -545,7 +540,7 @@ const SETTINGS_VALIDATORS = {
   rankChangeAnimation: (v) => boolStrict(v, '名次升降开关'),
   featureMarquee: (v) => boolStrict(v, '跑马灯开关'),
   bgmEnabled: (v) => boolStrict(v, '背景音乐开关'),
-  bgmFile: (v) => needAvatar(v === '' ? null : v),
+  bgmFile: (v) => needSoundPath(v, '背景音乐路径'),
   bgmVolume: (v) => {
     const n = Number(v);
     if (!Number.isFinite(n) || n < 0 || n > 1) throw new OpError('背景音乐音量须在 0–1 之间');

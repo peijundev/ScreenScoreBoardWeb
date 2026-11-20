@@ -1,8 +1,6 @@
 'use strict';
 const fs = require('fs');
-const fsp = require('fs/promises');
 const path = require('path');
-const crypto = require('crypto');
 const {
   state, AVATAR_DIR, SOUND_DIR, save, flushSave,
   exportProjectData, sanitizeImportedProject, walkAssetRefs,
@@ -15,6 +13,9 @@ const { send } = require('../../static');
 const { readRawBody } = require('../responses');
 const { commit, requireProject } = require('./common');
 const { ApiUnprocessableError } = require('../errors');
+const {
+  ASSET_KEY_RE, IMAGE_EXT, AUDIO_EXT, assetFileRe, decodeOriginalName, uniqueFileName,
+} = require('../../filename');
 
 function sniffImage(buf) {
   if (buf.length >= 4 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return 'png';
@@ -39,14 +40,15 @@ async function upload(ctx, kind) {
   if (!buf.length) throw new ApiUnprocessableError('空文件');
   const ext = isImage ? sniffImage(buf) : sniffAudio(buf);
   if (!ext) throw new ApiUnprocessableError(isImage ? '仅支持 png/jpeg/webp/gif' : '仅支持 wav/ogg/mp3/m4a');
-  const name = crypto.randomBytes(8).toString('hex') + '.' + ext;
   const dir = isImage ? AVATAR_DIR : SOUND_DIR;
-  await fsp.writeFile(path.join(dir, name), buf);
+  const name = uniqueFileName(dir, decodeOriginalName(ctx.req), ext, isImage ? 'image' : 'audio');
+  // 同步写盘，保证同名检查与写入之间不被其他上传请求插入
+  fs.writeFileSync(path.join(dir, name), buf);
   return { path: (isImage ? 'avatars/' : 'sounds/') + name, bytes: buf.length };
 }
 
 function assetPath(key) {
-  if (typeof key !== 'string' || !/^(avatars|sounds)\/[\w.-]+$/.test(key)) return null;
+  if (typeof key !== 'string' || !ASSET_KEY_RE.test(key)) return null;
   const name = key.split('/')[1];
   if (name !== path.basename(name)) return null;
   return path.join(key.startsWith('avatars/') ? AVATAR_DIR : SOUND_DIR, name);
@@ -99,8 +101,9 @@ function importAssets(assets) {
     const isImage = key.startsWith('avatars/');
     const ext = isImage ? sniffImage(buf) : sniffAudio(buf);
     if (!ext) throw new ApiUnprocessableError('资产格式非法：' + key);
-    const name = crypto.randomBytes(8).toString('hex') + '.' + ext;
-    fs.writeFileSync(path.join(isImage ? AVATAR_DIR : SOUND_DIR, name), buf);
+    const dir = isImage ? AVATAR_DIR : SOUND_DIR;
+    const name = uniqueFileName(dir, key.split('/').pop(), ext, isImage ? 'image' : 'audio');
+    fs.writeFileSync(path.join(dir, name), buf);
     map.set(key, (isImage ? 'avatars/' : 'sounds/') + name);
     total += buf.length;
   }
@@ -111,6 +114,75 @@ function assetExists(key) {
   const full = assetPath(key);
   if (!full) return false;
   try { return fs.statSync(full).isFile(); } catch (_) { return false; }
+}
+
+/** 收集资源被哪些项目/实体引用（用于删除提示与强制清理） */
+function assetReferences(key) {
+  const refs = [];
+  for (const project of Object.values(state.projects)) {
+    const settings = project.settings || {};
+    if (settings.bgImage === key) refs.push(project.name + ' 背景图');
+    if (settings.welcomeImage === key) refs.push(project.name + ' 欢迎图');
+    if (settings.customSound === key) refs.push(project.name + ' 记分音效');
+    if (settings.bgmFile === key) refs.push(project.name + ' 背景音乐');
+    for (const p of Object.values(project.people)) {
+      if (p.avatar === key) refs.push(project.name + ' / ' + p.name + ' 头像');
+      if (p.cardImage === key) refs.push(project.name + ' / ' + p.name + ' 卡片图');
+    }
+    for (const t of Object.values(project.teams)) {
+      if (t.avatar === key) refs.push(project.name + ' / ' + t.name + ' 头像');
+      if (t.cardImage === key) refs.push(project.name + ' / ' + t.name + ' 卡片图');
+    }
+  }
+  return refs;
+}
+
+function clearAssetReferences(key) {
+  let cleared = 0;
+  for (const project of Object.values(state.projects)) {
+    const settings = project.settings || {};
+    if (settings.bgImage === key) { settings.bgImage = null; cleared += 1; }
+    if (settings.welcomeImage === key) { settings.welcomeImage = ''; cleared += 1; }
+    if (settings.customSound === key) { settings.customSound = ''; cleared += 1; }
+    if (settings.bgmFile === key) { settings.bgmFile = ''; cleared += 1; }
+    for (const p of Object.values(project.people)) {
+      if (p.avatar === key) { p.avatar = null; cleared += 1; }
+      if (p.cardImage === key) { p.cardImage = null; cleared += 1; }
+    }
+    for (const t of Object.values(project.teams)) {
+      if (t.avatar === key) { t.avatar = null; cleared += 1; }
+      if (t.cardImage === key) { t.cardImage = null; cleared += 1; }
+    }
+  }
+  return cleared;
+}
+
+async function removeAsset(ctx, kind) {
+  const name = String(ctx.params.name || '');
+  const pattern = assetFileRe(kind === 'avatars' ? IMAGE_EXT : AUDIO_EXT);
+  if (!pattern.test(name) || name !== path.basename(name)) {
+    throw new ApiUnprocessableError('资源文件名非法');
+  }
+  const key = kind + '/' + name;
+  const force = ctx.query.force === '1' || ctx.query.force === 'true';
+  const refs = assetReferences(key);
+  if (refs.length && !force) {
+    const shown = refs.slice(0, 3).join('、') + (refs.length > 3 ? ' 等 ' + refs.length + ' 处' : '');
+    throw new ApiUnprocessableError('该资源正在被使用：' + shown);
+  }
+  const dir = kind === 'avatars' ? AVATAR_DIR : SOUND_DIR;
+  const full = path.join(dir, name);
+  let stat = null;
+  try { stat = fs.statSync(full); } catch (_) {}
+  if (!stat || !stat.isFile()) throw new ApiUnprocessableError('资源不存在');
+  fs.unlinkSync(full);
+  if (refs.length) {
+    clearAssetReferences(key);
+    save();
+    await flushSave();
+    broadcastState();
+  }
+  return { data: { removed: key, cleared: refs.length } };
 }
 
 function assignRanks(values, mode) {
@@ -235,26 +307,14 @@ const routes = [
     handler: async (ctx) => ({ data: await upload(ctx, 'sounds'), status: 201 }),
   },
   {
-    method: 'DELETE', path: '/assets/sounds/:name', mcp: 'delete_sound', summary: '从音效库删除音频',
+    method: 'DELETE', path: '/assets/sounds/:name', mcp: 'delete_sound', summary: '从资源库删除音频',
     mutates: true, destructive: true,
-    handler: (ctx) => {
-      const name = String(ctx.params.name || '');
-      if (!/^[\w.-]+\.(wav|ogg|mp3|m4a)$/i.test(name) || name !== path.basename(name)) {
-        throw new ApiUnprocessableError('音效文件名非法');
-      }
-      const key = 'sounds/' + name;
-      for (const project of Object.values(state.projects)) {
-        if (project.settings.customSound === key || project.settings.bgmFile === key) {
-          throw new ApiUnprocessableError('该音效正在被项目使用，请先切换到其他音效');
-        }
-      }
-      const full = path.join(SOUND_DIR, name);
-      let stat = null;
-      try { stat = fs.statSync(full); } catch (_) {}
-      if (!stat || !stat.isFile()) throw new ApiUnprocessableError('音效不存在');
-      fs.unlinkSync(full);
-      return { data: { removed: key } };
-    },
+    handler: (ctx) => removeAsset(ctx, 'sounds'),
+  },
+  {
+    method: 'DELETE', path: '/assets/avatars/:name', mcp: 'delete_image', summary: '从资源库删除图片',
+    mutates: true, destructive: true,
+    handler: (ctx) => removeAsset(ctx, 'avatars'),
   },
   {
     method: 'GET', path: '/assets', mcp: 'list_assets', summary: '列出已上传资产',
@@ -262,7 +322,7 @@ const routes = [
       const list = (dir, prefix) => {
         try {
           return fs.readdirSync(dir)
-            .filter((name) => /^[\w.-]+\.(png|jpe?g|gif|webp|wav|ogg|mp3|m4a)$/i.test(name))
+            .filter((name) => assetFileRe([...IMAGE_EXT, ...AUDIO_EXT]).test(name))
             .sort()
             .map((name) => {
               const stat = fs.statSync(path.join(dir, name));

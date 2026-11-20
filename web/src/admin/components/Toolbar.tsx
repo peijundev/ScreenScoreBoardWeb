@@ -11,6 +11,7 @@ interface Props {
   onSelectProject: (id: string) => void;
   onOpenSettings: () => void;
   onOpenFeatures: () => void;
+  onOpenAssets: () => void;
   onOpenTheme: () => void;
   onOpenStudio: () => void;
 }
@@ -28,6 +29,7 @@ export default function Toolbar({
   onSelectProject,
   onOpenSettings,
   onOpenFeatures,
+  onOpenAssets,
   onOpenTheme,
   onOpenStudio,
 }: Props): JSX.Element {
@@ -135,6 +137,9 @@ export default function Toolbar({
       </button>
       <button className="btn small" type="button" onClick={onOpenFeatures} disabled={!project}>
         功能
+      </button>
+      <button className="btn small" type="button" onClick={onOpenAssets} disabled={!project}>
+        资源库
       </button>
       <button
         className="btn small"

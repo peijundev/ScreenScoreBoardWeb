@@ -23,6 +23,7 @@ interface Props {
   onSelectProject: (id: string) => void;
   onOpenSettings: () => void;
   onOpenFeatures: () => void;
+  onOpenAssets: () => void;
   onOpenTheme: () => void;
   onOpenStudio: () => void;
 }
@@ -36,6 +37,7 @@ export default function MobileNav({
   onSelectProject,
   onOpenSettings,
   onOpenFeatures,
+  onOpenAssets,
   onOpenTheme,
   onOpenStudio,
 }: Props): JSX.Element {
@@ -163,6 +165,9 @@ export default function MobileNav({
             <h2>控制台</h2>
             <button className="btn mobile-wide" type="button" onClick={onOpenFeatures}>
               数据导入 / 导出 / 备份
+            </button>
+            <button className="btn mobile-wide" type="button" onClick={onOpenAssets} disabled={!project}>
+              资源库
             </button>
             <button className="btn mobile-wide" type="button" onClick={toggleAdminTheme}>
               管理端主题：{adminTheme === 'light' ? '浅色' : '深色'}

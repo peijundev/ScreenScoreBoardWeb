@@ -4,8 +4,9 @@
 const fs = require('fs');
 const path = require('path');
 const { state, AVATAR_DIR } = require('./state');
+const { assetFileRe, IMAGE_EXT, AUDIO_EXT } = require('./filename');
 
-const FILE_RE = /^[\w.-]+\.(png|jpe?g|gif|webp|wav|ogg|mp3|m4a)$/i;
+const FILE_RE = assetFileRe([...IMAGE_EXT, ...AUDIO_EXT]);
 
 function envNumber(name, fallback) {
   const n = Number(process.env[name]);

@@ -91,7 +91,7 @@ function imageSrc(v) {
   if (typeof v !== 'string') return '';
   const s = v.trim();
   if (!s) return '';
-  if (/^avatars\/[\w.-]+$/.test(s)) return s;
+  if (/^avatars\/[\p{L}\p{N}_.-]+$/u.test(s)) return s;
   if (/^\/media\/[\w./-]+$/.test(s)) return s;
   if (/^data:image\/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(s) &&
     s.length <= LIMITS.imageSrc) return s;

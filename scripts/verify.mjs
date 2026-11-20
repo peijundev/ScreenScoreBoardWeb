@@ -198,7 +198,7 @@ async function main() {
   console.log('头像上传:');
   r = await fetch(BASE + '/api/avatar', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: PNG });
   const up = await r.json();
-  assert(r.ok && /^avatars\/[0-9a-f]+\.png$/.test(up.path), '上传合法 PNG 返回 path');
+  assert(r.ok && /^avatars\/[^/]+\.png$/.test(up.path), '上传合法 PNG 返回 path');
   r = await fetch(BASE + '/' + up.path);
   assert(r.ok && Buffer.from(await r.arrayBuffer()).equals(PNG), '上传头像可取回且一致');
   r = await fetch(BASE + '/api/avatar', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: Buffer.alloc(3 * 1024 * 1024) });
@@ -214,11 +214,26 @@ async function main() {
   WAV.write('fmt ', 12, 'ascii');
   r = await fetch(BASE + '/api/sound', { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: WAV });
   const soundUp = await r.json();
-  assert(r.ok && /^sounds\/[0-9a-f]+\.wav$/.test(soundUp.path), '上传 WAV 音效返回 path');
+  assert(r.ok && /^sounds\/[^/]+\.wav$/.test(soundUp.path), '上传 WAV 音效返回 path');
   r = await fetch(BASE + '/' + soundUp.path);
   assert(r.ok && Buffer.from(await r.arrayBuffer()).equals(WAV), '音效文件可取回且一致');
   r = await fetch(BASE + '/api/sound', { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: Buffer.from('not audio') });
   assert(r.status === 415, '伪造音频返回 415');
+
+  // 导入时保留原始文件名（含中文），同名自动追加序号
+  const namedHeaders = { 'Content-Type': 'audio/wav', 'X-File-Name': encodeURIComponent('测试音效') };
+  r = await fetch(BASE + '/api/sound', { method: 'POST', headers: namedHeaders, body: WAV });
+  const namedSound = await r.json();
+  assert(r.ok && namedSound.path === 'sounds/测试音效.wav', '导入音频保留原始文件名');
+  r = await fetch(BASE + '/' + namedSound.path);
+  assert(r.ok && Buffer.from(await r.arrayBuffer()).equals(WAV), '中文文件名音频可访问');
+  r = await fetch(BASE + '/api/sound', { method: 'POST', headers: namedHeaders, body: WAV });
+  const namedSound2 = await r.json();
+  assert(r.ok && namedSound2.path === 'sounds/测试音效-1.wav', '同名音频自动追加序号');
+  const namedImageHeaders = { 'Content-Type': 'image/png', 'X-File-Name': encodeURIComponent('背景 图') };
+  r = await fetch(BASE + '/api/avatar', { method: 'POST', headers: namedImageHeaders, body: PNG });
+  const namedImage = await r.json();
+  assert(r.ok && namedImage.path === 'avatars/背景-图.png', '导入图片保留原始文件名');
 
   console.log('WebSocket 同步:');
   const viewer = wsClient('viewer');
@@ -509,6 +524,15 @@ async function main() {
   s = await viewer.waitState((st) => P(st).settings.cardStyle === 'neon');
   assert(P(s).settings.scoreEffect === 'confetti' && P(s).settings.soundPreset === 'chime' &&
     P(s).settings.soundVolume === 0.6, '卡片样式/特效/内置音效/音效同步');
+
+  await adminOp('updateSettings', { patch: { customSound: namedSound.path } });
+  s = await viewer.waitState((st) => P(st).settings.customSound === namedSound.path);
+  assert(true, '音效可使用保留的原始文件名');
+  await adminOp('updateSettings', { patch: { bgmFile: namedSound.path } });
+  s = await viewer.waitState((st) => P(st).settings.bgmFile === namedSound.path);
+  assert(true, '背景音乐支持 sounds/ 路径');
+  await adminOp('updateSettings', { patch: { bgmFile: '' } });
+  await viewer.waitState((st) => P(st).settings.bgmFile === '');
 
   await adminOp('updateSettings', { patch: { displayStyle: 'seewo' } });
   s = await viewer.waitState((st) => P(st).settings.displayStyle === 'seewo');
@@ -1019,7 +1043,7 @@ async function main() {
   // 音效库：导入的文件永久保留，删除前需解除引用
   r = await fetch(BASE + '/api/sound', { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: WAV });
   const libSound = await r.json();
-  assert(r.ok && /^sounds\/[0-9a-f]+\.wav$/.test(libSound.path), '音效库可导入新音效');
+  assert(r.ok && /^sounds\/[^/]+\.wav$/.test(libSound.path), '音效库可导入新音效');
   const libPath = path.join(DATA_DIR, libSound.path);
   const libName = libSound.path.split('/')[1];
   utimesSync(libPath, oldTime, oldTime);
@@ -1033,15 +1057,35 @@ async function main() {
   await adminOp('updateSettings', { patch: { customSound: libSound.path } });
   let delRes = await fetch(BASE + '/api/v1/assets/sounds/' + libName, { method: 'DELETE' });
   assert(delRes.status === 422, '被引用的音效不可删除');
-  await adminOp('updateSettings', { patch: { customSound: soundUp.path } });
-  delRes = await fetch(BASE + '/api/v1/assets/sounds/' + libName, { method: 'DELETE' });
+  delRes = await fetch(BASE + '/api/v1/assets/sounds/' + libName + '?force=1', { method: 'DELETE' });
   const delData = await delRes.json().catch(() => ({}));
-  assert(delRes.ok && delData.data?.removed === libSound.path && !existsSync(libPath), '未被引用的音效可删除');
+  let libState = await getState();
+  assert(delRes.ok && delData.data?.removed === libSound.path && delData.data?.cleared >= 1 &&
+    !existsSync(libPath) && P(libState).settings.customSound === '',
+    '强制删除音效并移除引用');
+  await adminOp('updateSettings', { patch: { customSound: soundUp.path } });
+
+  // 图片资源：被引用时需强制删除并清空引用
+  r = await fetch(BASE + '/api/avatar', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: PNG });
+  const libImage = await r.json();
+  assert(r.ok && /^avatars\/[^/]+\.png$/.test(libImage.path), '资源库可导入新图片');
+  const libImagePath = path.join(DATA_DIR, libImage.path);
+  const libImageName = libImage.path.split('/')[1];
+  await adminOp('setAvatar', { kind: 'person', id: pid, avatar: libImage.path });
+  delRes = await fetch(BASE + '/api/v1/assets/avatars/' + libImageName, { method: 'DELETE' });
+  assert(delRes.status === 422, '被引用的图片不可删除');
+  delRes = await fetch(BASE + '/api/v1/assets/avatars/' + libImageName + '?force=1', { method: 'DELETE' });
+  const imgDelData = await delRes.json().catch(() => ({}));
+  libState = await getState();
+  assert(delRes.ok && imgDelData.data?.removed === libImage.path && imgDelData.data?.cleared >= 1 &&
+    !existsSync(libImagePath) && P(libState).people[pid].avatar === null,
+    '强制删除图片并移除头像引用');
+  await adminOp('setAvatar', { kind: 'person', id: pid, avatar: up.path });
   const assetsRes = await (await fetch(BASE + '/api/v1/assets')).json();
   assert(Array.isArray(assetsRes.data?.sounds) && assetsRes.data.sounds.some((a) => a.path === soundUp.path),
-    '音效库列表包含已上传音效');
+    '资源库列表包含已上传音效');
   r = await fetch(BASE + '/api/v1/assets/sounds/..%2F..%2Fetc%2Fpasswd', { method: 'DELETE' });
-  assert(r.status === 404 || r.status === 422, '音效删除拒绝路径穿越');
+  assert(r.status === 404 || r.status === 422, '资源删除拒绝路径穿越');
 
   await adminOp('setScore', { personId: pid, score: 7 });
   await adminOp('updateSettings', {

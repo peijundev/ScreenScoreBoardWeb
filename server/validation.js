@@ -27,9 +27,20 @@ function needString(v, field, max = 40) {
   if (v.trim().length > max) throw new OpError(`${field}过长（最多 ${max} 字）`);
   return v.trim();
 }
+const { assetPathRe } = require('./filename');
+const AVATAR_PATH_RE = assetPathRe('avatars');
+const SOUND_PATH_RE = assetPathRe('sounds');
+
 function needAvatar(v) {
   if (v == null) return null;
-  if (typeof v !== 'string' || !/^avatars\/[\w.-]+$/.test(v)) throw new OpError('头像路径非法');
+  if (typeof v !== 'string' || !AVATAR_PATH_RE.test(v)) throw new OpError('头像路径非法');
+  return v;
+}
+
+/** 音频资源路径（含中文等 Unicode 文件名）；空值返回 '' */
+function needSoundPath(v, label = '音效文件路径') {
+  if (v == null || v === '') return '';
+  if (typeof v !== 'string' || !SOUND_PATH_RE.test(v)) throw new OpError(label + '非法');
   return v;
 }
 function needBio(v) {
@@ -92,6 +103,6 @@ function fontChoice(label) {
 
 module.exports = {
   OpError, NotFoundError, FeatureDisabledError,
-  needString, needAvatar, needBio, needScore, needLayout,
+  needString, needAvatar, needSoundPath, needBio, needScore, needLayout,
   HEX_COLOR, hexOrEmpty, intRange, boolStrict, fontNameOrEmpty, fontChoice,
 };

@@ -57,7 +57,11 @@ export function avatarURL(entity: AvatarSource | null | undefined, size = 96): s
 async function upload(file: File, endpoint: string): Promise<string> {
   const res = await fetch(endpoint, {
     method: 'POST',
-    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    headers: {
+      'Content-Type': file.type || 'application/octet-stream',
+      // 服务端用原始文件名落盘；请求头只能是 ASCII，先做 URI 编码
+      'X-File-Name': encodeURIComponent(file.name || ''),
+    },
     body: file,
   });
   const data = (await res.json().catch(() => ({}))) as { path?: string; error?: string };
@@ -73,27 +77,61 @@ export function uploadSound(file: File): Promise<string> {
   return upload(file, '/api/sound');
 }
 
-export interface SoundAsset {
+export interface Asset {
   path: string;
   bytes: number;
   mtime: number;
 }
 
-/** 全局音效库：服务器 sounds/ 目录下的所有音频 */
-export async function listSoundAssets(): Promise<SoundAsset[]> {
-  const res = await fetch('/api/v1/assets');
-  const payload = (await res.json().catch(() => ({}))) as {
-    data?: { sounds?: SoundAsset[] };
-    error?: { message?: string };
-  };
-  if (!res.ok) throw new Error(payload.error?.message || '读取音效库失败');
-  const sounds = payload.data?.sounds;
-  return Array.isArray(sounds) ? sounds : [];
+export interface AssetList {
+  avatars: Asset[];
+  sounds: Asset[];
 }
 
-export async function deleteSound(path: string): Promise<void> {
-  const name = String(path || '').replace(/^sounds\//, '');
-  const res = await fetch('/api/v1/assets/sounds/' + encodeURIComponent(name), { method: 'DELETE' });
-  const payload = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-  if (!res.ok) throw new Error(payload.error?.message || '删除音效失败');
+/** 全局资源库：服务器 avatars/ 与 sounds/ 目录下的所有文件 */
+export async function listAssets(): Promise<AssetList> {
+  const res = await fetch('/api/v1/assets');
+  const payload = (await res.json().catch(() => ({}))) as {
+    data?: { avatars?: Asset[]; sounds?: Asset[] };
+    error?: { message?: string };
+  };
+  if (!res.ok) throw new Error(payload.error?.message || '读取资源库失败');
+  return {
+    avatars: Array.isArray(payload.data?.avatars) ? payload.data.avatars : [],
+    sounds: Array.isArray(payload.data?.sounds) ? payload.data.sounds : [],
+  };
+}
+
+export async function listSoundAssets(): Promise<Asset[]> {
+  return (await listAssets()).sounds;
+}
+
+/**
+ * 删除资源。force=true 时服务端会同时移除所有引用（头像回退首字、音效回退内置音）。
+ * 返回被移除的引用数量。
+ */
+export async function deleteAsset(
+  kind: 'avatars' | 'sounds',
+  path: string,
+  force = false,
+): Promise<number> {
+  const name = String(path || '').replace(/^(avatars|sounds)\//, '');
+  const query = force ? '?force=1' : '';
+  const res = await fetch('/api/v1/assets/' + kind + '/' + encodeURIComponent(name) + query, {
+    method: 'DELETE',
+  });
+  const payload = (await res.json().catch(() => ({}))) as {
+    data?: { cleared?: number };
+    error?: { message?: string };
+  };
+  if (!res.ok) throw new Error(payload.error?.message || '删除资源失败');
+  return Number(payload.data?.cleared) || 0;
+}
+
+export async function deleteSound(path: string, force = false): Promise<number> {
+  return deleteAsset('sounds', path, force);
+}
+
+export async function deleteImageAsset(path: string, force = false): Promise<number> {
+  return deleteAsset('avatars', path, force);
 }

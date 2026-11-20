@@ -2,9 +2,10 @@
 // 入口：http server、路由表、头像上传、挂载 WebSocket
 const http = require('http');
 const fs = require('fs');
-const fsp = require('fs/promises');
 const path = require('path');
-const crypto = require('crypto');
+const {
+  ASSET_KEY_RE, decodeOriginalName, uniqueFileName,
+} = require('./filename');
 const { serveStatic, send, PUBLIC_DIR } = require('./static');
 const { config } = require('./config');
 const { logger } = require('./logger');
@@ -86,15 +87,20 @@ function handleUpload(req, res, opts) {
     if (!ext) {
       return send(res, 415, JSON.stringify({ error: opts.unsupported }), { 'Content-Type': 'application/json' });
     }
-    const name = crypto.randomBytes(8).toString('hex') + '.' + ext;
-    fsp.writeFile(path.join(opts.dir, name), buf)
-      .then(() => {
-        send(res, 200, JSON.stringify({ path: opts.prefix + '/' + name }), { 'Content-Type': 'application/json' });
-      })
-      .catch((e) => {
-        logger.error('上传写盘失败', { error: e.message });
-        send(res, 500, JSON.stringify({ error: '保存文件失败' }), { 'Content-Type': 'application/json' });
-      });
+    const name = uniqueFileName(
+      opts.dir,
+      decodeOriginalName(req),
+      ext,
+      opts.prefix === 'avatars' ? 'image' : 'audio',
+    );
+    try {
+      // 同步写盘：exists 检查与写入之间不插入其他上传请求，避免同名冲突
+      fs.writeFileSync(path.join(opts.dir, name), buf);
+      send(res, 200, JSON.stringify({ path: opts.prefix + '/' + name }), { 'Content-Type': 'application/json' });
+    } catch (e) {
+      logger.error('上传写盘失败', { error: e.message });
+      send(res, 500, JSON.stringify({ error: '保存文件失败' }), { 'Content-Type': 'application/json' });
+    }
   });
   req.on('error', (e) => { logger.warn('上传请求中断', { error: e.message }); });
 }
@@ -123,7 +129,7 @@ function readBody(req, limit) {
 }
 
 function assetPath(key) {
-  if (typeof key !== 'string' || !/^(avatars|sounds)\/[\w.-]+$/.test(key)) return null;
+  if (typeof key !== 'string' || !ASSET_KEY_RE.test(key)) return null;
   const name = key.split('/')[1];
   if (name !== path.basename(name)) return null;
   return path.join(key.startsWith('avatars/') ? AVATAR_DIR : SOUND_DIR, name);
@@ -177,8 +183,9 @@ function importAssets(assets) {
     const isImage = key.startsWith('avatars/');
     const ext = isImage ? sniffImage(buf) : sniffAudio(buf);
     if (!ext) throw new OpError('资产格式非法：' + key);
-    const name = crypto.randomBytes(8).toString('hex') + '.' + ext;
-    fs.writeFileSync(path.join(isImage ? AVATAR_DIR : SOUND_DIR, name), buf);
+    const dir = isImage ? AVATAR_DIR : SOUND_DIR;
+    const name = uniqueFileName(dir, key.split('/').pop(), ext, isImage ? 'image' : 'audio');
+    fs.writeFileSync(path.join(dir, name), buf);
     map.set(key, (isImage ? 'avatars/' : 'sounds/') + name);
     total += buf.length;
   }

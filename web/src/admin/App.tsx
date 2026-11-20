@@ -5,6 +5,7 @@ import PeoplePanel from './components/PeoplePanel';
 import TeamsPanel from './components/TeamsPanel';
 import SettingsDialog from './components/SettingsDialog';
 import FeaturesDialog from './components/FeaturesDialog';
+import AssetLibraryDialog from './components/AssetLibraryDialog';
 import ThemeEditorDialog from './components/ThemeEditorDialog';
 import ThemeStudioDialog from './theme/studio/ThemeStudioDialog';
 import MobileNav, { type MobileTab } from './components/MobileNav';
@@ -13,7 +14,7 @@ import Toasts from './components/Toasts';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import { projectOf, projectsOf, useAppStore } from '../shared/store';
 
-type DialogKind = 'settings' | 'features' | 'theme' | 'studio' | null;
+type DialogKind = 'settings' | 'features' | 'assets' | 'theme' | 'studio' | null;
 
 export default function App(): JSX.Element {
   const snapshot = useAppStore((s) => s.snapshot);
@@ -54,6 +55,7 @@ export default function App(): JSX.Element {
           onSelectProject={setProjectId}
           onOpenSettings={() => setDialog('settings')}
           onOpenFeatures={() => setDialog('features')}
+          onOpenAssets={() => setDialog('assets')}
           onOpenTheme={() => setDialog('theme')}
           onOpenStudio={() => setDialog('studio')}
         />
@@ -73,6 +75,7 @@ export default function App(): JSX.Element {
             onSelectProject={setProjectId}
             onOpenSettings={() => setDialog('settings')}
             onOpenFeatures={() => setDialog('features')}
+            onOpenAssets={() => setDialog('assets')}
             onOpenTheme={() => setDialog('theme')}
             onOpenStudio={() => setDialog('studio')}
           />
@@ -100,6 +103,9 @@ export default function App(): JSX.Element {
       )}
       {project && dialog === 'features' && (
         <FeaturesDialog project={project} onClose={() => setDialog(null)} />
+      )}
+      {project && dialog === 'assets' && (
+        <AssetLibraryDialog onClose={() => setDialog(null)} />
       )}
       {project && dialog === 'theme' && (
         <ThemeEditorDialog project={project} onClose={() => setDialog(null)} />

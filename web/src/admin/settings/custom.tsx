@@ -5,7 +5,7 @@ import {
   listSoundAssets,
   uploadAvatar,
   uploadSound,
-  type SoundAsset,
+  type Asset,
 } from '../../shared/api';
 import { SOUND_PRESETS, playPresetSound, playSoundFile } from '../../shared/sound';
 import { useAppStore } from '../../shared/store';
@@ -153,19 +153,13 @@ function PreviewSpotlight(): JSX.Element {
   );
 }
 
-function soundAssetLabel(asset: SoundAsset): string {
-  const d = new Date(asset.mtime);
-  const p = (n: number): string => String(n).padStart(2, '0');
-  const name = asset.path.split('/').pop() || asset.path;
-  return (
-    '音效 ' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' +
-    p(d.getHours()) + ':' + p(d.getMinutes()) + ' · ' + name.slice(0, 4)
-  );
+function soundAssetLabel(asset: Asset): string {
+  return asset.path.split('/').pop() || asset.path;
 }
 
 function CustomSound(ctx: Ctx): JSX.Element {
   const { op, settings } = ctx;
-  const [assets, setAssets] = useState<SoundAsset[]>([]);
+  const [assets, setAssets] = useState<Asset[]>([]);
   const [busy, setBusy] = useState(false);
   const currentFile = String(settings.customSound || '');
   const preset = String(settings.soundPreset || 'default');
