@@ -528,6 +528,8 @@ async function main() {
       scoreEffect: 'spotlight', spotlightScope: 'person_team',
       spotlightWidth: 700, spotlightHeight: 420, spotlightTheme: 'fly',
       spotlightReturnDuration: 2200, spotlightScrimEnabled: true, spotlightScrimOpacity: 0.25,
+      spotlightPlayMode: 'parallel', spotlightParallelMax: 6, spotlightParallelGap: 36,
+      spotlightParallelTransition: 500, spotlightInterruptFade: 250,
       customSound: soundUp.path,
     },
   });
@@ -535,8 +537,32 @@ async function main() {
   assert(P(s).settings.customSound === soundUp.path && P(s).settings.spotlightScope === 'person_team' &&
     P(s).settings.spotlightWidth === 700 && P(s).settings.spotlightHeight === 420 &&
     P(s).settings.spotlightTheme === 'fly' && P(s).settings.spotlightReturnDuration === 2200 &&
-    P(s).settings.spotlightScrimEnabled === true && P(s).settings.spotlightScrimOpacity === 0.25,
-    '居中突显特效/范围/宽高/主题/飞入飞回时长/压暗开关与强度/自定义音效同步');
+    P(s).settings.spotlightScrimEnabled === true && P(s).settings.spotlightScrimOpacity === 0.25 &&
+    P(s).settings.spotlightPlayMode === 'parallel' && P(s).settings.spotlightParallelMax === 6 &&
+    P(s).settings.spotlightParallelGap === 36 && P(s).settings.spotlightParallelTransition === 500 &&
+    P(s).settings.spotlightInterruptFade === 250,
+    '居中突显特效/范围/宽高/主题/飞入飞回时长/压暗开关与强度/播放模式/并列与打断参数/自定义音效同步');
+  await adminOp('updateSettings', { patch: { spotlightPlayMode: 'warp' } }).catch((e) => {
+    assert(/播放模式/.test(e.message), '非法播放模式被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { spotlightParallelMax: 7 } }).catch((e) => {
+    assert(/并列最多卡片数/.test(e.message), '非法并列最多卡片数被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { spotlightParallelGap: 121 } }).catch((e) => {
+    assert(/并列卡片间距/.test(e.message), '非法并列卡片间距被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { spotlightParallelTransition: 1600 } }).catch((e) => {
+    assert(/并列卡片过渡时长/.test(e.message), '非法并列卡片过渡时长被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { spotlightInterruptFade: 1200 } }).catch((e) => {
+    assert(/打断淡出时长/.test(e.message), '非法打断淡出时长被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { spotlightPlayMode: 'interrupt' } });
+  s = await viewer.waitState((st) => P(st).settings.spotlightPlayMode === 'interrupt');
+  assert(true, '打断模式可选');
+  await adminOp('updateSettings', { patch: { spotlightPlayMode: 'parallel' } });
+  s = await viewer.waitState((st) => P(st).settings.spotlightPlayMode === 'parallel');
+  assert(true, '恢复并列模式以验证持久化');
   await adminOp('updateSettings', { patch: { spotlightTheme: 'genie' } });
   s = await viewer.waitState((st) => P(st).settings.spotlightTheme === 'genie');
   assert(true, '神灯主题可选');
@@ -1073,8 +1099,11 @@ async function main() {
     rp.settings.spotlightScope === 'person_team' && rp.settings.spotlightWidth === 700 &&
     rp.settings.spotlightHeight === 420 && rp.settings.spotlightTheme === 'squeeze' &&
     rp.settings.spotlightReturnDuration === 2200 && rp.settings.spotlightScrimEnabled === true &&
-    rp.settings.spotlightScrimOpacity === 0.25 && rp.settings.scoreRolling === false,
-    '重启后居中突显/范围/宽高/主题/飞入飞回时长/压暗开关与强度/滚动数字/自定义音效恢复');
+    rp.settings.spotlightScrimOpacity === 0.25 && rp.settings.spotlightPlayMode === 'parallel' &&
+    rp.settings.spotlightParallelMax === 6 && rp.settings.spotlightParallelGap === 36 &&
+    rp.settings.spotlightParallelTransition === 500 && rp.settings.spotlightInterruptFade === 250 &&
+    rp.settings.scoreRolling === false,
+    '重启后居中突显/范围/宽高/主题/飞入飞回时长/压暗开关与强度/播放模式/并列与打断参数/滚动数字/自定义音效恢复');
   assert(rp.settings.countdownDisplayMode === 'fullscreen' && rp.settings.countdownShape === 'rounded-rect' &&
     rp.settings.countdownSize === 600 && rp.settings.countdownHeight === 300 &&
     rp.settings.countdownFontSize === 96 && rp.settings.countdownPosition === 'bottom-right' &&

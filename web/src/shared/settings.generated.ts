@@ -38,6 +38,11 @@ export interface SettingsFields {
   spotlightTheme: string;
   spotlightReturnToOrigin: boolean;
   spotlightReturnDuration: number;
+  spotlightPlayMode: string;
+  spotlightParallelMax: number;
+  spotlightParallelGap: number;
+  spotlightParallelTransition: number;
+  spotlightInterruptFade: number;
   spotlightScrimEnabled: boolean;
   spotlightScrimOpacity: number;
   scoreEffectDuration: number;

@@ -44,6 +44,11 @@ const DEFAULT_SETTINGS = {
   spotlightTheme: 'pop',    // pop | fly | genie | squeeze
   spotlightReturnToOrigin: false, // （兼容）fly 主题开关
   spotlightReturnDuration: 1600,  // fly 主题时长 ms（600–6000）
+  spotlightPlayMode: 'queue',     // queue（队列响应）| interrupt（打断）| parallel（并列）
+  spotlightParallelMax: 4,        // 并列模式最多同时展示的卡片数 1–6
+  spotlightParallelGap: 20,       // 并列模式卡片间距 px（0–120）
+  spotlightParallelTransition: 300, // 并列模式加入/退场/重排时长 ms（0–1500）
+  spotlightInterruptFade: 150,    // 打断模式旧特效淡出时长 ms（0–1000）
   spotlightScrimEnabled: true,    // 突显时压暗背景
   spotlightScrimOpacity: 0.45,    // 压暗强度 0–1
   scoreEffectDuration: 700, // 特效时长 ms（200–3000）
@@ -320,6 +325,14 @@ const SETTINGS_VALIDATORS = {
     (['pop', 'fly', 'genie', 'squeeze'].includes(v)
       ? v
       : (() => { throw new OpError('突显主题非法'); })()),
+  spotlightPlayMode: (v) =>
+    (['queue', 'interrupt', 'parallel'].includes(v)
+      ? v
+      : (() => { throw new OpError('播放模式非法'); })()),
+  spotlightParallelMax: (v) => intRange(v, 1, 6, '并列最多卡片数须为 1–6'),
+  spotlightParallelGap: (v) => intRange(v, 0, 120, '并列卡片间距须为 0–120'),
+  spotlightParallelTransition: (v) => intRange(v, 0, 1500, '并列卡片过渡时长须为 0–1500 ms'),
+  spotlightInterruptFade: (v) => intRange(v, 0, 1000, '打断淡出时长须为 0–1000 ms'),
   scoreEffectDuration: (v) => {
     const n = Number(v);
     if (!Number.isInteger(n) || n < 200 || n > 3000) throw new OpError('特效时长须为 200–3000 的整数');

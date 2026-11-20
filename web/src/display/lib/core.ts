@@ -395,6 +395,60 @@ export function fxInfo(s: Settings, delta: number | null | undefined): FxInfo {
   return { cls: ' fx', badge: { text: (delta > 0 ? '+' : '') + delta, color } };
 }
 
+interface LiveSpotlight {
+  overlay: HTMLElement;
+  cleanup: () => void;
+}
+
+const liveSpotlights = new Set<LiveSpotlight>();
+
+// 原卡可见性用引用计数管理：打断瞬间新旧特效可能同时隐藏同一张卡，
+// 旧的清理回调不能把仍被新特效占用的原卡提前显示出来。
+const hiddenOriginals = new Map<HTMLElement, number>();
+
+export function hideOriginalCard(el: HTMLElement): void {
+  hiddenOriginals.set(el, (hiddenOriginals.get(el) || 0) + 1);
+  el.style.visibility = 'hidden';
+}
+
+export function showOriginalCard(el: HTMLElement): void {
+  const left = (hiddenOriginals.get(el) || 0) - 1;
+  if (left > 0) {
+    hiddenOriginals.set(el, left);
+    return;
+  }
+  hiddenOriginals.delete(el);
+  if (el.isConnected) el.style.visibility = '';
+}
+
+function registerSpotlight(overlay: HTMLElement, cleanup: () => void): () => void {
+  const handle: LiveSpotlight = { overlay, cleanup };
+  liveSpotlights.add(handle);
+  return () => {
+    liveSpotlights.delete(handle);
+  };
+}
+
+/**
+ * 打断模式：清除正在播放的居中突显特效。
+ * fadeMs <= 0 立即移除；否则整体淡出后再移除并恢复原卡。
+ */
+export function interruptSpotlights(fadeMs = 0): void {
+  const dur = clamp(Number(fadeMs) || 0, 0, 2000);
+  for (const handle of Array.from(liveSpotlights)) {
+    liveSpotlights.delete(handle);
+    if (dur <= 0 || !handle.overlay.isConnected) {
+      handle.cleanup();
+      continue;
+    }
+    const anim = handle.overlay.animate(
+      [{ opacity: 1 }, { opacity: 0 }],
+      { duration: dur, easing: 'ease', fill: 'forwards' },
+    );
+    anim.onfinish = () => handle.cleanup();
+  }
+}
+
 export function rollNumber(el: HTMLElement | null, from: number, to: number): void {
   if (!el || from === to) return;
   el.textContent = String(from);
@@ -470,7 +524,7 @@ export function spawnConfetti(el: HTMLElement, colors: string[], duration: numbe
   setTimeout(() => layer.remove(), duration + 500);
 }
 
-function injectSpotDelta(clone: HTMLElement, delta: number | null | undefined, s: Settings): void {
+export function injectSpotDelta(clone: HTMLElement, delta: number | null | undefined, s: Settings): void {
   if (delta == null || delta === 0) return;
   if (s.scoreEffectOnlyPositive && delta < 0) return;
   const scoreEl = clone.querySelector('.person-score, .member-score, .team-total');
@@ -483,7 +537,7 @@ function injectSpotDelta(clone: HTMLElement, delta: number | null | undefined, s
   scoreEl.appendChild(badge);
 }
 
-function cloneCard(el: HTMLElement): HTMLElement {
+export function cloneCard(el: HTMLElement): HTMLElement {
   const clone = el.cloneNode(true) as HTMLElement;
   clone.querySelectorAll('.resize-handle, .fx-delta, .confetti-layer').forEach((n) => n.remove());
   ['position', 'left', 'top', 'right', 'bottom', 'width', 'height', 'transform', 'animation', 'zoom'].forEach(
@@ -496,7 +550,7 @@ function cloneCard(el: HTMLElement): HTMLElement {
   return clone;
 }
 
-function spotlightSize(el: HTMLElement, s: Settings): { width: number; height: number; rect: DOMRect } {
+export function spotlightSize(el: HTMLElement, s: Settings): { width: number; height: number; rect: DOMRect } {
   const rect = el.getBoundingClientRect();
   const width = clamp(Number(s.spotlightWidth) || 520, 200, 1600);
   let height = Number(s.spotlightHeight) || 0;
@@ -542,7 +596,12 @@ function centerTargets(
   }
 }
 
-function spawnSpotlightReturn(els: HTMLElement[], s: Settings, delta?: number): void {
+function spawnSpotlightReturn(
+  els: HTMLElement[],
+  s: Settings,
+  delta?: number,
+  extraCleanup?: () => void,
+): void {
   const total = clamp(Number(s.spotlightReturnDuration) || 1600, 600, 6000);
   const overlay = document.createElement('div');
   overlay.className = 'spotlight-return-overlay';
@@ -560,7 +619,7 @@ function spawnSpotlightReturn(els: HTMLElement[], s: Settings, delta?: number): 
 
   document.body.appendChild(overlay);
   items.forEach((it) => {
-    it.el.style.visibility = 'hidden';
+    hideOriginalCard(it.el);
   });
   scrim.animate(
     [{ opacity: 0 }, { opacity: 1, offset: 0.25 }, { opacity: 1, offset: 0.7 }, { opacity: 0 }],
@@ -581,11 +640,15 @@ function spawnSpotlightReturn(els: HTMLElement[], s: Settings, delta?: number): 
     );
   }
 
-  setTimeout(() => {
-    items.forEach((it) => {
-      if (it.el.isConnected) it.el.style.visibility = '';
-    });
+  const cleanup = () => {
+    items.forEach((it) => showOriginalCard(it.el));
     overlay.remove();
+    if (extraCleanup) extraCleanup();
+  };
+  const unregister = registerSpotlight(overlay, cleanup);
+  setTimeout(() => {
+    cleanup();
+    unregister();
   }, total + 150);
 }
 
@@ -606,7 +669,7 @@ function spawnSpotlightGenie(els: HTMLElement[], s: Settings, delta?: number): v
 
   document.body.appendChild(overlay);
   items.forEach((it) => {
-    it.el.style.visibility = 'hidden';
+    hideOriginalCard(it.el);
   });
   scrim.animate(
     [{ opacity: 0 }, { opacity: 1, offset: 0.2 }, { opacity: 1, offset: 0.72 }, { opacity: 0 }],
@@ -633,11 +696,14 @@ function spawnSpotlightGenie(els: HTMLElement[], s: Settings, delta?: number): v
     );
   }
 
-  setTimeout(() => {
-    items.forEach((it) => {
-      if (it.el.isConnected) it.el.style.visibility = '';
-    });
+  const cleanup = () => {
+    items.forEach((it) => showOriginalCard(it.el));
     overlay.remove();
+  };
+  const unregister = registerSpotlight(overlay, cleanup);
+  setTimeout(() => {
+    cleanup();
+    unregister();
   }, total + 150);
 }
 
@@ -646,24 +712,27 @@ function spawnSpotlightSqueeze(board: HTMLElement, els: HTMLElement[], s: Settin
   const boardRect = board.getBoundingClientRect();
   const centerX = boardRect.left + boardRect.width / 2;
 
+  const awayAnims: Animation[] = [];
   board.querySelectorAll<HTMLElement>('.card[data-kind], .member[data-person]').forEach((n) => {
     if (els.includes(n)) return;
     const r = n.getBoundingClientRect();
     const dir = r.left + r.width / 2 < centerX ? -1 : 1;
     const dist = Math.min(260, Math.max(70, Math.abs(centerX - (r.left + r.width / 2)) * 0.35));
     const away = 'translateX(' + Math.round(dir * dist) + 'px) scale(0.8)';
-    n.animate(
-      [
-        { transform: 'none', filter: 'blur(0px)', opacity: 1, offset: 0 },
-        { transform: away, filter: 'blur(5px)', opacity: 0.5, offset: 0.34 },
-        { transform: away, filter: 'blur(5px)', opacity: 0.5, offset: 0.72 },
-        { transform: 'none', filter: 'blur(0px)', opacity: 1, offset: 1 },
-      ],
-      { duration: total, easing: 'cubic-bezier(0.22, 0.61, 0.36, 1)' },
+    awayAnims.push(
+      n.animate(
+        [
+          { transform: 'none', filter: 'blur(0px)', opacity: 1, offset: 0 },
+          { transform: away, filter: 'blur(5px)', opacity: 0.5, offset: 0.34 },
+          { transform: away, filter: 'blur(5px)', opacity: 0.5, offset: 0.72 },
+          { transform: 'none', filter: 'blur(0px)', opacity: 1, offset: 1 },
+        ],
+        { duration: total, easing: 'cubic-bezier(0.22, 0.61, 0.36, 1)' },
+      ),
     );
   });
 
-  spawnSpotlightReturn(els, s, delta);
+  spawnSpotlightReturn(els, s, delta, () => awayAnims.forEach((a) => a.cancel()));
 }
 
 function spawnSpotlightPop(els: HTMLElement[], s: Settings, delta?: number): void {
@@ -692,7 +761,12 @@ function spawnSpotlightPop(els: HTMLElement[], s: Settings, delta?: number): voi
   }
   overlay.appendChild(stack);
   document.body.appendChild(overlay);
-  setTimeout(() => overlay.remove(), total + 250);
+  const cleanup = () => overlay.remove();
+  const unregister = registerSpotlight(overlay, cleanup);
+  setTimeout(() => {
+    cleanup();
+    unregister();
+  }, total + 250);
 }
 
 export function spawnSpotlight(

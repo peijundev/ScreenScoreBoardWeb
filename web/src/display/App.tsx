@@ -8,6 +8,7 @@ import {
   applyAutoAvatarSizes,
   assignRanks,
   buildItems,
+  interruptSpotlights,
   playScoreSound,
   prefersReducedMotion,
   rollNumber,
@@ -15,6 +16,11 @@ import {
   spawnHighlight,
   spawnSpotlight,
 } from './lib/core';
+import {
+  interruptSpotlightParallel,
+  playSpotlightParallel,
+  resetSpotlightParallel,
+} from './lib/spotlight';
 import Board, { LeaderboardView, WelcomeView } from './components/Board';
 import ThemeCanvas from './theme/ThemeCanvas';
 import ThemeScriptLayer from './theme/ThemeScriptLayer';
@@ -248,32 +254,49 @@ export default function App(): JSX.Element {
 
     if (settings.displayStyle !== 'xianxia' && settings.scoreEffect === 'spotlight') {
       const scope = String(settings.spotlightScope || 'person');
+      const mode = String(settings.spotlightPlayMode || 'queue');
       const changed = Object.values(project.people).filter((p) => {
         const d = deltas.get(p.id);
         return d && !(settings.scoreEffectOnlyPositive && d < 0);
       });
-      const p = changed[0];
-      if (p) {
+      const spotlightElsFor = (p: { id: string; teamId: string | null }): HTMLElement[] => {
         const memberEl = board.querySelector<HTMLElement>('.member[data-person="' + p.id + '"]');
         const personEl =
-          memberEl || board.querySelector<HTMLElement>('.card[data-kind="person"][data-id="' + p.id + '"]');
+          memberEl ||
+          board.querySelector<HTMLElement>('.card[data-kind="person"][data-id="' + p.id + '"]');
         const teamEl = p.teamId
           ? board.querySelector<HTMLElement>('.card[data-kind="team"][data-id="' + p.teamId + '"]')
           : null;
-        const els: HTMLElement[] = [];
         if (scope === 'team') {
-          if (teamEl) els.push(teamEl);
-          else if (personEl) els.push(personEl);
-        } else if (scope === 'person_team') {
-          if (memberEl && teamEl) els.push(memberEl, teamEl);
-          else if (personEl) els.push(personEl);
-          else if (teamEl) els.push(teamEl);
-        } else {
-          if (memberEl) els.push(memberEl);
-          else if (personEl) els.push(personEl);
-          else if (teamEl) els.push(teamEl);
+          if (teamEl) return [teamEl];
+          return personEl ? [personEl] : [];
         }
-        if (els.length) spawnSpotlight(board, els, settings, deltas.get(p.id));
+        if (scope === 'person_team') {
+          if (memberEl && teamEl) return [memberEl, teamEl];
+          if (personEl) return [personEl];
+          return teamEl ? [teamEl] : [];
+        }
+        if (memberEl) return [memberEl];
+        if (personEl) return [personEl];
+        return teamEl ? [teamEl] : [];
+      };
+      // 并列模式：同一次刷新的多人变化一起并列；队列/打断模式保持原行为（只播第一个人）
+      const list = mode === 'parallel' ? changed : changed.slice(0, 1);
+      const targets = list
+        .map((p) => ({ key: p.id, els: spotlightElsFor(p), delta: deltas.get(p.id) }))
+        .filter((t) => t.els.length > 0);
+      if (targets.length) {
+        if (mode === 'parallel' && !prefersReducedMotion()) {
+          playSpotlightParallel(board, targets, settings);
+        } else {
+          if (mode === 'interrupt') {
+            const fade = Number(settings.spotlightInterruptFade);
+            const fadeMs = Number.isFinite(fade) ? fade : 150;
+            interruptSpotlights(fadeMs);
+            interruptSpotlightParallel(fadeMs);
+          }
+          spawnSpotlight(board, targets[0].els, settings, targets[0].delta);
+        }
       }
     }
 
@@ -385,6 +408,12 @@ export default function App(): JSX.Element {
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
   }, [settings]);
+
+  // 切换项目/卸载时清掉正在播放的并列会话，避免残留卡片
+  useEffect(() => {
+    resetSpotlightParallel();
+    return () => resetSpotlightParallel();
+  }, [project?.id]);
 
   if (!project || !settings) {
     return <div className="empty-tip">连接中…</div>;

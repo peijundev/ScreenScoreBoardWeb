@@ -1219,11 +1219,48 @@ body[data-score-effect="shake"] .fx { animation: fx-shake var(--fx-duration, 700
   overflow: hidden;
 }
 
+/* 并列模式：同一画面动态加入 / 替换 / 退场多张卡片 */
+.spotlight-parallel-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+}
+.spotlight-parallel-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(var(--spot-scrim-rgb), var(--spot-scrim-alpha));
+  opacity: 0;
+}
+.spotlight-parallel-group {
+  position: fixed;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow: hidden;
+  border-radius: 12px;
+  transform-origin: center;
+  will-change: transform;
+}
+.spotlight-parallel-card {
+  flex: none;
+  overflow: hidden;
+  border-radius: 12px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+}
+.spotlight-parallel-card > * {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  overflow: hidden;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .fx, .dot.connecting, .countdown-big.ended .countdown-ring { animation: none !important; }
   .ink-art { animation: none !important; }
   .ink-petals { display: none !important; }
-  .fx-delta, .confetti-layer, .spotlight-overlay, .spotlight-return-overlay { display: none; }
+  .fx-delta, .confetti-layer, .spotlight-overlay, .spotlight-return-overlay,
+  .spotlight-parallel-overlay { display: none; }
 }
 
 /* ============================================================
@@ -1617,6 +1654,7 @@ body[data-display-style="xianxia"] .fx-delta,
 body[data-display-style="xianxia"] .confetti-layer,
 body[data-display-style="xianxia"] .spotlight-overlay,
 body[data-display-style="xianxia"] .spotlight-return-overlay,
+body[data-display-style="xianxia"] .spotlight-parallel-overlay,
 body[data-display-style="xianxia"] .highlight-scrim {
   display: none !important;
 }
