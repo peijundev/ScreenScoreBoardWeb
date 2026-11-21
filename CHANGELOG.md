@@ -18,6 +18,7 @@
 - **存储配置**：`DATA_DIR/storage.json`（权限 0600，仅管理员 API 可读，密码不回传），优先于存储相关环境变量；文件损坏时拒绝启动。
 - **可靠性与并发**：连接超时/重试、健康诊断（`/api/v1/storage/health`）、`revision` 乐观并发（CAS）、PostgreSQL advisory lock / MySQL `GET_LOCK` / Redis 分布式锁。
 - **测试**：新增 `npm run test:storage`；CI 增加 MongoDB 7 与 Redis 7 service；`npm run verify` 覆盖配置 API、TXT 迁移、密码不回传、非法配置与损坏配置。
+- **管理端主题**：在原有 KDE Breeze 深/浅之外新增 GNOME Adwaita 与 macOS 各深/浅，共六套；桌面顶栏与移动端「更多 → 显示」均可切换，选择保存在浏览器 localStorage，旧值 `dark`/`light` 自动兼容；Adwaita 使用 8px 圆角与 GNOME 蓝，macOS 使用系统蓝、6px 控件圆角与系统字体优先。
 
 ### 变更
 

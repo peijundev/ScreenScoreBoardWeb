@@ -7,6 +7,25 @@
   <link rel="stylesheet" href="/admin.css">
 </head>
 <body data-theme="dark">
+  <script>
+    // 首屏主题初始化；映射表与 web/src/shared/adminTheme.ts 的 normalizeAdminTheme 保持同步
+    try {
+      var stored = localStorage.getItem('admin-theme');
+      var themes = {
+        dark: 'breeze-dark',
+        light: 'breeze-light',
+        'breeze-dark': 'breeze-dark',
+        'breeze-light': 'breeze-light',
+        'adwaita-dark': 'adwaita-dark',
+        'adwaita-light': 'adwaita-light',
+        'macos-dark': 'macos-dark',
+        'macos-light': 'macos-light'
+      };
+      if (themes[stored]) document.body.dataset.theme = themes[stored];
+    } catch (error) {
+      // localStorage 不可用时保持默认 Breeze 深色
+    }
+  </script>
   <div id="root"></div>
   <script type="module" src="/src/admin/main.tsx"></script>
 </body>

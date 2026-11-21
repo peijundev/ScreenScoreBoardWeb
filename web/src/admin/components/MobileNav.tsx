@@ -1,9 +1,10 @@
-import { useEffect, useState, type JSX } from 'react';
+import { useEffect, type JSX } from 'react';
 import type { Project } from '../../shared/types';
 import { useAppStore } from '../../shared/store';
 import { useAuthStore, type AuthUser } from '../../shared/auth';
 import { toast } from '../../shared/ui';
 import { confirm, prompt } from './dialogs';
+import AdminThemePicker from './AdminThemePicker';
 
 export type MobileTab = 'preview' | 'people' | 'teams' | 'theme' | 'more';
 
@@ -66,18 +67,6 @@ export default function MobileNav({
   const logout = useAuthStore((s) => s.logout);
   const tabs = isAdmin ? TABS : TABS.filter(([value]) => value !== 'theme');
   const undoCount = useAppStore((s) => (project ? (s.runtime?.undoCounts[project.id] ?? 0) : 0));
-  const [adminTheme, setAdminTheme] = useState<'dark' | 'light'>(() => {
-    try {
-      return localStorage.getItem('admin-theme') === 'light' ? 'light' : 'dark';
-    } catch {
-      return 'dark';
-    }
-  });
-
-  useEffect(() => {
-    document.body.dataset.theme = adminTheme;
-  }, [adminTheme]);
-
   useEffect(() => {
     if (!isAdmin && tab === 'theme') onTab('people');
   }, [isAdmin, tab, onTab]);
@@ -112,17 +101,6 @@ export default function MobileNav({
     });
     if (!ok) return;
     sendOp('deleteProject', { projectId: project.id }).catch((err: Error) => toast(err.message));
-  }
-
-  function toggleAdminTheme(): void {
-    const next = adminTheme === 'light' ? 'dark' : 'light';
-    setAdminTheme(next);
-    document.body.dataset.theme = next;
-    try {
-      localStorage.setItem('admin-theme', next);
-    } catch {
-      // ignore
-    }
   }
 
   return (
@@ -206,9 +184,7 @@ export default function MobileNav({
               </>
             )}
             <h2>显示</h2>
-            <button className="btn mobile-wide" type="button" onClick={toggleAdminTheme}>
-              管理端主题：{adminTheme === 'light' ? '浅色' : '深色'}
-            </button>
+            <AdminThemePicker wide />
             <a
               className="btn mobile-wide open-display"
               href={project ? '/display-v2?project=' + encodeURIComponent(project.id) : '/display-v2'}

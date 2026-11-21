@@ -1,5 +1,6 @@
-/* 管理端样式：KDE Breeze Dark 风格（方角、平面、克制的高亮） */
-body[data-theme="dark"] {
+/* 管理端样式：KDE Breeze 与 GNOME Adwaita 两套深/浅配色 */
+body[data-theme="dark"],
+body[data-theme="breeze-dark"] {
   --bg: #1b1e20;            /* 窗口背景 */
   --card: #232629;          /* 面板 */
   --card-border: #3b4045;   /* 控件边框 */
@@ -18,7 +19,8 @@ body[data-theme="dark"] {
   --btn-bg: #2a2e32;        /* 普通按钮 / 标签 */
   --border-strong: #4b5158;
 }
-body[data-theme="light"] {
+body[data-theme="light"],
+body[data-theme="breeze-light"] {
   --bg: #eff0f1;
   --card: #fcfcfc;
   --card-border: #bdc3c7;
@@ -36,6 +38,92 @@ body[data-theme="light"] {
   --subcard: #f2f3f5;
   --btn-bg: #e8eaec;
   --border-strong: #9aa3a8;
+}
+
+/* GNOME Adwaita：更大的圆角、蓝色强调、浅色/深色对比更柔和 */
+body[data-theme="adwaita-dark"] {
+  --bg: #242424;
+  --card: #303030;
+  --card-border: #3d3d3d;
+  --text: #ffffff;
+  --text-dim: #b0b0b0;
+  --input-bg: #1e1e1e;
+  --hover: #3a3a3a;
+  --row-alt: #2b2b2b;
+  --accent: #3584e4;
+  --accent-hover: #62a0ea;
+  --accent-text: #ffffff;
+  --danger: #e01b24;
+  --positive: #2ec27e;
+  --panel-head: #303030;
+  --subcard: #383838;
+  --btn-bg: #3a3a3a;
+  --border-strong: #5e5e5e;
+  --radius: 8px;
+}
+body[data-theme="adwaita-light"] {
+  --bg: #fafafa;
+  --card: #ffffff;
+  --card-border: #deddda;
+  --text: #2e3436;
+  --text-dim: #77767b;
+  --input-bg: #ffffff;
+  --hover: #ebebeb;
+  --row-alt: #f6f5f4;
+  --accent: #3584e4;
+  --accent-hover: #1c71d8;
+  --accent-text: #ffffff;
+  --danger: #e01b24;
+  --positive: #2ec27e;
+  --panel-head: #f0f0f0;
+  --subcard: #f6f5f4;
+  --btn-bg: #ebebeb;
+  --border-strong: #c0bfbc;
+  --radius: 8px;
+}
+
+/* macOS Aqua：系统蓝、较轻的边框、6px 控件圆角 */
+body[data-theme="macos-dark"] {
+  --bg: #1c1c1e;
+  --card: #2c2c2e;
+  --card-border: #3a3a3c;
+  --text: #f5f5f7;
+  --text-dim: #98989d;
+  --input-bg: #1c1c1e;
+  --hover: #3a3a3c;
+  --row-alt: #252527;
+  --accent: #0a84ff;
+  --accent-hover: #409cff;
+  --accent-text: #ffffff;
+  --danger: #ff453a;
+  --positive: #30d158;
+  --panel-head: #2c2c2e;
+  --subcard: #323234;
+  --btn-bg: #3a3a3c;
+  --border-strong: #545458;
+  --radius: 6px;
+  --radius-large: 10px;
+}
+body[data-theme="macos-light"] {
+  --bg: #ececec;
+  --card: #ffffff;
+  --card-border: #d6d6d6;
+  --text: #1d1d1f;
+  --text-dim: #6e6e73;
+  --input-bg: #ffffff;
+  --hover: #e5e5e5;
+  --row-alt: #f7f7f7;
+  --accent: #007aff;
+  --accent-hover: #0066d6;
+  --accent-text: #ffffff;
+  --danger: #ff3b30;
+  --positive: #34c759;
+  --panel-head: #ededed;
+  --subcard: #f5f5f7;
+  --btn-bg: #f0f0f0;
+  --border-strong: #b0b0b0;
+  --radius: 6px;
+  --radius-large: 10px;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -100,13 +188,23 @@ body {
 .dot.connecting { background: #f67400; animation: blink 1.2s step-end infinite; }
 @keyframes blink { 50% { opacity: .35; } }
 
+.conn-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.app-version {
+  font-size: 12px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
 .open-display {
   margin-left: auto;
-  color: var(--accent);
   text-decoration: none;
-  font-size: 13px;
 }
-.open-display:hover { text-decoration: underline; }
 
 /* ---- 通知 ---- */
 .toast {
@@ -1710,4 +1808,92 @@ select:focus-visible {
 @media (max-width: 860px) {
   .storage-status-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .storage-fields { grid-template-columns: 1fr; }
+}
+
+/* ---- Adwaita 专属：字体与圆角（不影响 Breeze） ---- */
+body[data-theme^="adwaita"] {
+  font-family: "Adwaita Sans", "Cantarell", "Noto Sans", "Noto Sans CJK SC",
+    "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+body[data-theme^="adwaita"] .btn,
+body[data-theme^="adwaita"] .project-select,
+body[data-theme^="adwaita"] .app-dialog-input,
+body[data-theme^="adwaita"] .settings-dialog,
+body[data-theme^="adwaita"] .settings-tabs button,
+body[data-theme^="adwaita"] .set-group,
+body[data-theme^="adwaita"] .mobile-card,
+body[data-theme^="adwaita"] .account-access-card,
+body[data-theme^="adwaita"] .chip,
+body[data-theme^="adwaita"] .storage-status-card,
+body[data-theme^="adwaita"] .storage-backend-card,
+body[data-theme^="adwaita"] .storage-notice,
+body[data-theme^="adwaita"] .storage-restart-banner,
+body[data-theme^="adwaita"] .storage-risk,
+body[data-theme^="adwaita"] input:not([type="checkbox"]):not([type="radio"]),
+body[data-theme^="adwaita"] select,
+body[data-theme^="adwaita"] textarea {
+  border-radius: var(--radius);
+}
+body[data-theme^="adwaita"] ::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+}
+
+/* ---- 管理端主题选择器 ---- */
+.admin-theme-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.admin-theme-picker select {
+  padding: 3px 6px;
+  border: 1px solid var(--card-border);
+  background: var(--btn-bg);
+  color: var(--text);
+  font-size: 12px;
+}
+.admin-theme-picker select:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+.admin-theme-picker.mobile-wide {
+  width: 100%;
+  justify-content: space-between;
+  margin: 4px 0;
+}
+.admin-theme-picker.mobile-wide select {
+  flex: 1;
+  min-height: var(--touch-target, 44px);
+}
+
+/* ---- macOS 专属：系统字体与 6px 控件圆角（不影响其他主题） ---- */
+body[data-theme^="macos"] {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue",
+    "Noto Sans", "PingFang SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif;
+}
+body[data-theme^="macos"] .btn,
+body[data-theme^="macos"] .project-select,
+body[data-theme^="macos"] .app-dialog-input,
+body[data-theme^="macos"] .settings-tabs button,
+body[data-theme^="macos"] .set-group,
+body[data-theme^="macos"] .mobile-card,
+body[data-theme^="macos"] .account-access-card,
+body[data-theme^="macos"] .chip,
+body[data-theme^="macos"] .storage-status-card,
+body[data-theme^="macos"] .storage-backend-card,
+body[data-theme^="macos"] .storage-notice,
+body[data-theme^="macos"] .storage-restart-banner,
+body[data-theme^="macos"] .storage-risk,
+body[data-theme^="macos"] input:not([type="checkbox"]):not([type="radio"]),
+body[data-theme^="macos"] select,
+body[data-theme^="macos"] textarea {
+  border-radius: var(--radius);
+}
+body[data-theme^="macos"] .settings-dialog {
+  border-radius: var(--radius-large);
+}
+body[data-theme^="macos"] ::-webkit-scrollbar-thumb {
+  border-radius: 999px;
 }

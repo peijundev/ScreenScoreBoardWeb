@@ -5,6 +5,7 @@ import { useAuthStore, type AuthUser } from '../../shared/auth';
 import { toast } from '../../shared/ui';
 import { confirm, prompt } from './dialogs';
 import SoundQuickMenu from './SoundQuickMenu';
+import AdminThemePicker from './AdminThemePicker';
 
 interface Props {
   project: Project | null;
@@ -60,13 +61,6 @@ export default function Toolbar({
   const undoCount = useAppStore((s) =>
     project ? (s.runtime?.undoCounts[project.id] ?? 0) : 0,
   );
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    try {
-      return localStorage.getItem('admin-theme') === 'light' ? 'light' : 'dark';
-    } catch {
-      return 'dark';
-    }
-  });
   const [version, setVersion] = useState<VersionInfo | null>(null);
   const initialized = useRef(false);
 
@@ -78,15 +72,6 @@ export default function Toolbar({
       .then((info: VersionInfo | null) => setVersion(info))
       .catch(() => {});
   }, []);
-
-  useEffect(() => {
-    document.body.dataset.theme = theme;
-    try {
-      localStorage.setItem('admin-theme', theme);
-    } catch {
-      // ignore
-    }
-  }, [theme]);
 
   async function addProject(): Promise<void> {
     const name = await prompt({
@@ -226,15 +211,17 @@ export default function Toolbar({
         </>
       )}
       {!authEnabled && <span className="hint">本机模式</span>}
-      <span
-        id="conn-dot"
-        className={'dot' + (connected ? '' : ' connecting')}
-        title={connected ? '已连接' : '连接中…'}
-      />
+      <span className="conn-status" title={connected ? '实时连接正常' : '与服务器断开'}>
+        <span
+          id="conn-dot"
+          className={'dot' + (connected ? '' : ' connecting')}
+        />
+        <span>{connected ? '已连接' : '断开'}</span>
+      </span>
+      <AdminThemePicker />
       {version && (
         <span
-          className="hint"
-          style={{ color: 'var(--text-dim)', fontSize: 12 }}
+          className="app-version"
           title={
             version.frontend === 'react'
               ? '当前使用 React 前端（public/v2）'
@@ -242,14 +229,10 @@ export default function Toolbar({
           }
         >
           v{version.version}
-          {' · ' + (version.frontend === 'react' ? 'React' : '未构建')}
         </span>
       )}
-      <button className="btn small" type="button" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
-        主题：{theme === 'light' ? '浅色' : '深色'}
-      </button>
       <a
-        className="open-display"
+        className="btn small primary open-display"
         href={project ? '/display-v2?project=' + encodeURIComponent(project.id) : '/display-v2'}
         target="_blank"
         rel="noreferrer"
