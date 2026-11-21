@@ -249,7 +249,7 @@ async function main() {
   console.log('版本信息:');
   const verRes = await fetch(BASE + '/api/version');
   const verData = await verRes.json();
-  assert(verRes.ok && verData.version === '1.6.2', '版本接口返回 1.6.2');
+  assert(verRes.ok && verData.version === '1.6.3', '版本接口返回 1.6.3');
   assert(verData.finalForTechStack === false, '不再标记为原技术栈最终版');
   assert(verData.frontend === 'react' || verData.frontend === 'missing', '版本接口返回当前前端类型');
 

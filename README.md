@@ -2,9 +2,11 @@
 
 显示端 + 管理端的实时计分板。后端为 Node 原生 http + WebSocket；前端为 React 19 + Vite + TypeScript（源码在 `web/`，构建产物在 `public/v2/`）。支持多项目（每个项目一个独立积分榜）和可切换的存储后端（JSON / SQLite / PostgreSQL / MySQL）。
 
-> ## 版本 1.6.2 — Electron 三模式
+> ## 版本 1.6.3 — Node.js 24 基线
 >
-> - **新增**：Electron 启动页拆分为本地模式、远程管理模式、远程屏幕模式；远程管理只填服务器地址 / 账号 / 密码，远程屏幕只填完整显示端网址
+> - **破坏性变更**：最低 Node.js 版本提升到 24，不再支持 Node 20 / 22；升级后需重新安装依赖，并用 Node 24 重建 `better-sqlite3`
+> - **改进**：`@types/node` 对齐 24.x；`test:theme` 纳入 CI；Dockerfile 支持 `NODE_VERSION` 构建参数，并修复 Vite 8 rolldown 原生绑定导致的镜像构建失败
+> - **延续 1.6.2**：Electron 启动页三模式（本地 / 远程管理 / 远程屏幕），远程管理只填服务器地址 / 账号 / 密码，远程屏幕只填完整显示端网址
 > - **延续 1.6.1**：纯突显（不加分）、官方 npm SDK（REST + MCP）、部署模式访问控制（可关闭登录系统，完全开放）
 > - **延续 1.6.0**：完整多用户鉴权（管理员 / 操作员 / 只读）、CSRF、会话与 API 令牌、HTTPS、Electron 本地/远程双模式与运行中返回欢迎页
 > - **延续 1.5.2**：REST API v1（90+ 条端点，含鉴权 + OpenAPI 3.1）、MCP（HTTP / stdio，90 个业务工具）、手机全功能管理端
