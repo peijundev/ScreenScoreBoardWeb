@@ -295,7 +295,7 @@ test('手机管理端：全屏对话框与主要流程', { skip: skipReason }, a
   assert.equal(out.vector, true);
   assert.equal(out.settingsMobile, true);
   assert.equal(out.accountDialog, true, '账号与安全对话框可打开');
-  assert.deepEqual(out.accountTabs, ['用户管理', '会话', 'API 令牌', '修改密码']);
+  assert.deepEqual(out.accountTabs, ['访问控制', '用户管理', '会话', 'API 令牌', '修改密码']);
   assert.deepEqual(out.opTabs, ['预览', '人员', '团队', '更多'], '操作员没有主题标签');
   assert.equal(out.opHasAddForm, false, '操作员不能新增人员');
   assert.equal(out.opHasRemote, true, '操作员保留遥控记分');

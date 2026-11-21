@@ -4,6 +4,7 @@ import {
   createToken,
   createUser,
   deleteUser,
+  getAccessSettings,
   listSessions,
   listTokens,
   listUsers,
@@ -11,8 +12,10 @@ import {
   resetUserPassword,
   revokeSession,
   revokeToken,
+  updateAccessSettings,
   updateUser,
   useAuthStore,
+  type AccessSettings,
   type AuthUser,
   type Role,
   type SessionInfo,
@@ -22,7 +25,7 @@ import { toast } from '../../shared/ui';
 import DialogShell from './DialogShell';
 import { confirm, prompt } from './dialogs';
 
-type Tab = 'password' | 'sessions' | 'tokens' | 'users';
+type Tab = 'access' | 'password' | 'sessions' | 'tokens' | 'users';
 
 const roleLabel: Record<Role, string> = {
   admin: '管理员',
@@ -41,7 +44,10 @@ export default function AccountDialog({ onClose }: { onClose: () => void }): JSX
   const status = useAuthStore((s) => s.status);
   const me = status?.user ?? null;
   const isAdmin = me?.role === 'admin';
-  const [tab, setTab] = useState<Tab>(isAdmin ? 'users' : 'sessions');
+  const openAccess = status?.openAccess === true;
+  const [tab, setTab] = useState<Tab>(openAccess ? 'access' : isAdmin ? 'users' : 'sessions');
+  const [access, setAccess] = useState<AccessSettings | null>(null);
+  const [accessBusy, setAccessBusy] = useState(false);
   const [users, setUsers] = useState<AuthUser[]>([]);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [tokens, setTokens] = useState<TokenInfo[]>([]);
@@ -84,14 +90,53 @@ export default function AccountDialog({ onClose }: { onClose: () => void }): JSX
     }
   }, [selectedUserId]);
 
+  const loadAccess = useCallback(async (): Promise<void> => {
+    if (!isAdmin) return;
+    try {
+      setAccess(await getAccessSettings());
+    } catch (err) {
+      toast((err as Error).message);
+    }
+  }, [isAdmin]);
+
   useEffect(() => {
     void loadUsers();
   }, [loadUsers]);
 
   useEffect(() => {
+    if (openAccess && isAdmin) setTab('access');
+  }, [openAccess, isAdmin]);
+
+  useEffect(() => {
+    if (tab === 'access') void loadAccess();
     if (tab === 'sessions') void loadSessions();
     if (tab === 'tokens') void loadTokens();
-  }, [tab, loadSessions, loadTokens]);
+  }, [tab, loadAccess, loadSessions, loadTokens]);
+
+  async function setLoginRequired(requireLogin: boolean): Promise<void> {
+    if (!requireLogin) {
+      const ok = await confirm({
+        title: '关闭登录系统（开放模式）',
+        message: '关闭后任何能访问本服务的人都会自动获得管理员权限，可以修改分数、设置、用户与令牌。仅建议在可信局域网 / VPN 使用。确定关闭？',
+        confirmText: '仍然开放',
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    setAccessBusy(true);
+    try {
+      const next = await updateAccessSettings(requireLogin);
+      setAccess(next);
+      await useAuthStore.getState().refresh();
+      // WS 在切换登录模式时会重连；延迟再刷新一次，避免关闭连接的竞态覆盖状态
+      window.setTimeout(() => { void useAuthStore.getState().refresh(); }, 400);
+      toast(requireLogin ? '已启用登录系统' : '已关闭登录系统，当前完全开放');
+    } catch (err) {
+      toast((err as Error).message);
+    } finally {
+      setAccessBusy(false);
+    }
+  }
 
   async function savePassword(e: React.FormEvent): Promise<void> {
     e.preventDefault();
@@ -220,20 +265,65 @@ export default function AccountDialog({ onClose }: { onClose: () => void }): JSX
       <div className="account-dialog">
         <div className="account-tabs">
           {isAdmin && (
+            <button className={tab === 'access' ? 'active' : ''} type="button" onClick={() => setTab('access')}>
+              访问控制
+            </button>
+          )}
+          {isAdmin && (
             <button className={tab === 'users' ? 'active' : ''} type="button" onClick={() => setTab('users')}>
               用户管理
             </button>
           )}
-          <button className={tab === 'sessions' ? 'active' : ''} type="button" onClick={() => setTab('sessions')}>
-            会话
-          </button>
-          <button className={tab === 'tokens' ? 'active' : ''} type="button" onClick={() => setTab('tokens')}>
-            API 令牌
-          </button>
-          <button className={tab === 'password' ? 'active' : ''} type="button" onClick={() => setTab('password')}>
-            修改密码
-          </button>
+          {!openAccess && (
+            <button className={tab === 'sessions' ? 'active' : ''} type="button" onClick={() => setTab('sessions')}>
+              会话
+            </button>
+          )}
+          {!openAccess && (
+            <button className={tab === 'tokens' ? 'active' : ''} type="button" onClick={() => setTab('tokens')}>
+              API 令牌
+            </button>
+          )}
+          {!openAccess && (
+            <button className={tab === 'password' ? 'active' : ''} type="button" onClick={() => setTab('password')}>
+              修改密码
+            </button>
+          )}
         </div>
+
+        {tab === 'access' && isAdmin && (
+          <div className="account-panel">
+            <div className={'account-access-card' + (openAccess ? ' is-open' : '')}>
+              <h3>{openAccess ? '开放模式（无需登录）' : '登录系统已启用'}</h3>
+              <p className="hint">
+                {openAccess
+                  ? '当前任何能访问本服务的人都会自动获得管理员权限。适合可信局域网、临时活动或 VPN 内部署。'
+                  : '访问管理端、API 写操作与 MCP 需要登录；显示端仍然公开只读。'}
+              </p>
+              <div className="account-access-actions">
+                <button
+                  className={'btn ' + (openAccess ? 'primary' : 'danger')}
+                  type="button"
+                  disabled={accessBusy || (access?.activeAdmins ?? 1) === 0}
+                  onClick={() => { void setLoginRequired(openAccess); }}
+                >
+                  {openAccess ? '启用登录系统' : '关闭登录系统（完全开放）'}
+                </button>
+                <span className="hint">
+                  启用中的管理员：{access?.activeAdmins ?? '—'} 个
+                </span>
+              </div>
+            </div>
+            <p className="hint">
+              关闭登录系统前至少需要一个启用中的管理员；设置会写入 <code>auth.json</code> 并在重启后保留。
+              重新启用登录后，开放模式建立的 WebSocket 连接会立即要求重新认证。
+            </p>
+            <p className="hint">
+              安全提示：开放模式等同于把管理员权限交给所有访问者。公网部署请使用 HTTPS、
+              反向代理访问控制或防火墙限制来源；活动结束后及时重新启用登录。
+            </p>
+          </div>
+        )}
 
         {tab === 'users' && isAdmin && (
           <div className="account-panel">
@@ -293,7 +383,7 @@ export default function AccountDialog({ onClose }: { onClose: () => void }): JSX
                       <button
                         className="btn small"
                         type="button"
-                        disabled={self}
+                        disabled={self || lastAdmin}
                         onClick={() => { void toggleDisabled(user); }}
                       >
                         {user.disabled ? '启用' : '停用'}
@@ -331,7 +421,7 @@ export default function AccountDialog({ onClose }: { onClose: () => void }): JSX
           </div>
         )}
 
-        {tab === 'sessions' && (
+        {!openAccess && tab === 'sessions' && (
           <div className="account-panel">
             {isAdmin && (
               <div className="account-toolbar">
@@ -409,7 +499,7 @@ export default function AccountDialog({ onClose }: { onClose: () => void }): JSX
           </div>
         )}
 
-        {tab === 'tokens' && (
+        {!openAccess && tab === 'tokens' && (
           <div className="account-panel">
             <div className="account-toolbar">
               {isAdmin && (
@@ -501,7 +591,7 @@ export default function AccountDialog({ onClose }: { onClose: () => void }): JSX
           </div>
         )}
 
-        {tab === 'password' && (
+        {!openAccess && tab === 'password' && (
           <form className="account-panel account-password" onSubmit={(e) => { void savePassword(e); }}>
             <h3>修改我的密码</h3>
             <label className="auth-field">

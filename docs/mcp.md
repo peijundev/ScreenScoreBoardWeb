@@ -2,7 +2,7 @@
 
 计分板把全部 REST 管理能力暴露为 MCP 工具，供 Claude Desktop、Claude Code、自研 AI 客户端等直接操控项目、人员、分数、设置、主题与数据。
 
-> **安全提示：MCP 需要管理员身份。** HTTP MCP 接受管理员 Cookie（需 CSRF）或 `Authorization: Bearer` API 令牌；stdio 形态通过 `SCOREBOARD_TOKEN` 携带令牌。建议为自动化单独创建令牌，不要复用管理员密码。详见 [authentication.md](authentication.md)。
+> **安全提示：MCP 需要管理员身份。** HTTP MCP 接受管理员 Cookie（需 CSRF）或 `Authorization: Bearer` API 令牌；stdio 形态通过 `SCOREBOARD_TOKEN` 携带令牌。建议为自动化单独创建令牌，不要复用管理员密码。管理员关闭登录系统（开放模式）后 MCP 也不再需要鉴权，详见 [authentication.md](authentication.md)。
 
 - 协议版本：`2025-06-18`（手写 JSON-RPC 2.0 核心，不依赖官方 SDK 运行时）
 - 两种传输：**stdio**（本机进程）与 **HTTP**（`POST /mcp`）

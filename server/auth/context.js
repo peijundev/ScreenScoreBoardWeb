@@ -5,6 +5,7 @@ const { AsyncLocalStorage } = require('async_hooks');
 const als = new AsyncLocalStorage();
 
 const SYSTEM = Object.freeze({ kind: 'system', role: 'system' });
+const OPEN = Object.freeze({ kind: 'system', role: 'system', openAccess: true });
 const ANONYMOUS = Object.freeze({ kind: 'anonymous', role: 'anonymous' });
 
 function runAs(actor, fn) {
@@ -16,4 +17,4 @@ function currentActor() {
   return store ? store.actor : null;
 }
 
-module.exports = { SYSTEM, ANONYMOUS, runAs, currentActor };
+module.exports = { SYSTEM, OPEN, ANONYMOUS, runAs, currentActor };

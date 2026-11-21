@@ -21,6 +21,8 @@ const routes = [
   authRoute('POST', '/auth/logout', 'public', '退出登录', handlers.logout),
 
   authRoute('GET', '/auth/me', 'viewer', '当前用户', handlers.me),
+  authRoute('GET', '/auth/access', 'admin', '读取登录与访问控制设置', handlers.getAccess),
+  authRoute('PATCH', '/auth/access', 'admin', '启用/关闭登录系统', handlers.updateAccess),
   authRoute('POST', '/auth/password', 'viewer', '修改自己的密码', handlers.changePassword),
   authRoute('GET', '/auth/sessions', 'viewer', '自己的会话', handlers.listSessions),
   authRoute('DELETE', '/auth/sessions/:id', 'viewer', '吊销会话', handlers.revokeSession),

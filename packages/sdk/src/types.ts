@@ -262,10 +262,18 @@ export interface User {
 
 export interface AuthStatus {
   authEnabled: boolean;
+  openAccess?: boolean;
+  requireLogin?: boolean;
   setupRequired: boolean;
   setupAllowed: boolean;
   authenticated: boolean;
   user: User | null;
+}
+
+export interface AccessSettings {
+  requireLogin: boolean;
+  openAccess: boolean;
+  activeAdmins: number;
 }
 
 export interface AuthSession {

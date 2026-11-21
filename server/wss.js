@@ -30,9 +30,23 @@ function attachWSS(server, opts = {}) {
 
   // 会话/令牌/用户被吊销时，主动关闭对应连接
   authStore.setRevocationListener((payload) => {
+    if (payload.accessMode === 'open') {
+      // 关闭登录系统后让所有连接立即按开放模式重连（display 也会短暂重连）
+      for (const client of wss.clients) {
+        try { client.close(1000, 'access mode changed'); } catch (_) {}
+      }
+      return;
+    }
     for (const client of wss.clients) {
       const auth = /** @type {any} */ (client).auth;
       if (!auth) continue;
+      if (payload.accessMode === 'login') {
+        // 重新启用登录后，开放模式建立的 system 连接必须重新认证
+        if (auth.kind === 'system') {
+          try { client.close(4401, 'login required'); } catch (_) {}
+        }
+        continue;
+      }
       let match = false;
       if (payload.sessionId) match = auth.sessionId === payload.sessionId;
       else if (payload.tokenId) match = auth.tokenId === payload.tokenId;

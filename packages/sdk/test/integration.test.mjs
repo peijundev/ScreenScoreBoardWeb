@@ -103,6 +103,24 @@ test('SDK 对真实服务端：登录、记分、突显、令牌与 MCP', { skip
   const csv = await client.data.exportScoresCsv(projectId, 'people');
   assert.match(csv, /AI 选手/);
 
+  const accessBefore = await client.auth.getAccess();
+  assert.equal(accessBefore.requireLogin, true);
+  assert.equal(accessBefore.openAccess, false);
+  const opened = await client.auth.updateAccess(false);
+  assert.equal(opened.openAccess, true);
+  assert.equal(opened.requireLogin, false);
+
+  // 开放模式下，没有 Cookie / 令牌的新客户端也会获得管理员权限
+  const anonymous = new ScreenScoreBoardClient({ baseUrl: BASE });
+  const openStatus = await anonymous.auth.status();
+  assert.equal(openStatus.openAccess, true);
+  assert.equal(openStatus.authenticated, true);
+  const openUsers = await anonymous.auth.users.list();
+  assert.ok(openUsers.length >= 1);
+
+  await anonymous.auth.updateAccess(true);
+  assert.equal((await client.auth.getAccess()).requireLogin, true);
+
   const token = await client.auth.tokens.create({ name: 'sdk-ai' });
   assert.match(token.token || '', /^ssb_/);
 

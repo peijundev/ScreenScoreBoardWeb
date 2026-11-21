@@ -73,5 +73,14 @@ export default function AuthGate({ children }: { children: ReactNode }): JSX.Ele
     return <LoginPage authLost={authLost} />;
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      {status.openAccess && (
+        <div className="open-access-banner" role="status">
+          开放模式：未启用登录，任何能访问本服务的人都拥有管理员权限
+        </div>
+      )}
+      {children}
+    </>
+  );
 }

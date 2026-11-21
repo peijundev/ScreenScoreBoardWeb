@@ -12,6 +12,7 @@ interface Props {
   connected: boolean;
   user: AuthUser | null;
   authEnabled: boolean;
+  openAccess?: boolean;
   isAdmin: boolean;
   canScore: boolean;
   onSelectProject: (id: string) => void;
@@ -41,6 +42,7 @@ export default function Toolbar({
   connected,
   user,
   authEnabled,
+  openAccess = false,
   isAdmin,
   canScore,
   onSelectProject,
@@ -197,18 +199,25 @@ export default function Toolbar({
       )}
       {authEnabled && user && (
         <>
-          <button className="btn small" type="button" onClick={onOpenAccount} title="账号与安全">
-            {user.username} · {roleLabel[user.role] || user.role}
-          </button>
           <button
             className="btn small"
             type="button"
-            onClick={() => {
-              void logout().catch((err: Error) => toast(err.message));
-            }}
+            onClick={onOpenAccount}
+            title={openAccess ? '开放模式：未启用登录，点击管理访问控制' : '账号与安全'}
           >
-            退出
+            {openAccess ? '开放模式 · 管理员' : user.username + ' · ' + (roleLabel[user.role] || user.role)}
           </button>
+          {!openAccess && (
+            <button
+              className="btn small"
+              type="button"
+              onClick={() => {
+                void logout().catch((err: Error) => toast(err.message));
+              }}
+            >
+              退出
+            </button>
+          )}
         </>
       )}
       {!authEnabled && <span className="hint">本机模式</span>}

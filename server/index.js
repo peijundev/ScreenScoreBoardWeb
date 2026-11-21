@@ -529,6 +529,9 @@ async function start(options = {}) {
   if (authEnabled && authStore.isSetupRequired()) {
     logger.warn('管理员尚未初始化：请在本机打开管理端完成设置，或设置 ADMIN_PASSWORD / ADMIN_PASSWORD_FILE');
   }
+  if (authEnabled && authStore.isOpenAccess()) {
+    logger.warn('登录系统已关闭（开放模式）：所有访问者都会获得管理员权限，请仅在可信网络使用');
+  }
 
   // 优雅退出：先断开 WS、停止接受 HTTP 连接，再由 state 层落盘
   onShutdown(async () => {
@@ -564,6 +567,8 @@ async function start(options = {}) {
   console.log(`  管理端  ${SERVER_PROTOCOL}://localhost:${actualPort}/admin`);
   if (!authEnabled) {
     console.log('  鉴权    已关闭（仅限 loopback 本机模式）');
+  } else if (authStore.isOpenAccess()) {
+    console.log('  鉴权    开放模式（无需登录，所有访问者拥有管理员权限）');
   }
   if (!REACT_BUILT) {
     console.log('  ※ 未检测到 React 构建产物，请先执行 npm run build:web');

@@ -12,6 +12,7 @@ const {
 } = require('./policy');
 const {
   SYSTEM,
+  OPEN,
   ANONYMOUS,
 } = require('./context');
 const {
@@ -29,6 +30,13 @@ const CSRF_EXEMPT = new Set([
   '/api/v1/auth/setup',
   '/api/v1/auth/logout',
 ]);
+const OPEN_USER = Object.freeze({
+  id: 'open',
+  username: 'open',
+  displayName: '开放模式',
+  role: 'admin',
+  disabled: false,
+});
 
 function bearerToken(req) {
   const header = req.headers && req.headers.authorization;
@@ -40,6 +48,11 @@ function bearerToken(req) {
 function resolveRequest(req) {
   if (!store.isEnabled()) {
     req.auth = SYSTEM;
+    return req.auth;
+  }
+  if (store.isOpenAccess()) {
+    req.auth = OPEN;
+    req.__authResolved = true;
     return req.auth;
   }
   if (req.__authResolved) return req.auth;
@@ -172,6 +185,8 @@ function authStatus(req) {
   if (!store.isEnabled()) {
     return {
       authEnabled: false,
+      openAccess: false,
+      requireLogin: false,
       setupRequired: false,
       setupAllowed: false,
       authenticated: true,
@@ -183,9 +198,22 @@ function authStatus(req) {
       },
     };
   }
+  if (store.isOpenAccess()) {
+    return {
+      authEnabled: true,
+      openAccess: true,
+      requireLogin: false,
+      setupRequired: false,
+      setupAllowed: false,
+      authenticated: true,
+      user: OPEN_USER,
+    };
+  }
   if (store.isSetupRequired()) {
     return {
       authEnabled: true,
+      openAccess: false,
+      requireLogin: true,
       setupRequired: true,
       setupAllowed: store.setupAllowedFor(req),
       authenticated: false,
@@ -198,6 +226,8 @@ function authStatus(req) {
     if (user) {
       return {
         authEnabled: true,
+        openAccess: false,
+        requireLogin: true,
         setupRequired: false,
         setupAllowed: false,
         authenticated: true,
@@ -207,6 +237,8 @@ function authStatus(req) {
   }
   return {
     authEnabled: true,
+    openAccess: false,
+    requireLogin: true,
     setupRequired: false,
     setupAllowed: false,
     authenticated: false,
@@ -247,6 +279,8 @@ function requireLogin(ctx) {
 function requireAdmin(ctx) {
   const auth = requireLogin(ctx);
   if (auth.kind === 'system') {
+    // 部署模式的「完全开放」按管理员处理；Electron 本机模式仍禁止用户管理
+    if (store.isOpenAccess()) return auth;
     throw new ApiConflictError('本机模式未启用鉴权');
   }
   if (auth.role !== 'admin') throw new ForbiddenError('需要管理员权限');
@@ -255,7 +289,13 @@ function requireAdmin(ctx) {
 
 function targetUserId(ctx, requested) {
   const auth = requireLogin(ctx);
-  if (auth.kind === 'system') return requested || '';
+  if (auth.kind === 'system') {
+    if (!store.isOpenAccess()) return requested || '';
+    const fallback = store.firstActiveAdminId();
+    const wanted = requested == null || requested === '' ? fallback : String(requested);
+    if (!wanted) throw new NotFoundError('没有可用的管理员账号');
+    return wanted;
+  }
   const wanted = requested == null || requested === '' ? auth.userId : String(requested);
   if (wanted !== auth.userId && auth.role !== 'admin') {
     throw new ForbiddenError('没有权限操作其他用户');
@@ -355,15 +395,61 @@ async function logout(ctx) {
 
 async function me(ctx) {
   const auth = requireLogin(ctx);
+  if (store.isOpenAccess()) {
+    noStore(ctx.res);
+    return { data: { user: OPEN_USER, authEnabled: true, openAccess: true, requireLogin: false } };
+  }
   const user = auth.kind === 'system' ? null : store.findUserById(auth.userId);
   ensureCsrfCookie(ctx.req, ctx.res);
   noStore(ctx.res);
-  return { data: { user: store.publicUser(user), authEnabled: store.isEnabled() } };
+  return {
+    data: {
+      user: store.publicUser(user),
+      authEnabled: store.isEnabled(),
+      openAccess: false,
+      requireLogin: store.isLoginRequired(),
+    },
+  };
+}
+
+async function getAccess(ctx) {
+  requireAdmin(ctx);
+  noStore(ctx.res);
+  return { data: store.getAccessSettings() };
+}
+
+async function updateAccess(ctx) {
+  requireAdmin(ctx);
+  const value = ctx.body.requireLogin;
+  if (typeof value !== 'boolean') {
+    throw new ApiUnprocessableError('requireLogin 必须是布尔值');
+  }
+  if (store.countActiveAdmins() === 0) {
+    throw new ApiConflictError('至少需要一个启用中的管理员才能切换登录模式');
+  }
+  let result;
+  try {
+    result = store.setRequireLogin(value);
+  } catch (error) {
+    if (error && error.message === '至少需要一个启用中的管理员') {
+      throw new ApiConflictError(error.message);
+    }
+    throw error;
+  }
+  log.warn(value ? '已启用登录系统' : '已关闭登录系统（开放模式）', {
+    openAccess: result.openAccess,
+  });
+  noStore(ctx.res);
+  return { data: result };
 }
 
 async function changePassword(ctx) {
   const auth = requireLogin(ctx);
-  if (auth.kind === 'system') throw new ApiConflictError('本机模式未启用鉴权');
+  if (auth.kind === 'system') {
+    throw new ApiConflictError(
+      store.isOpenAccess() ? '开放模式下没有可修改的登录密码' : '本机模式未启用鉴权',
+    );
+  }
   const currentPassword = String(ctx.body.currentPassword || '');
   const newPassword = String(ctx.body.newPassword || '');
   const user = store.findUserById(auth.userId);
@@ -550,6 +636,8 @@ module.exports = {
     login,
     logout,
     me,
+    getAccess,
+    updateAccess,
     changePassword,
     listSessions,
     revokeSession,

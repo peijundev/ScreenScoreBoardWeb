@@ -1,6 +1,7 @@
 import type { HttpClient } from '../http.js';
 import { enc } from '../path.js';
 import type {
+  AccessSettings,
   ApiToken,
   AuthSession,
   AuthStatus,
@@ -168,6 +169,20 @@ export class AuthApi {
 
   me(): Promise<MeResult> {
     return this.http.request<MeResult>('GET', '/auth/me');
+  }
+
+  getAccess(): Promise<AccessSettings> {
+    return this.http.request<AccessSettings>('GET', '/auth/access');
+  }
+
+  /**
+   * 启用/关闭登录系统。`requireLogin: false` 会让所有访问者获得管理员权限。
+   * 至少需要一个启用中的管理员。
+   */
+  updateAccess(requireLogin: boolean): Promise<AccessSettings> {
+    return this.http.request<AccessSettings>('PATCH', '/auth/access', {
+      body: { requireLogin },
+    });
   }
 
   changePassword(currentPassword: string, newPassword: string): Promise<{ ok: boolean }> {

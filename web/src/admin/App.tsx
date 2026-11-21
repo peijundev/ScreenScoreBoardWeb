@@ -24,6 +24,7 @@ export default function App(): JSX.Element {
   const authStatus = useAuthStore((s) => s.status);
   const user = authStatus?.user ?? null;
   const authEnabled = authStatus?.authEnabled !== false;
+  const openAccess = authStatus?.openAccess === true;
   const role = user?.role ?? 'viewer';
   const isAdmin = role === 'admin';
   const canScore = role === 'admin' || role === 'operator';
@@ -62,6 +63,7 @@ export default function App(): JSX.Element {
           connected={connected}
           user={user}
           authEnabled={authEnabled}
+          openAccess={openAccess}
           isAdmin={isAdmin}
           canScore={canScore}
           onSelectProject={setProjectId}
@@ -85,6 +87,7 @@ export default function App(): JSX.Element {
             connected={connected}
             user={user}
             authEnabled={authEnabled}
+            openAccess={openAccess}
             isAdmin={isAdmin}
             canScore={canScore}
             tab={mobileTab}

@@ -13,6 +13,34 @@
 
 显示端 `?edit=1` 的布局编辑需要管理员登录；普通投屏（不带 `edit=1`）不受影响。匿名 WS 快照包含全部项目数据，这是公开显示端的既有语义。
 
+## 开放访问（不使用登录系统）
+
+部署模式下，管理员可以在管理端 **账号与安全 → 访问控制** 中关闭登录系统。关闭后：
+
+- `/admin`、REST API、WebSocket 写操作与 MCP 都**不再需要登录**，所有访问者自动获得管理员权限。
+- 显示端行为不变，仍然公开只读。
+- `/api/v1/auth/status` 返回 `authEnabled: true, openAccess: true, requireLogin: false`，用户为虚拟的「开放模式」管理员。
+- 设置写入 `DATA_DIR/auth.json` 的 `settings.requireLogin`，重启后保留。
+
+安全边界：
+
+- **任何能访问端口的人都能改分数、设置、用户和令牌。** 仅建议用于可信局域网、临时活动或 VPN 内部署。
+- 公网部署请使用 HTTPS、反向代理访问控制或防火墙限制来源。
+- 必须先有至少一个启用中的管理员，服务端才允许关闭登录；避免重新启用后无人可登录。
+- 重新启用登录后，开放模式建立的 WebSocket 连接会立即关闭（4401），需要重新认证；已有会话 Cookie 仍然有效。
+- 开放模式下任何访问者都可以重新启用登录（因为都按管理员处理），这是该模式的固有语义。
+
+API：
+
+```bash
+curl -H "Authorization: Bearer ssb_xxx" http://127.0.0.1:3000/api/v1/auth/access
+
+curl -X PATCH http://127.0.0.1:3000/api/v1/auth/access \
+  -H "Authorization: Bearer ssb_xxx" \
+  -H 'Content-Type: application/json' \
+  -d '{"requireLogin": false}'
+```
+
 ## 首次初始化
 
 两种方式任选其一：

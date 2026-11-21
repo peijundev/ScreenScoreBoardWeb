@@ -27,6 +27,7 @@ const SESSIONS_FILE = path.join(DATA_DIR, 'sessions.json');
 const USERNAME_RE = /^[\p{L}\p{N}_.-]{3,32}$/u;
 
 let enabled = false;
+let requireLogin = true;
 let users = new Map();
 let usersByName = new Map();
 let tokens = new Map();
@@ -157,6 +158,7 @@ function loadAuthFile() {
   usersByName = new Map();
   tokens = new Map();
   tokensByHash = new Map();
+  requireLogin = true;
   if (!fs.existsSync(AUTH_FILE)) return;
   let data;
   try {
@@ -192,11 +194,20 @@ function loadAuthFile() {
     tokens.set(record.id, record);
     tokensByHash.set(record.tokenHash, record);
   }
+  if (data.settings && typeof data.settings === 'object' && data.settings.requireLogin === false) {
+    requireLogin = false;
+  }
+  // 开放模式必须有可用的管理员，否则重新启用登录后会无人可登录
+  if (!requireLogin && countActiveAdmins() === 0) {
+    requireLogin = true;
+    log.warn('auth.json 中的开放模式没有启用中的管理员，已强制要求登录');
+  }
 }
 
 function saveAuthFile() {
   const data = {
     version: 1,
+    settings: { requireLogin },
     users: [...users.values()],
     tokens: [...tokens.values()],
   };
@@ -303,6 +314,48 @@ function countActiveAdmins() {
 
 function isEnabled() {
   return enabled;
+}
+
+function isLoginRequired() {
+  return requireLogin;
+}
+
+/** 部署模式下的「完全开放」：不要求登录，所有请求按管理员处理。 */
+function isOpenAccess() {
+  return enabled && !requireLogin;
+}
+
+function firstActiveAdminId() {
+  for (const user of users.values()) {
+    if (user.role === 'admin' && !user.disabled) return user.id;
+  }
+  return null;
+}
+
+function getAccessSettings() {
+  return {
+    requireLogin,
+    openAccess: isOpenAccess(),
+    activeAdmins: countActiveAdmins(),
+  };
+}
+
+function setRequireLogin(value) {
+  if (!enabled) throw new Error('鉴权未启用');
+  if (typeof value !== 'boolean') throw new Error('requireLogin 必须是布尔值');
+  if (countActiveAdmins() === 0) throw new Error('至少需要一个启用中的管理员');
+  if (requireLogin === value) return getAccessSettings();
+  const previous = requireLogin;
+  requireLogin = value;
+  try {
+    saveAuthFile();
+  } catch (error) {
+    requireLogin = previous;
+    throw error;
+  }
+  // 切回登录模式时，开放模式下建立的 system WS 连接必须立即失效
+  notifyRevoke({ accessMode: value ? 'login' : 'open' });
+  return getAccessSettings();
 }
 
 function isSetupRequired() {
@@ -756,6 +809,11 @@ module.exports = {
   init,
   flush,
   isEnabled,
+  isLoginRequired,
+  isOpenAccess,
+  firstActiveAdminId,
+  getAccessSettings,
+  setRequireLogin,
   isSetupRequired,
   setupAllowedFor,
   countActiveAdmins,

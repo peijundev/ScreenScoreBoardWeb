@@ -358,6 +358,8 @@ test('鉴权系统：登录、角色、CSRF、会话、MCP 与本地模式', asy
   const sessionsFile = path.join(dataDir, 'sessions.json');
   assert.equal(statSync(authFile).mode & 0o777, 0o600, 'auth.json 权限 0600');
   assert.equal(statSync(sessionsFile).mode & 0o777, 0o600, 'sessions.json 权限 0600');
+  const authJson = JSON.parse(readFileSync(authFile, 'utf8'));
+  assert.equal(authJson.settings.requireLogin, true, 'auth.json 持久化登录模式开关');
   assert.ok(!readFileSync(authFile, 'utf8').includes(ADMIN_PASSWORD), 'auth.json 无明文密码');
   const stateFile = readFileSync(path.join(dataDir, 'state.json'), 'utf8');
   assert.ok(!/"users"|"tokens"|"passwordHash"/.test(stateFile), 'state.json 不含鉴权数据');
@@ -372,6 +374,61 @@ test('鉴权系统：登录、角色、CSRF、会话、MCP 与本地模式', asy
   assert.equal(legacyMinRole('GET', '/api/themes/th_1'), 'public');
   assert.equal(legacyMinRole('POST', '/api/avatar'), 'admin');
   assert.equal(legacyMinRole('GET', '/api/not-real'), 'admin');
+
+  // 部署模式开放访问：管理员可在运行时关闭/启用登录系统
+  console.log('访问控制（开放模式）:');
+  const accessBefore = await api(BASE, admin, '/auth/access');
+  assert.equal(accessBefore.status, 200);
+  assert.equal(accessBefore.json.data.requireLogin, true);
+  assert.equal(accessBefore.json.data.openAccess, false);
+  assert.ok(accessBefore.json.data.activeAdmins >= 1);
+
+  const openRes = await api(BASE, admin, '/auth/access', {
+    method: 'PATCH', body: JSON.stringify({ requireLogin: false }),
+  });
+  assert.equal(openRes.status, 200);
+  assert.equal(openRes.json.data.openAccess, true);
+
+  const openStatus = await fetch(BASE + '/api/v1/auth/status').then((r) => r.json());
+  assert.equal(openStatus.data.openAccess, true);
+  assert.equal(openStatus.data.authenticated, true);
+  assert.equal(openStatus.data.requireLogin, false);
+  assert.equal(openStatus.data.user.role, 'admin');
+
+  const anonAccess = await fetch(BASE + '/api/v1/auth/access');
+  assert.equal(anonAccess.status, 200, '开放模式下无需登录即可读取访问控制');
+  const anonCreate = await fetch(BASE + '/api/v1/projects', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: '开放模式项目' }),
+  });
+  assert.equal(anonCreate.status, 201, '开放模式下匿名请求获得管理员权限');
+
+  const openWs = wsClient(BASE);
+  await openWs.ready;
+  await openWs.waitState((m) => m.data.projects[projectId]);
+  assert.ok(
+    await openWs.op('updateSettings', { projectId, patch: { title: '开放模式' } }),
+    '开放模式下匿名 WS 可写',
+  );
+
+  const closeRes = await api(BASE, null, '/auth/access', {
+    method: 'PATCH', body: JSON.stringify({ requireLogin: true }),
+  });
+  assert.equal(closeRes.status, 200, '开放模式下匿名请求可重新启用登录');
+  assert.equal(closeRes.json.data.requireLogin, true);
+  assert.equal(await openWs.closed, 4401, '重新启用登录后 system WS 被关闭');
+
+  const anonAfter = await fetch(BASE + '/api/v1/projects', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: '匿名拒绝' }),
+  });
+  assert.equal(anonAfter.status, 401, '重新启用登录后匿名写被拒绝');
+  const adminMe = await fetch(BASE + '/api/v1/auth/me', {
+    headers: { Cookie: admin.cookie },
+  });
+  assert.equal(adminMe.status, 200, '原有管理员会话在重新启用登录后仍有效');
 
   // 首次初始化
   const setupStatus = await fetch('http://127.0.0.1:3471/api/v1/auth/status').then((r) => r.json());
@@ -462,11 +519,23 @@ test('鉴权系统：登录、角色、CSRF、会话、MCP 与本地模式', asy
   viewWs.ws.close();
   opWs.ws.close();
 
-  // 会话在服务重启后仍有效（sessions.json 持久化）
+  // 开放模式 + 会话在服务重启后仍有效
+  const openBeforeRestart = await api(BASE, admin, '/auth/access', {
+    method: 'PATCH', body: JSON.stringify({ requireLogin: false }),
+  });
+  assert.equal(openBeforeRestart.status, 200);
   await stopProcess(server);
   const restarted = startServer({ dataDir });
   try {
     await waitHealth(BASE);
+    const restartedStatus = await fetch(BASE + '/api/v1/auth/status').then((r) => r.json());
+    assert.equal(restartedStatus.data.openAccess, true, '开放模式在重启后保留');
+    const reopen = await fetch(BASE + '/api/v1/auth/access', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requireLogin: true }),
+    });
+    assert.equal(reopen.status, 200, '重启后开放模式仍可重新启用登录');
     const persisted = await fetch(BASE + '/api/v1/auth/me', {
       headers: { Cookie: admin.cookie },
     });

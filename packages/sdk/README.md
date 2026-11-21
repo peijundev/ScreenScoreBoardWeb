@@ -105,6 +105,23 @@ client.setSession({ cookie, csrfToken });
 
 `auth.users.*`、为其他用户创建/吊销令牌等管理操作需要管理员；`auth.tokens.*` 与 `auth.sessions.*` 默认操作自己的账号。
 
+### 访问控制（部署模式）
+
+管理员可以在运行时决定是否使用登录系统：
+
+```ts
+const access = await client.auth.getAccess();
+console.log(access.requireLogin, access.openAccess, access.activeAdmins);
+
+// 完全开放：所有访问者获得管理员权限（建议只在可信局域网/VPN）
+await client.auth.updateAccess(false);
+
+// 重新启用登录
+await client.auth.updateAccess(true);
+```
+
+> 关闭登录系统等同于把管理员权限交给所有访问者。服务端要求至少保留一个启用中的管理员，并会把设置持久化到 `auth.json`。
+
 ### 4. 浏览器
 
 ```ts

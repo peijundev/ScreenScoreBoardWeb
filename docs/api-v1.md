@@ -78,6 +78,8 @@ curl -X PATCH http://localhost:3000/api/v1/themes/th_x/layers \
 | POST | `/auth/login` | 公开 | `{ username, password, remember }` |
 | POST | `/auth/logout` | 公开 | 吊销当前会话并清 Cookie |
 | GET | `/auth/me` | 登录 | 当前用户 |
+| GET | `/auth/access` | admin | 读取登录/开放访问设置 |
+| PATCH | `/auth/access` | admin | 启用或关闭登录系统，body `{ "requireLogin": false }` |
 | POST | `/auth/password` | 登录 | 修改自己的密码 |
 | GET | `/auth/sessions` | 登录 | 自己的会话；admin 可 `?userId=` |
 | DELETE | `/auth/sessions/:id` | 登录 | 吊销会话 |
@@ -94,6 +96,7 @@ curl -X PATCH http://localhost:3000/api/v1/themes/th_x/layers \
 
 - 会话 Cookie：`ssb_session`，HttpOnly、`SameSite=Lax`、`Path=/`；CSRF Cookie：`ssb_csrf`（JS 可读）。
 - 非 GET 的 Cookie 请求需要 `X-CSRF-Token`；`Authorization: Bearer ssb_...` 豁免。
+- 管理员可在「访问控制」中设置 `requireLogin: false`（开放模式）。此时所有请求按管理员处理，无需登录；响应中的 `openAccess` 为 `true`。该模式会持久化到 `auth.json`，并要求至少保留一个启用中的管理员。
 - 公开读：`/health`、`/version`、`/state`、`/themes/:themeId`。
 - 其余 GET 至少需要 `viewer`；写操作默认需要 `admin`；记分相关写接口与手动突显接口允许 `operator`。
 - `/mcp` 仅管理员。

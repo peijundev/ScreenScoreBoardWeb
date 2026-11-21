@@ -15,10 +15,18 @@ export interface AuthUser {
 
 export interface AuthStatus {
   authEnabled: boolean;
+  openAccess?: boolean;
+  requireLogin?: boolean;
   setupRequired: boolean;
   setupAllowed: boolean;
   authenticated: boolean;
   user: AuthUser | null;
+}
+
+export interface AccessSettings {
+  requireLogin: boolean;
+  openAccess: boolean;
+  activeAdmins: number;
 }
 
 export interface SessionInfo {
@@ -144,6 +152,16 @@ export async function setup(username: string, password: string): Promise<AuthUse
 
 export async function logout(): Promise<void> {
   await authFetch('/api/v1/auth/logout', { method: 'POST' });
+}
+
+export async function getAccessSettings(): Promise<AccessSettings> {
+  const res = await authFetch('/api/v1/auth/access');
+  return parseEnvelope<AccessSettings>(res);
+}
+
+export async function updateAccessSettings(requireLogin: boolean): Promise<AccessSettings> {
+  const res = await authFetch('/api/v1/auth/access', jsonInit('PATCH', { requireLogin }));
+  return parseEnvelope<AccessSettings>(res);
 }
 
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {

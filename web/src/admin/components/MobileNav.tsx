@@ -27,6 +27,7 @@ interface Props {
   connected: boolean;
   user: AuthUser | null;
   authEnabled: boolean;
+  openAccess?: boolean;
   isAdmin: boolean;
   canScore: boolean;
   tab: MobileTab;
@@ -46,6 +47,7 @@ export default function MobileNav({
   connected,
   user,
   authEnabled,
+  openAccess = false,
   isAdmin,
   canScore,
   tab,
@@ -214,17 +216,24 @@ export default function MobileNav({
               <>
                 <h2>账号</h2>
                 <button className="btn mobile-wide" type="button" onClick={onOpenAccount}>
-                  {user.username} · {roleLabel[user.role] || user.role}
+                  {openAccess
+                    ? '开放模式 · 管理员'
+                    : user.username + ' · ' + (roleLabel[user.role] || user.role)}
                 </button>
-                <button
-                  className="btn mobile-wide danger"
-                  type="button"
-                  onClick={() => {
-                    void logout().catch((err: Error) => toast(err.message));
-                  }}
-                >
-                  退出登录
-                </button>
+                {!openAccess && (
+                  <button
+                    className="btn mobile-wide danger"
+                    type="button"
+                    onClick={() => {
+                      void logout().catch((err: Error) => toast(err.message));
+                    }}
+                  >
+                    退出登录
+                  </button>
+                )}
+                {openAccess && (
+                  <p className="hint">未启用登录：任何访问者都拥有管理员权限</p>
+                )}
               </>
             )}
             {!authEnabled && <p className="hint">本机模式（未启用鉴权）</p>}
