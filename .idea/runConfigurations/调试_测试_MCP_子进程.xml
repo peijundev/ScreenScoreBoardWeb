@@ -1,0 +1,9 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="调试 · 测试 MCP（含子进程）" type="NodeJSConfigurationType" nameIsGenerated="false" path-to-js-file="scripts/mcp.test.mjs" working-dir="$PROJECT_DIR$">
+    <node-interpreter value="project" />
+    <envs>
+      <env name="NODE_OPTIONS" value="--inspect=9333" />
+    </envs>
+    <method v="2" />
+  </configuration>
+</component>

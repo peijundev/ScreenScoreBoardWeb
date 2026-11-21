@@ -50,13 +50,13 @@
     "test:api": "node --test scripts/api-v1.test.mjs",
     "test:mcp": "node --test scripts/mcp.test.mjs",
     "test:mobile": "node --test scripts/mobile-ui.test.mjs",
-    "test:auth": "node --test scripts/auth.test.mjs scripts/electron-mode.test.mjs",
+    "test:auth": "node --test scripts/auth.test.mjs scripts/electron-mode.test.mjs scripts/electron-zoom.test.mjs",
     "sdk:build": "npm --prefix packages/sdk run build",
     "sdk:test": "npm --prefix packages/sdk test",
     "sdk:pack": "npm pack ./packages/sdk --dry-run",
     "auth:reset": "node bin/screenscoreboard-auth.js",
     "mcp:stdio": "node bin/screenscoreboard-mcp.js",
-    "test:all": "node --test scripts/theme-schema.test.mjs scripts/theme-script.test.mjs scripts/api-v1.test.mjs scripts/mcp.test.mjs scripts/mobile-ui.test.mjs scripts/auth.test.mjs scripts/electron-mode.test.mjs"
+    "test:all": "node --test scripts/theme-schema.test.mjs scripts/theme-script.test.mjs scripts/api-v1.test.mjs scripts/mcp.test.mjs scripts/mobile-ui.test.mjs scripts/auth.test.mjs scripts/electron-mode.test.mjs scripts/electron-zoom.test.mjs"
   },
   "engines": {
     "node": ">=24"

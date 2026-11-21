@@ -1,0 +1,14 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="构建 · 前端（SourceMap）" type="js.build_tools.npm" nameIsGenerated="false">
+    <package-json value="$PROJECT_DIR$/package.json" />
+    <command value="run" />
+    <scripts>
+      <script value="build:web" />
+    </scripts>
+    <node-interpreter value="project" />
+    <envs>
+      <env name="VITE_SOURCEMAP" value="1" />
+    </envs>
+    <method v="2" />
+  </configuration>
+</component>

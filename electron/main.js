@@ -4,6 +4,7 @@ const { app, BrowserWindow, Menu, shell, dialog, session, ipcMain } = require('e
 const path = require('path');
 const fs = require('fs');
 const modeUtils = require('./mode');
+const { nextZoom, zoomCommand } = require('./zoom');
 
 const APP_NAME = 'ScreenScoreBoard';
 
@@ -83,6 +84,33 @@ function isDisplayLink(raw) {
   }
 }
 
+/**
+ * 浏览器式页面缩放：Ctrl/Cmd + 滚轮、+、-、0。
+ * 使用 manual 模式由应用自己处理，避免 Chromium 再叠加一次；比例只存在于当前窗口，不落盘。
+ */
+function attachZoom(win) {
+  const wc = win.webContents;
+  wc.setZoomMode('manual');
+  wc.setZoomFactor(1);
+  const apply = (command) => {
+    wc.setZoomFactor(nextZoom(wc.getZoomFactor(), command));
+  };
+  // Ctrl/Cmd + 滚轮由 preload 发 IPC（Electron 的 zoom-changed 不覆盖真实滚轮）
+  wc.on('before-input-event', (event, input) => {
+    const command = zoomCommand(input);
+    if (!command) return;
+    event.preventDefault();
+    apply(command);
+  });
+}
+
+function zoomWindow(win, command) {
+  const target = win && !win.isDestroyed() ? win : BrowserWindow.getFocusedWindow();
+  if (!target || target.isDestroyed()) return;
+  const wc = target.webContents;
+  wc.setZoomFactor(nextZoom(wc.getZoomFactor(), command));
+}
+
 function createAdminWindow(projectId) {
   const win = new BrowserWindow({
     width: 1280,
@@ -99,6 +127,7 @@ function createAdminWindow(projectId) {
       sandbox: true,
     },
   });
+  attachZoom(win);
   win.loadURL(adminURL(projectId));
   // 管理端里的「打开显示端」链接（target=_blank）改为开独立显示端窗口
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -128,8 +157,10 @@ function openDisplayWindow(projectId) {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      preload: path.join(__dirname, 'display-preload.js'),
     },
   });
+  attachZoom(win);
   win.loadURL(displayURL(projectId));
   displayWindows.add(win);
   win.on('closed', () => displayWindows.delete(win));
@@ -325,6 +356,11 @@ async function startLocalMode() {
 }
 
 function registerLauncherHandlers() {
+  ipcMain.on('ssb:zoom', (event, command) => {
+    if (command !== 'in' && command !== 'out') return;
+    zoomWindow(BrowserWindow.fromWebContents(event.sender), command);
+  });
+
   ipcMain.handle('ssb:launcher:get', () => ({
     mode,
     remoteUrl,
@@ -456,9 +492,9 @@ function buildMenu() {
           },
         },
         { type: 'separator' },
-        { label: '实际大小', role: 'resetZoom' },
-        { label: '放大', role: 'zoomIn' },
-        { label: '缩小', role: 'zoomOut' },
+        { label: '实际大小', click: (_mi, win) => zoomWindow(win, 'reset') },
+        { label: '放大', click: (_mi, win) => zoomWindow(win, 'in') },
+        { label: '缩小', click: (_mi, win) => zoomWindow(win, 'out') },
       ],
     },
     {

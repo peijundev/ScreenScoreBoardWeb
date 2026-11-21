@@ -4,6 +4,7 @@
     <envs>
       <env name="PORT" value="3000" />
       <env name="LOG_LEVEL" value="debug" />
+      <env name="DATA_DIR" value="data/debug" />
     </envs>
     <method v="2" />
   </configuration>

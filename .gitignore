@@ -19,3 +19,7 @@ public/v2/
 # 本地环境变量（可能包含 ADMIN_PASSWORD 等秘密）
 .env
 .env.*
+
+# WebStorm HTTP Client 的本地密码与会话（示例文件 *.example 仍会提交）
+http-client.private.env.json
+http-client.cookies

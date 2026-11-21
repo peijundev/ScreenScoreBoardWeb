@@ -1,0 +1,3 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="调试 · 附加 Node 9332" type="ChromiumRemoteDebugType" factoryName="Chromium Remote" nameIsGenerated="false" host="127.0.0.1" port="9332" />
+</component>

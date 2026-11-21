@@ -1,0 +1,127 @@
+# ScreenScoreBoard MCP HTTP 调试集合
+#
+# 先运行 screenscoreboard.http 的「登录 → 创建令牌」，token 会保存在当前 HTTP Client 会话中。
+# MCP 只接受 POST /mcp，且需要管理员令牌。
+
+### 1. initialize
+# @name mcpInitialize
+POST {{baseUrl}}/mcp
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "initialize",
+  "params": {
+    "protocolVersion": "2025-06-18",
+    "capabilities": {},
+    "clientInfo": {
+      "name": "webstorm-http-client",
+      "version": "1"
+    }
+  }
+}
+
+> {%
+  client.test("MCP initialize 成功", function () {
+    client.assert(response.status === 200, "initialize 失败：HTTP " + response.status);
+    client.assert(!!response.body.result, "响应缺少 result");
+  });
+  const sessionId = response.headers.valueOf("Mcp-Session-Id");
+  if (sessionId) client.global.set("mcpSessionId", sessionId);
+%}
+
+### 2. tools/list
+POST {{baseUrl}}/mcp
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/list",
+  "params": {}
+}
+
+> {%
+  client.test("工具列表非空", function () {
+    client.assert(response.status === 200, "tools/list 失败：HTTP " + response.status);
+    client.assert(Array.isArray(response.body.result.tools), "响应缺少 result.tools");
+    client.assert(response.body.result.tools.length > 0, "工具列表为空");
+  });
+%}
+
+### 3. tools/call add_score
+POST {{baseUrl}}/mcp
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "method": "tools/call",
+  "params": {
+    "name": "add_score",
+    "arguments": {
+      "projectId": "{{projectId}}",
+      "personId": "{{personId}}",
+      "delta": 3
+    }
+  }
+}
+
+> {%
+  client.test("add_score 成功", function () {
+    client.assert(response.status === 200, "add_score 失败：HTTP " + response.status);
+    client.assert(!response.body.result.isError, "MCP 返回 isError");
+  });
+%}
+
+### 4. tools/call trigger_spotlight
+POST {{baseUrl}}/mcp
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "jsonrpc": "2.0",
+  "id": 4,
+  "method": "tools/call",
+  "params": {
+    "name": "trigger_spotlight",
+    "arguments": {
+      "projectId": "{{projectId}}",
+      "targetType": "person",
+      "targetId": "{{personId}}",
+      "durationMs": 1500
+    }
+  }
+}
+
+> {%
+  client.test("trigger_spotlight 成功", function () {
+    client.assert(response.status === 200, "trigger_spotlight 失败：HTTP " + response.status);
+    client.assert(!response.body.result.isError, "MCP 返回 isError");
+  });
+%}
+
+### 5. resources/read 读取状态
+POST {{baseUrl}}/mcp
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "jsonrpc": "2.0",
+  "id": 5,
+  "method": "resources/read",
+  "params": {
+    "uri": "scoreboard://state"
+  }
+}
+
+> {%
+  client.test("resources/read 成功", function () {
+    client.assert(response.status === 200, "resources/read 失败：HTTP " + response.status);
+    client.assert(!!response.body.result, "响应缺少 result");
+  });
+%}

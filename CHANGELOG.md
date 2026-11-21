@@ -11,6 +11,8 @@
 - **Podman Quadlet**：`deploy/quadlet/screenscoreboard.container` 作为 systemd 用户服务长期运行。
 - **镜像发布**：新增 GitHub Actions 工作流，Release 时推送 `ghcr.io/peijundev/screenscoreboard:<版本>` 与 `:latest`。
 - **容器文档**：新增 `docs/containers.md`，覆盖 Docker、Docker Rootless、Podman、Dev Container 与 K8s。
+- **Electron 缩放**：显示端与管理端支持浏览器式页面缩放（`Ctrl/Cmd + 滚轮`、`+`、`-`、`0`），范围 50%–300%、每档 10%；比例只存在于当前窗口，不写入配置，关闭窗口或重启后回到 100%。
+- **WebStorm 调试**：前端调试配置自动拉起 Vite；后端调试改用独立 `data/debug`；补齐认证/SDK/契约/格式化/密码重置/通用打包配置；新增 Electron 主进程与渲染进程 Attach、测试子进程 Attach、SourceMap 构建配置；新增 `http/` HTTP Client 集合（REST API v1 + MCP）；Dev Container 声明 JetBrains 后端并转发调试端口。
 
 ### 变更
 

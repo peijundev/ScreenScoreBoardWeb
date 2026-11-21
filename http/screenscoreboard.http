@@ -1,0 +1,134 @@
+# ScreenScoreBoard REST API v1 调试集合
+#
+# 使用前：
+#   1. 复制 http-client.private.env.json.example 为 http-client.private.env.json，填入管理员密码（该文件已被 Git 忽略）
+#   2. 在编辑器右上角选择 dev 环境
+#   3. 依次运行：登录 → 创建令牌 → 创建项目 → 添加人员 → 加分 → 突显
+#   4. 需要 MCP 时，先跑完前面的请求拿到 token，再打开 mcp.http
+
+### 1. 登录（Cookie 会话）
+# @name login
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{adminUsername}}",
+  "password": "{{adminPassword}}",
+  "remember": false
+}
+
+> {%
+  client.test("登录成功", function () {
+    client.assert(response.status === 200, "登录失败：HTTP " + response.status);
+  });
+  const csrf = response.cookies["ssb_csrf"] && response.cookies["ssb_csrf"].value;
+  client.assert(!!csrf, "响应中没有 ssb_csrf Cookie");
+  client.global.set("csrf", csrf);
+%}
+
+### 2. 创建 API 令牌（Cookie + CSRF）
+# @name createToken
+POST {{baseUrl}}/api/v1/auth/tokens
+Content-Type: application/json
+X-CSRF-Token: {{csrf}}
+
+{
+  "name": "webstorm-http-client"
+}
+
+> {%
+  client.test("令牌创建成功", function () {
+    client.assert(response.status === 200, "创建令牌失败：HTTP " + response.status);
+    client.assert(!!response.body.data.token, "响应缺少 data.token");
+  });
+  client.global.set("token", response.body.data.token);
+  client.global.set("tokenId", response.body.data.id);
+%}
+
+### 3. 创建项目（Cookie + CSRF，验证 CSRF 路径）
+# @name createProject
+POST {{baseUrl}}/api/v1/projects
+Content-Type: application/json
+X-CSRF-Token: {{csrf}}
+
+{
+  "name": "HTTP Client Demo {{$timestamp}}"
+}
+
+> {%
+  client.test("项目创建成功", function () {
+    client.assert(response.status === 201, "创建项目失败：HTTP " + response.status);
+    client.assert(!!response.body.data.projectId, "响应缺少 data.projectId");
+  });
+  client.global.set("projectId", response.body.data.projectId);
+%}
+
+### 4. 添加人员（Bearer）
+# @name createPerson
+POST {{baseUrl}}/api/v1/projects/{{projectId}}/people
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "张三"
+}
+
+> {%
+  client.test("人员创建成功", function () {
+    client.assert(response.status === 201, "创建人员失败：HTTP " + response.status);
+    client.assert(!!response.body.data.id, "响应缺少 data.id");
+  });
+  client.global.set("personId", response.body.data.id);
+%}
+
+### 5. 加分（Bearer）
+POST {{baseUrl}}/api/v1/projects/{{projectId}}/people/{{personId}}/score/add
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "delta": 5
+}
+
+> {%
+  client.test("加分成功", function () {
+    client.assert(response.status === 200, "加分失败：HTTP " + response.status);
+  });
+%}
+
+### 6. 纯突显（Bearer，不加分）
+POST {{baseUrl}}/api/v1/projects/{{projectId}}/spotlight
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "targetType": "person",
+  "targetId": "{{personId}}",
+  "durationMs": 1500
+}
+
+> {%
+  client.test("突显成功", function () {
+    client.assert(response.status === 200, "突显失败：HTTP " + response.status);
+  });
+%}
+
+### 7. 读取状态（Bearer）
+GET {{baseUrl}}/api/v1/state
+Authorization: Bearer {{token}}
+
+> {%
+  client.test("状态读取成功", function () {
+    client.assert(response.status === 200, "读取状态失败：HTTP " + response.status);
+  });
+%}
+
+### 8. 吊销本次创建的令牌（收尾，可选）
+DELETE {{baseUrl}}/api/v1/auth/tokens/{{tokenId}}
+Authorization: Bearer {{token}}
+
+> {%
+  client.test("令牌吊销成功", function () {
+    client.assert(response.status === 200 || response.status === 204, "吊销失败：HTTP " + response.status);
+  });
+%}
