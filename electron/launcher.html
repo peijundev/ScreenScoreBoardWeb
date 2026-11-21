@@ -29,9 +29,14 @@
     .brand { color: var(--accent); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; }
     h1 { font-size: 19px; margin: 4px 0 6px; }
     .lead { color: var(--dim); margin: 0 0 18px; line-height: 1.7; }
-    .modes { display: flex; gap: 8px; margin-bottom: 16px; }
+    .modes {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 16px;
+    }
     .mode-btn {
-      flex: 1;
+      min-width: 0;
       background: var(--card);
       border: 1px solid var(--border);
       color: var(--text);
@@ -73,21 +78,30 @@
     .status.ok { color: #27ae60; }
     .note { margin-top: 14px; color: var(--dim); font-size: 12px; line-height: 1.7; }
     code { background: var(--input); border: 1px solid var(--border); padding: 1px 4px; }
+    @media (max-width: 640px) {
+      .modes { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
   <div class="brand">ScreenScoreBoard</div>
   <h1>选择运行模式</h1>
-  <p class="lead">本地模式使用内置服务端；远程模式连接已部署的计分板，使用远程账号登录。</p>
+  <p class="lead">
+    本地模式使用内置服务端；远程管理模式需要服务器地址与账号密码；远程屏幕模式只需要一个显示端网址。
+  </p>
 
   <div class="modes">
     <button class="mode-btn" id="mode-local" type="button">
       <strong>本地模式</strong>
       <span>内置服务端，仅本机，无需登录</span>
     </button>
-    <button class="mode-btn" id="mode-remote" type="button">
-      <strong>远程模式</strong>
-      <span>连接远程服务器，需要账号密码</span>
+    <button class="mode-btn" id="mode-remote-admin" type="button">
+      <strong>远程管理</strong>
+      <span>连接远程服务器，登录管理端</span>
+    </button>
+    <button class="mode-btn" id="mode-remote-display" type="button">
+      <strong>远程屏幕</strong>
+      <span>只打开一个显示端网址，无需登录</span>
     </button>
   </div>
 
@@ -102,56 +116,81 @@
     <div class="status" id="local-status"></div>
   </section>
 
-  <section class="panel" id="panel-remote" hidden>
+  <section class="panel" id="panel-remote-admin" hidden>
     <div class="field">
       <span>远程服务器地址（站点根地址，不要带 /admin）</span>
-      <input id="remote-url" type="url" placeholder="https://score.example.com" spellcheck="false" />
+      <input id="admin-url" type="url" placeholder="https://score.example.com" spellcheck="false" />
     </div>
     <div class="field">
       <span>账号</span>
-      <input id="remote-username" type="text" autocomplete="username" spellcheck="false" />
+      <input id="admin-username" type="text" autocomplete="username" spellcheck="false" />
     </div>
     <div class="field">
       <span>密码</span>
-      <input id="remote-password" type="password" autocomplete="current-password" />
-    </div>
-    <div class="field">
-      <span>显示端网址（留空则使用服务器地址 + /display）</span>
-      <input id="remote-display" type="url" placeholder="https://score.example.com/display" spellcheck="false" />
+      <input id="admin-password" type="password" autocomplete="current-password" />
     </div>
     <div class="buttons">
-      <button class="primary" id="remote-start" type="button">登录并连接</button>
-      <button class="ghost" id="remote-quit" type="button">退出</button>
+      <button class="primary" id="admin-start" type="button">登录并连接</button>
+      <button class="ghost" id="admin-quit" type="button">退出</button>
     </div>
-    <div class="status" id="remote-status"></div>
+    <div class="status" id="admin-status"></div>
     <div class="note">
-      密码只用于本次登录，不会保存。远程管理端登录成功后，会话 Cookie 会保存在 Electron 的默认会话中。<br />
-      非本机服务器必须使用 HTTPS；显示端网址可以是任意 http/https 页面，窗口会像无标签页浏览器一样打开它。
+      密码只用于本次登录，不会保存。登录成功后，会话 Cookie 会保存在 Electron 的默认会话中。<br />
+      非本机服务器必须使用 HTTPS；管理端里的显示端窗口默认使用服务器地址 + <code>/display</code>。
+    </div>
+  </section>
+
+  <section class="panel" id="panel-remote-display" hidden>
+    <div class="field">
+      <span>显示端网址（完整链接）</span>
+      <input id="display-url" type="url" placeholder="https://score.example.com/display?project=pr_xxx" spellcheck="false" />
+    </div>
+    <div class="buttons">
+      <button class="primary" id="display-start" type="button">打开屏幕</button>
+      <button class="ghost" id="display-quit" type="button">退出</button>
+    </div>
+    <div class="status" id="display-status"></div>
+    <div class="note">
+      显示端窗口是没有标签页、没有地址栏的浏览器，会直接打开这个网址。<br />
+      无需登录，支持任意 http/https 页面；窗口仍然可以用 F11 全屏。
     </div>
   </section>
 
   <script>
-    const state = { mode: 'local', busy: false, config: null };
+    const state = { mode: 'local', busy: false };
     const modeLocal = document.getElementById('mode-local');
-    const modeRemote = document.getElementById('mode-remote');
+    const modeAdmin = document.getElementById('mode-remote-admin');
+    const modeDisplay = document.getElementById('mode-remote-display');
     const panelLocal = document.getElementById('panel-local');
-    const panelRemote = document.getElementById('panel-remote');
-    const remoteUrl = document.getElementById('remote-url');
-    const remoteUsername = document.getElementById('remote-username');
-    const remotePassword = document.getElementById('remote-password');
-    const remoteDisplay = document.getElementById('remote-display');
+    const panelAdmin = document.getElementById('panel-remote-admin');
+    const panelDisplay = document.getElementById('panel-remote-display');
+    const adminUrl = document.getElementById('admin-url');
+    const adminUsername = document.getElementById('admin-username');
+    const adminPassword = document.getElementById('admin-password');
+    const displayUrl = document.getElementById('display-url');
     const localStatus = document.getElementById('local-status');
-    const remoteStatus = document.getElementById('remote-status');
+    const adminStatus = document.getElementById('admin-status');
+    const displayStatus = document.getElementById('display-status');
     const localStart = document.getElementById('local-start');
-    const remoteStart = document.getElementById('remote-start');
+    const adminStart = document.getElementById('admin-start');
+    const displayStart = document.getElementById('display-start');
 
-    function setMode(mode) {
-      state.mode = mode === 'remote' ? 'remote' : 'local';
-      modeLocal.classList.toggle('active', state.mode === 'local');
-      modeRemote.classList.toggle('active', state.mode === 'remote');
-      panelLocal.hidden = state.mode !== 'local';
-      panelRemote.hidden = state.mode !== 'remote';
-      if (state.mode === 'remote') remoteUrl.focus();
+    function normalizeMode(value) {
+      if (value === 'remote') return 'remote-admin';
+      return ['local', 'remote-admin', 'remote-display'].includes(value) ? value : 'local';
+    }
+
+    function setMode(value) {
+      const mode = normalizeMode(value);
+      state.mode = mode;
+      modeLocal.classList.toggle('active', mode === 'local');
+      modeAdmin.classList.toggle('active', mode === 'remote-admin');
+      modeDisplay.classList.toggle('active', mode === 'remote-display');
+      panelLocal.hidden = mode !== 'local';
+      panelAdmin.hidden = mode !== 'remote-admin';
+      panelDisplay.hidden = mode !== 'remote-display';
+      if (mode === 'remote-admin') adminUrl.focus();
+      if (mode === 'remote-display') displayUrl.focus();
     }
 
     function setStatus(el, text, kind) {
@@ -162,22 +201,24 @@
     function setBusy(value) {
       state.busy = value;
       localStart.disabled = value;
-      remoteStart.disabled = value;
+      adminStart.disabled = value;
+      displayStart.disabled = value;
       modeLocal.disabled = value;
-      modeRemote.disabled = value;
+      modeAdmin.disabled = value;
+      modeDisplay.disabled = value;
     }
 
     modeLocal.addEventListener('click', () => setMode('local'));
-    modeRemote.addEventListener('click', () => setMode('remote'));
+    modeAdmin.addEventListener('click', () => setMode('remote-admin'));
+    modeDisplay.addEventListener('click', () => setMode('remote-display'));
 
     window.ssbLauncher.get().then((config) => {
-      state.config = config || {};
-      remoteUrl.value = config.remoteUrl || '';
-      remoteUsername.value = config.username || '';
-      remoteDisplay.value = config.displayUrl || '';
-      setMode(config.mode === 'remote' ? 'remote' : 'local');
+      adminUrl.value = config.remoteUrl || '';
+      adminUsername.value = config.username || '';
+      displayUrl.value = config.displayUrl || '';
+      setMode(config.mode);
     }).catch((error) => {
-      setStatus(remoteStatus, '读取配置失败：' + error.message, 'error');
+      setStatus(adminStatus, '读取配置失败：' + error.message, 'error');
     });
 
     localStart.addEventListener('click', async () => {
@@ -198,40 +239,64 @@
       }
     });
 
-    async function connectRemote() {
+    async function connectAdmin() {
       if (state.busy) return;
       const config = {
-        remoteUrl: remoteUrl.value.trim(),
-        username: remoteUsername.value.trim(),
-        password: remotePassword.value,
-        displayUrl: remoteDisplay.value.trim(),
+        remoteUrl: adminUrl.value.trim(),
+        username: adminUsername.value.trim(),
+        password: adminPassword.value,
       };
-      if (!config.remoteUrl) { setStatus(remoteStatus, '请填写远程服务器地址', 'error'); return; }
-      if (!config.username) { setStatus(remoteStatus, '请填写账号', 'error'); return; }
-      if (!config.password) { setStatus(remoteStatus, '请填写密码', 'error'); return; }
+      if (!config.remoteUrl) { setStatus(adminStatus, '请填写远程服务器地址', 'error'); return; }
+      if (!config.username) { setStatus(adminStatus, '请填写账号', 'error'); return; }
+      if (!config.password) { setStatus(adminStatus, '请填写密码', 'error'); return; }
       setBusy(true);
-      setStatus(remoteStatus, '正在连接并登录…');
+      setStatus(adminStatus, '正在连接并登录…');
       try {
         const result = await window.ssbLauncher.remote(config);
         if (!result.ok) {
-          setStatus(remoteStatus, result.error || '连接失败', 'error');
+          setStatus(adminStatus, result.error || '连接失败', 'error');
           setBusy(false);
           return;
         }
-        remotePassword.value = '';
-        setStatus(remoteStatus, '登录成功，正在进入…', 'ok');
+        adminPassword.value = '';
+        setStatus(adminStatus, '登录成功，正在进入…', 'ok');
       } catch (error) {
-        setStatus(remoteStatus, '连接失败：' + error.message, 'error');
+        setStatus(adminStatus, '连接失败：' + error.message, 'error');
         setBusy(false);
       }
     }
 
-    remoteStart.addEventListener('click', () => { void connectRemote(); });
-    remotePassword.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { e.preventDefault(); void connectRemote(); }
+    async function openDisplay() {
+      if (state.busy) return;
+      const url = displayUrl.value.trim();
+      if (!url) { setStatus(displayStatus, '请填写显示端网址', 'error'); return; }
+      setBusy(true);
+      setStatus(displayStatus, '正在打开显示端…');
+      try {
+        const result = await window.ssbLauncher.display({ displayUrl: url });
+        if (!result.ok) {
+          setStatus(displayStatus, result.error || '打开失败', 'error');
+          setBusy(false);
+          return;
+        }
+        setStatus(displayStatus, '已打开，正在进入…', 'ok');
+      } catch (error) {
+        setStatus(displayStatus, '打开失败：' + error.message, 'error');
+        setBusy(false);
+      }
+    }
+
+    adminStart.addEventListener('click', () => { void connectAdmin(); });
+    displayStart.addEventListener('click', () => { void openDisplay(); });
+    adminPassword.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); void connectAdmin(); }
+    });
+    displayUrl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); void openDisplay(); }
     });
     document.getElementById('local-quit').addEventListener('click', () => window.ssbLauncher.quit());
-    document.getElementById('remote-quit').addEventListener('click', () => window.ssbLauncher.quit());
+    document.getElementById('admin-quit').addEventListener('click', () => window.ssbLauncher.quit());
+    document.getElementById('display-quit').addEventListener('click', () => window.ssbLauncher.quit());
   </script>
 </body>
 </html>

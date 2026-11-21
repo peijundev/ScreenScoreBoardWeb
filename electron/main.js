@@ -30,7 +30,19 @@ function localBaseURL() {
 }
 
 function baseURL() {
-  return mode === 'remote' ? remoteUrl : localBaseURL();
+  if (mode === 'remote-admin') return remoteUrl;
+  if (mode === 'remote-display') {
+    try {
+      return remoteDisplayUrl ? new URL(remoteDisplayUrl).origin : '';
+    } catch (_) {
+      return '';
+    }
+  }
+  return localBaseURL();
+}
+
+function isRemoteDisplayMode() {
+  return mode === 'remote-display';
 }
 
 function projectIdFromWindow(win) {
@@ -46,21 +58,21 @@ function adminURL(projectId) {
   return modeUtils.adminUrl(baseURL(), projectId);
 }
 
-/** 远程模式优先使用用户填写的完整显示端网址；本地模式用 127.0.0.1 + /display */
+/** 屏幕模式使用完整显示端网址；管理模式用服务器根地址 + /display；本地模式用 127.0.0.1 */
 function displayURL(projectId) {
-  if (mode === 'remote') {
-    return modeUtils.resolveDisplayUrl(remoteDisplayUrl, remoteUrl, projectId);
-  }
+  if (mode === 'remote-display') return remoteDisplayUrl;
+  if (mode === 'remote-admin') return modeUtils.displayUrl(remoteUrl, projectId);
   return modeUtils.displayUrl(localBaseURL(), projectId);
 }
 
 function isDisplayLink(raw) {
   try {
     const url = new URL(raw);
-    if (mode === 'remote' && remoteDisplayUrl) {
+    if (mode === 'remote-display' && remoteDisplayUrl) {
       const configured = new URL(remoteDisplayUrl);
       if (url.href === configured.href) return true;
     }
+    if (!baseURL()) return false;
     const base = new URL(baseURL());
     return (
       url.origin === base.origin &&
@@ -161,8 +173,9 @@ function openLauncherWindow() {
 
 function finishLaunch() {
   launching = false;
+  if (isRemoteDisplayMode()) openDisplayWindow();
+  else createAdminWindow();
   buildMenu();
-  createAdminWindow();
   if (launcherWindow) {
     const win = launcherWindow;
     launcherWindow = null;
@@ -233,8 +246,6 @@ async function storeLoginCookies(origin, setCookieHeaders) {
 async function loginRemote(config) {
   const checked = modeUtils.validateRemoteUrl(config.remoteUrl);
   if (!checked.ok) throw new Error(checked.error);
-  const displayChecked = modeUtils.validateDisplayUrl(config.displayUrl);
-  if (!displayChecked.ok) throw new Error(displayChecked.error);
   const username = String(config.username || '').trim();
   const password = String(config.password || '');
   if (!username) throw new Error('请填写账号');
@@ -263,17 +274,37 @@ async function loginRemote(config) {
 
   remoteUrl = checked.url;
   remoteUsername = username;
-  remoteDisplayUrl = displayChecked.url;
-  mode = 'remote';
+  // 管理模式的显示端窗口固定使用服务器根地址 + /display；
+  // 保留 remoteDisplayUrl 仅用于启动页屏幕模式的回填，不参与管理端显示端 URL。
+  mode = 'remote-admin';
   try {
     modeUtils.saveConfig(app.getPath('userData'), {
-      mode: 'remote',
+      mode: 'remote-admin',
       remoteUrl,
       username: remoteUsername,
       displayUrl: remoteDisplayUrl,
     });
   } catch (error) {
-    console.warn('[electron] 保存远程模式配置失败：' + error.message);
+    console.warn('[electron] 保存远程管理模式配置失败：' + error.message);
+  }
+}
+
+/** 远程屏幕模式：不登录，只打开一个完整的显示端网址 */
+async function startDisplayMode(config) {
+  const checked = modeUtils.validateDisplayUrl(config.displayUrl);
+  if (!checked.ok) throw new Error(checked.error);
+  if (!checked.url) throw new Error('请填写显示端网址');
+  remoteDisplayUrl = checked.url;
+  mode = 'remote-display';
+  try {
+    modeUtils.saveConfig(app.getPath('userData'), {
+      mode: 'remote-display',
+      remoteUrl,
+      username: remoteUsername,
+      displayUrl: remoteDisplayUrl,
+    });
+  } catch (error) {
+    console.warn('[electron] 保存远程屏幕模式配置失败：' + error.message);
   }
 }
 
@@ -327,6 +358,19 @@ function registerLauncherHandlers() {
     }
   });
 
+  ipcMain.handle('ssb:launcher:display', async (_event, config) => {
+    if (launching) return { ok: false, error: '正在打开，请稍候' };
+    launching = true;
+    try {
+      await startDisplayMode(config || {});
+      scheduleFinish();
+      return { ok: true };
+    } catch (error) {
+      launching = false;
+      return { ok: false, error: error && error.message ? error.message : '打开失败' };
+    }
+  });
+
   ipcMain.handle('ssb:launcher:quit', () => {
     app.quit();
     return { ok: true };
@@ -344,31 +388,57 @@ function registerLauncherHandlers() {
   });
 }
 
+function modeLabel() {
+  if (mode === 'local') return '本地（内置服务端）';
+  if (mode === 'remote-display') return '远程屏幕';
+  return '远程管理';
+}
+
+function reloadDisplayWindow() {
+  const target = Array.from(displayWindows).pop();
+  if (target) target.reload();
+}
+
 function buildMenu() {
+  const displayOnly = isRemoteDisplayMode();
+  const fileSubmenu = displayOnly
+    ? [
+      {
+        label: '在系统浏览器中打开显示端',
+        accelerator: 'CmdOrCtrl+Shift+B',
+        click: () => shell.openExternal(displayURL(null)),
+      },
+      {
+        label: '重新加载显示端',
+        accelerator: 'CmdOrCtrl+R',
+        click: () => reloadDisplayWindow(),
+      },
+      { type: 'separator' },
+      { label: '退出', role: 'quit' },
+    ]
+    : [
+      {
+        label: '打开显示端窗口',
+        accelerator: 'CmdOrCtrl+Shift+D',
+        click: (_mi, win) => openDisplayWindow(focusedProjectId(win)),
+      },
+      {
+        label: '在系统浏览器中打开显示端',
+        accelerator: 'CmdOrCtrl+Shift+B',
+        click: (_mi, win) => {
+          shell.openExternal(displayURL(focusedProjectId(win)));
+        },
+      },
+      {
+        label: '新建管理端窗口',
+        click: (_mi, win) => createAdminWindow(focusedProjectId(win)),
+      },
+      { type: 'separator' },
+      { label: '退出', role: 'quit' },
+    ];
+
   const template = [
-    {
-      label: '文件',
-      submenu: [
-        {
-          label: '打开显示端窗口',
-          accelerator: 'CmdOrCtrl+Shift+D',
-          click: (_mi, win) => openDisplayWindow(focusedProjectId(win)),
-        },
-        {
-          label: '在系统浏览器中打开显示端',
-          accelerator: 'CmdOrCtrl+Shift+B',
-          click: (_mi, win) => {
-            shell.openExternal(displayURL(focusedProjectId(win)));
-          },
-        },
-        {
-          label: '新建管理端窗口',
-          click: (_mi, win) => createAdminWindow(focusedProjectId(win)),
-        },
-        { type: 'separator' },
-        { label: '退出', role: 'quit' },
-      ],
-    },
+    { label: '文件', submenu: fileSubmenu },
     {
       label: '视图',
       submenu: [
@@ -395,7 +465,9 @@ function buildMenu() {
       label: '服务器',
       submenu: [
         {
-          label: mode === 'remote' ? '当前：远程 ' + remoteUrl : '当前：本地（内置服务端）',
+          label: '当前：' + modeLabel() +
+            (mode === 'remote-admin' ? ' ' + remoteUrl : '') +
+            (mode === 'remote-display' ? ' ' + remoteDisplayUrl : ''),
           enabled: false,
         },
         { type: 'separator' },
@@ -412,10 +484,13 @@ function buildMenu() {
           },
         },
         {
-          label: '重新连接',
-          enabled: mode === 'remote',
+          label: displayOnly ? '重新加载显示端' : '重新连接',
+          enabled: displayOnly
+            ? displayWindows.size > 0
+            : mode === 'remote-admin' && Boolean(adminWindow),
           click: () => {
-            if (adminWindow) adminWindow.reload();
+            if (displayOnly) reloadDisplayWindow();
+            else if (adminWindow) adminWindow.reload();
           },
         },
       ],
@@ -426,14 +501,17 @@ function buildMenu() {
         {
           label: '关于',
           click: () => {
+            const lines = [
+              '计分板' + (displayOnly ? '显示端' : '管理端') + '（Electron）',
+              '模式：' + modeLabel(),
+            ];
+            if (!displayOnly) lines.push('管理端：' + baseURL() + '/admin');
+            lines.push('显示端：' + displayURL(null));
             dialog.showMessageBox({
               type: 'info',
               title: '关于 ' + APP_NAME,
               message: APP_NAME,
-              detail: '计分板管理端（Electron）\n模式：' +
-                (mode === 'remote' ? '远程' : '本地（内置服务端）') +
-                '\n管理端：' + baseURL() + '/admin' +
-                '\n显示端：' + displayURL(null),
+              detail: lines.join('\n'),
             });
           },
         },
@@ -471,6 +549,10 @@ if (!gotLock) {
     if (adminWindow) {
       if (adminWindow.isMinimized()) adminWindow.restore();
       adminWindow.focus();
+    } else if (displayWindows.size > 0) {
+      const win = Array.from(displayWindows).pop();
+      if (win.isMinimized()) win.restore();
+      win.focus();
     } else if (BrowserWindow.getAllWindows().length === 0) {
       openLauncherWindow();
     }

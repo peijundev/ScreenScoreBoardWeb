@@ -184,8 +184,9 @@ STORAGE=mysql MYSQL_URL=mysql://user:pass@localhost:3306/scoreboard npm start
 | `TLS_KEY_FILE` | 空 | 可选，Node 内置 HTTPS 私钥 |
 | `TLS_PASSPHRASE` | 空 | 可选，私钥口令 |
 | `SCOREBOARD_TOKEN` | 空 | stdio MCP / 自动化客户端使用的 API 令牌 |
-| `SCOREBOARD_MODE` | `local` | Electron：`local` / `remote` |
-| `SCOREBOARD_REMOTE_URL` | 空 | Electron 远程模式服务器地址（兼容 `SCOREBOARD_URL`） |
+| `SCOREBOARD_MODE` | `local` | Electron：`local` / `remote-admin` / `remote-display`（旧 `remote` 兼容为 `remote-admin`） |
+| `SCOREBOARD_REMOTE_URL` | 空 | Electron 远程管理模式服务器地址（兼容 `SCOREBOARD_URL`） |
+| `SCOREBOARD_DISPLAY_URL` | 空 | Electron 远程屏幕模式的完整显示端网址 |
 
 - 健康检查：`GET /api/health` 返回版本、运行时长、存储类型与 WS 连接数，不返回全量状态
 - 单实例锁：默认拒绝两个进程同时使用同一 `DATA_DIR`；陈旧锁（进程已退出）会自动清理
@@ -308,15 +309,15 @@ sudo install -m 600 /dev/null /etc/screenscoreboard/env
 echo "ADMIN_PASSWORD=至少8位的强密码" | sudo tee /etc/screenscoreboard/env >/dev/null
 ```
 
-## Electron 管理端（本地 / 远程双模式）
+## Electron 管理端（本地 / 远程管理 / 远程屏幕）
 
-Electron 应用同时承载**管理端**和可选的显示端窗口。**每次启动都会先显示模式选择页**：
+Electron 应用同时承载**管理端**和显示端窗口。**每次启动都会先显示模式选择页**：
 
 - **本地模式（原行为）**：内嵌启动同一个 HTTP/WS 服务，自动选择空闲端口，只绑定 `127.0.0.1`；本地模式关闭鉴权，管理端与显示端都无需登录。
-- **远程模式**：
-  - **管理端**填写三项：远程服务器根地址、账号、密码。Electron 先调用远程 `/api/v1/auth/login` 登录，把会话 Cookie 写入 Electron 默认会话，然后加载远程 `/admin`。
-  - **显示端**填写一项：完整显示端网址（可以是任意 http/https 页面，不要求与服务器同源）。显示端窗口就是一个无标签页、无地址栏的浏览器，直接加载这个网址。
-  - 密码只用于本次登录，不会保存；服务器地址、账号、显示端网址会保存到配置文件。
+- **远程管理模式**：填写三项：远程服务器根地址、账号、密码。Electron 先调用远程 `/api/v1/auth/login` 登录，把会话 Cookie 写入 Electron 默认会话，然后加载远程 `/admin`。管理端里的显示端窗口默认使用服务器根地址 + `/display`。
+- **远程屏幕模式**：只需要填写一项完整显示端网址（可以是任意 http/https 页面，不要求与服务器同源）。显示端窗口就是一个无标签页、无地址栏的浏览器，直接加载这个网址；不需要登录。
+
+密码只用于本次登录，不会保存；服务器地址、账号、显示端网址会保存到配置文件。旧配置里的 `mode: "remote"` 会自动迁移为远程管理模式。
 
 ```bash
 npm run electron        # 开发模式启动 Electron（preelectron 会先构建前端）
@@ -325,24 +326,29 @@ npm run electron        # 开发模式启动 Electron（preelectron 会先构建
 启动后可以随时切换：
 
 - **管理端顶栏「切换模式」按钮**（手机端在「更多」里）：关闭当前管理/显示窗口，回到欢迎页重新选择模式；本地服务端会保留复用，不会丢数据。
-- **服务器 → 退出到欢迎页（切换模式）…**（快捷键 `Ctrl/Cmd+Shift+M`）：同上。
+- **服务器 → 退出到欢迎页（切换模式）…**（快捷键 `Ctrl/Cmd+Shift+M`）：同上；远程屏幕模式也使用这个菜单。
 - **服务器 → 重启应用…**：完全重启后再选择。
-- **服务器 → 重新连接**：远程模式下重新加载管理端。
-- **文件 → 打开显示端窗口**：新建一个显示端窗口（远程模式加载配置的显示端网址；可再开多个，支持 F11 全屏）。
+- **服务器 → 重新连接 / 重新加载显示端**：管理模式重新加载管理端，屏幕模式重新加载显示端。
+- **文件 → 打开显示端窗口**：管理模式新建一个显示端窗口（默认为服务器地址 + `/display`；可再开多个，支持 F11 全屏）。
 - **文件 → 在系统浏览器中打开显示端**。
 - **文件 → 新建管理端窗口**。
 
-远程模式要求服务器根地址是非本机时使用 HTTPS；自签证书需要先在操作系统/Electron 信任链中安装。显示端网址允许 HTTP，因为它不携带管理端凭据。也可用环境变量预填启动页：
+远程管理模式要求服务器根地址是非本机时使用 HTTPS；自签证书需要先在操作系统/Electron 信任链中安装。显示端网址允许 HTTP，因为它不携带管理端凭据。也可用环境变量预填启动页：
 
 ```bash
-SCOREBOARD_MODE=remote \
+# 远程管理模式
+SCOREBOARD_MODE=remote-admin \
 SCOREBOARD_REMOTE_URL=https://score.example.com \
 SCOREBOARD_USERNAME=admin \
+npm run electron
+
+# 远程屏幕模式（不需要账号密码）
+SCOREBOARD_MODE=remote-display \
 SCOREBOARD_DISPLAY_URL=https://score.example.com/display?project=pr_xxx \
 npm run electron
 ```
 
-启动页仍会显示并要求输入密码；也可以用菜单随时切换。
+远程管理模式启动页仍会要求输入密码；远程屏幕模式只要求确认显示端网址。也可以用菜单随时切换。
 
 本地模式的数据目录在系统用户数据目录，不使用项目里的 `data/`：
 

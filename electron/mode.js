@@ -4,12 +4,20 @@ const fs = require('fs');
 const path = require('path');
 
 const CONFIG_NAME = 'electron-config.json';
+const MODES = Object.freeze(['local', 'remote-admin', 'remote-display']);
 const DEFAULT_CONFIG = Object.freeze({
   mode: 'local',
   remoteUrl: '',
   username: '',
   displayUrl: '',
 });
+
+/** 兼容旧配置：remote 等价于 remote-admin */
+function normalizeMode(value, fallback = 'local') {
+  const raw = String(value == null ? '' : value).trim().toLowerCase();
+  if (raw === 'remote') return 'remote-admin';
+  return MODES.includes(raw) ? raw : fallback;
+}
 
 function configPath(userDataDir) {
   return path.join(userDataDir, CONFIG_NAME);
@@ -20,7 +28,7 @@ function readFileConfig(userDataDir) {
     const parsed = JSON.parse(fs.readFileSync(configPath(userDataDir), 'utf8'));
     if (!parsed || typeof parsed !== 'object') return { ...DEFAULT_CONFIG };
     return {
-      mode: parsed.mode === 'remote' ? 'remote' : 'local',
+      mode: normalizeMode(parsed.mode),
       remoteUrl: typeof parsed.remoteUrl === 'string' ? parsed.remoteUrl : '',
       username: typeof parsed.username === 'string' ? parsed.username : '',
       displayUrl: typeof parsed.displayUrl === 'string' ? parsed.displayUrl : '',
@@ -32,14 +40,19 @@ function readFileConfig(userDataDir) {
 
 function loadConfig(userDataDir, env = process.env) {
   const file = readFileConfig(userDataDir);
-  const envMode = String(env.SCOREBOARD_MODE || '').toLowerCase();
-  const mode = envMode === 'remote' || envMode === 'local' ? envMode : file.mode;
+  const envMode = String(env.SCOREBOARD_MODE || '').trim()
+    ? normalizeMode(env.SCOREBOARD_MODE, '')
+    : '';
+  const mode = envMode || file.mode;
   let remoteUrl = file.remoteUrl;
   let username = file.username;
   let displayUrl = file.displayUrl;
-  if (mode === 'remote') {
+  if (mode === 'remote-admin') {
     remoteUrl = env.SCOREBOARD_REMOTE_URL || env.SCOREBOARD_URL || file.remoteUrl || '';
     username = env.SCOREBOARD_USERNAME || file.username || '';
+    // 管理模式固定使用服务器根地址 + /display；displayUrl 仅回填屏幕模式表单
+    displayUrl = env.SCOREBOARD_DISPLAY_URL || file.displayUrl || '';
+  } else if (mode === 'remote-display') {
     displayUrl = env.SCOREBOARD_DISPLAY_URL || file.displayUrl || '';
   }
   return { mode, remoteUrl, username, displayUrl };
@@ -50,7 +63,7 @@ function saveConfig(userDataDir, config) {
   const file = configPath(userDataDir);
   const tmp = file + '.tmp';
   const value = {
-    mode: config.mode === 'remote' ? 'remote' : 'local',
+    mode: normalizeMode(config.mode),
     remoteUrl: typeof config.remoteUrl === 'string' ? config.remoteUrl : '',
     username: typeof config.username === 'string' ? config.username : '',
     displayUrl: typeof config.displayUrl === 'string' ? config.displayUrl : '',
@@ -204,6 +217,8 @@ function cookieFromSetCookie(origin, header) {
 module.exports = {
   CONFIG_NAME,
   DEFAULT_CONFIG,
+  MODES,
+  normalizeMode,
   configPath,
   loadConfig,
   saveConfig,
