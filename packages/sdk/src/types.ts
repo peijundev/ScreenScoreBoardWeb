@@ -17,6 +17,8 @@ export interface Health {
   version: string;
   uptimeSec: number;
   storage: string;
+  /** 存储无冲突/保存正常；旧版服务端可能不返回 */
+  storageOk?: boolean;
   wsClients: number;
   projects: number;
   ts: number;

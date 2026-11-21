@@ -138,24 +138,47 @@ npm run sdk:pack
 
 ## 存储后端
 
-通过环境变量 `STORAGE` 选择，默认 `json`：
+支持 9 种后端，可在管理端「存储后端」中可视化选择、填写连接参数、测试连接、迁移数据并保存；也可以继续用环境变量 `STORAGE` 配置。默认 `json`。
 
 | STORAGE | 说明 | 相关环境变量 |
 |---|---|---|
-| `json`（默认） | 状态写入 `data/state.json`，原子写入 | `STATE_FILE` 可指定文件路径 |
-| `sqlite` | 表 `scoreboard_state`（WAL 模式） | `SQLITE_FILE`（默认 `data/scoreboard.db`） |
-| `postgres` | 表 `scoreboard_state`，启动时自动建表 | `DATABASE_URL` 或标准 `PG*` 变量；`PG_CONNECT_TIMEOUT_MS` |
-| `mysql` | 表 `scoreboard_state`，启动时自动建表 | `MYSQL_URL` 或 `MYSQL_HOST` / `MYSQL_PORT` / `MYSQL_USER` / `MYSQL_PASSWORD` / `MYSQL_DATABASE` |
+| `json`（默认） | 状态写入 `data/state.json`，原子写入 | `STATE_FILE`、`STATE_FILE_PRETTY` |
+| `txt` | 状态以缩进 JSON 写入 `data/state.txt`，便于人工查看 | `STATE_TXT_FILE` |
+| `sqlite` | 表 `scoreboard_state`（WAL 模式、revision CAS） | `SQLITE_FILE`、`SQLITE_BUSY_TIMEOUT_MS` |
+| `postgres` | 表 `scoreboard_state`，启动自动建表；支持 advisory lock | `DATABASE_URL` 或标准 `PG*` 变量；`PG_CONNECT_TIMEOUT_MS` |
+| `mysql` | 表 `scoreboard_state`，启动自动建表；支持 `GET_LOCK` | `MYSQL_URL` 或 `MYSQL_HOST` / `MYSQL_PORT` / `MYSQL_USER` / `MYSQL_PASSWORD` / `MYSQL_DATABASE` |
+| `mongodb` | 集合 `scoreboard_state`，单文档快照；单文档上限 16MB | `MONGODB_URL` / `MONGO_URL`、`MONGODB_DB` |
+| `sqlserver` | 表 `dbo.scoreboard_state`，纯 JS `mssql` 驱动 | `MSSQL_URL` 或 `MSSQL_SERVER` / `MSSQL_PORT` / `MSSQL_USER` / `MSSQL_PASSWORD` / `MSSQL_DATABASE` |
+| `oracle` | 表 `scoreboard_state`，`oracledb` Thin 模式（无需 Instant Client） | `ORACLE_URL` 或 `ORACLE_CONNECT_STRING` / `ORACLE_USER` / `ORACLE_PASSWORD` |
+| `redis` | Hash 快照 + Lua CAS；支持分布式锁 | `REDIS_URL` 或 `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` |
 
 示例：
 
 ```bash
+STORAGE=txt npm start
 STORAGE=sqlite SQLITE_FILE=./data/scoreboard.db npm start
 STORAGE=postgres DATABASE_URL=postgres://user:pass@localhost:5432/scoreboard npm start
-STORAGE=mysql MYSQL_URL=mysql://user:pass@localhost:3306/scoreboard npm start
+STORAGE=redis REDIS_URL=redis://localhost:6379/0 npm start
 ```
 
-数据库后端把整份状态作为一个 JSON 快照存入一行（`id='state'`），启动时自动建表；上传的头像文件仍保存在本地 `data/avatars/`。
+### 管理端可视化配置（推荐）
+
+管理员在管理端打开「存储后端」即可：
+
+1. 选择后端并填写连接参数；
+2. 「测试连接」确认可达与目标是否已有数据；
+3. 选择「迁移现有数据」或「新后端从空库开始」；
+4. 保存后**重启服务**生效。
+
+存储配置独立保存在 `DATA_DIR/storage.json`，优先级高于存储相关环境变量，文件权限 `0600`；数据库密码不会通过 API 回传前端，也不会进入项目状态、广播、导出或备份。配置文件损坏时服务会拒绝启动（fail-closed），修复或移走该文件即可回退到环境变量/默认 JSON。
+
+> **Redis 作为权威存储**必须开启 AOF（`appendonly yes`，`appendfsync everysec` 或 `always`）并设置 `maxmemory-policy noeviction`，否则重启或内存淘汰可能丢失状态。无法保证持久化时建议选择 PostgreSQL。
+>
+> **MongoDB** 单文档上限 16MB；项目与主题库接近上限时迁移会明确失败，请改用关系型数据库。
+
+数据库后端把整份状态作为一个 JSON 快照存入一行/一个文档，启动时自动建表；账号/会话仍在 `DATA_DIR/auth.json` / `sessions.json`，上传的头像与音效仍保存在本地 `data/avatars/`、`data/sounds/`。跨主机分布式锁只保证单写者，不提供多副本同时对外服务。
+
+详细字段、迁移与排错见 [docs/storage-backends.md](docs/storage-backends.md)。
 
 ## 后端运行配置
 

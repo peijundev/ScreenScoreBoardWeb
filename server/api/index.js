@@ -11,6 +11,7 @@ const authResources = require('./resources/auth');
 const projects = require('./resources/projects');
 const themes = require('./resources/themes');
 const data = require('./resources/data');
+const storage = require('./resources/storage');
 const { createSystemRoutes } = require('./resources/system');
 
 let allRoutes = [];
@@ -19,6 +20,7 @@ const resourceRoutes = [
   ...projects.routes,
   ...themes.routes,
   ...data.routes,
+  ...storage.routes,
 ];
 allRoutes = [...createSystemRoutes(() => allRoutes), ...resourceRoutes];
 const matchRoute = createRouter(allRoutes);

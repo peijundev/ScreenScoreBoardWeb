@@ -3,7 +3,8 @@
 // sounds/ 是全局音效库，用户导入后需永久保留在可选菜单中，不参与孤儿清理。
 const fs = require('fs');
 const path = require('path');
-const { state, AVATAR_DIR } = require('./state');
+const { state } = require('./state');
+const { AVATAR_DIR } = require('./paths');
 const { assetFileRe, IMAGE_EXT, AUDIO_EXT } = require('./filename');
 
 const FILE_RE = assetFileRe([...IMAGE_EXT, ...AUDIO_EXT]);

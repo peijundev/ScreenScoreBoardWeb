@@ -13,11 +13,19 @@
 - **容器文档**：新增 `docs/containers.md`，覆盖 Docker、Docker Rootless、Podman、Dev Container 与 K8s。
 - **Electron 缩放**：显示端与管理端支持浏览器式页面缩放（`Ctrl/Cmd + 滚轮`、`+`、`-`、`0`），范围 50%–300%、每档 10%；比例只存在于当前窗口，不写入配置，关闭窗口或重启后回到 100%。
 - **WebStorm 调试**：前端调试配置自动拉起 Vite；后端调试改用独立 `data/debug`；补齐认证/SDK/契约/格式化/密码重置/通用打包配置；新增 Electron 主进程与渲染进程 Attach、测试子进程 Attach、SourceMap 构建配置；新增 `http/` HTTP Client 集合（REST API v1 + MCP）；Dev Container 声明 JetBrains 后端并转发调试端口。
+- **可切换存储后端**：管理端新增「存储后端」对话框，可可视化选择后端、填写连接参数、测试连接、迁移现有数据或空库切换，保存后重启生效。
+- **新增后端**：TXT（人类可读缩进 JSON）、MongoDB、SQL Server、Oracle（Thin 模式）、Redis；驱动均按需加载，未安装时只影响所选后端。
+- **存储配置**：`DATA_DIR/storage.json`（权限 0600，仅管理员 API 可读，密码不回传），优先于存储相关环境变量；文件损坏时拒绝启动。
+- **可靠性与并发**：连接超时/重试、健康诊断（`/api/v1/storage/health`）、`revision` 乐观并发（CAS）、PostgreSQL advisory lock / MySQL `GET_LOCK` / Redis 分布式锁。
+- **测试**：新增 `npm run test:storage`；CI 增加 MongoDB 7 与 Redis 7 service；`npm run verify` 覆盖配置 API、TXT 迁移、密码不回传、非法配置与损坏配置。
 
 ### 变更
 
 - 运行镜像从 Debian slim 改为 **Alpine**，最终镜像约 200 MB；`better-sqlite3` 在构建阶段现场编译 musl 版本，构建工具不进入运行镜像。
 - `docker-compose.yml` 增加健康检查、只读根文件系统、`no-new-privileges`、PostgreSQL profile；新增 `docker-compose.rootless.yml` 解决 rootless 下 bind mount 权限问题。
+- 存储后端由 4 种扩展到 9 种；`scripts/gen-contracts.mjs` 改为直接读取 `server/settings.js`，不再通过 `state.js` 间接初始化存储，配置损坏不会阻断契约生成。
+- 旧 SQL 表在启动时自动补 `revision` 列并把旧行初始化为 1，无需手工迁移。
+- 存储保存改为 CAS：检测到外部写入时停止落盘并降级健康状态，避免旧快照覆盖新数据。
 
 ## 1.6.3 — Node.js 24 基线
 

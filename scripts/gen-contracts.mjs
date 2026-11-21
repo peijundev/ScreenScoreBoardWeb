@@ -1,4 +1,4 @@
-// 生成前后端共享契约类型：设置字段（来自 server/state.js 的 DEFAULT_SETTINGS）与 op 名
+// 生成前后端共享契约类型：设置字段（来自 server/settings.js 的 DEFAULT_SETTINGS）与 op 名
 // 运行: npm run gen:contracts
 import { createRequire } from 'node:module';
 import { writeFileSync } from 'node:fs';
@@ -7,7 +7,8 @@ import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const { DEFAULT_SETTINGS } = require('../server/state.js');
+// 直接读 settings.js，避免加载 state.js 时初始化存储（配置损坏不应阻断契约生成）
+const { DEFAULT_SETTINGS } = require('../server/settings.js');
 const { OPS } = require('../server/ops.js');
 
 function tsType(value) {

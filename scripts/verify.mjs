@@ -3,7 +3,7 @@
 import { spawn } from 'node:child_process';
 import http from 'node:http';
 import {
-  mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync, utimesSync,
+  mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync, statSync, utimesSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -1384,6 +1384,145 @@ async function main() {
     console.log('存储后端（MySQL）: 跳过（未设置 TEST_MYSQL_URL）');
   }
 
+  console.log('存储配置 API 与 TXT 后端:');
+  const configDir = mkdtempSync(path.join(tmpdir(), 'sb-config-'));
+  server = startServer({ DATA_DIR: configDir, STORAGE: 'json', STATE_FILE: '' });
+  await waitServer();
+
+  let storageRes = await authFetch('/api/v1/storage');
+  assert(storageRes.ok, '管理员可读取存储配置');
+  let storagePayload = await storageRes.json();
+  assert(storagePayload.data.config.kind === 'json', '默认后端为 json');
+  assert(storagePayload.data.backends.length === 9, '返回 9 种存储后端元数据');
+  assert(storagePayload.data.backends.some((b) => b.kind === 'redis' && b.recommended), 'Redis 标记为推荐');
+
+  const anonStorage = await fetch(BASE + '/api/v1/storage');
+  assert(anonStorage.status === 401, '匿名访问存储配置返回 401');
+
+  const putJson = (body) => authFetch('/api/v1/storage', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  storageRes = await putJson({ kind: 'nope', options: {} });
+  assert(storageRes.status === 422, '未知存储后端被拒绝');
+  storageRes = await putJson({ kind: 'json', options: { file: '../escape.json' } });
+  assert(storageRes.status === 422, '越界状态文件路径被拒绝');
+
+  storageRes = await putJson({ kind: 'txt', options: { file: 'state.txt' } });
+  assert(storageRes.ok, '保存 TXT 存储配置');
+  assert(existsSync(path.join(configDir, 'storage.json')), '生成 storage.json');
+  if (process.platform !== 'win32') {
+    const mode = statSync(path.join(configDir, 'storage.json')).mode & 0o777;
+    assert(mode === 0o600, 'storage.json 权限为 0600');
+  }
+
+  storageRes = await authFetch('/api/v1/storage/test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind: 'txt', options: { file: 'state.txt' } }),
+  });
+  let testPayload = await storageRes.json();
+  assert(testPayload.data.ok === true, '测试 TXT 连接成功');
+
+  let cfgState = await getState();
+  const cfgProjectId = Object.keys(cfgState.projects)[0];
+  const cfgClient = wsClient('config-admin', adminSession);
+  await cfgClient.ready;
+  await cfgClient.waitState((st) => st.projects && st.projects[cfgProjectId]);
+  const cfgAck = await cfgClient.sendOp('addPerson', { projectId: cfgProjectId, name: '迁移测试' });
+  const cfgPersonId = cfgAck.result.personId;
+  await new Promise((r) => setTimeout(r, 300));
+  cfgClient.ws.close();
+
+  storageRes = await authFetch('/api/v1/storage/migrate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      mode: 'copy',
+      config: { kind: 'txt', options: { file: 'state.txt' } },
+    }),
+  });
+  storagePayload = await storageRes.json();
+  assert(storageRes.ok && storagePayload.data.verified === true, '迁移到 TXT 并回读校验');
+
+  await stopServer(server);
+  // storage.json 优先于环境变量：这里故意传入 STORAGE=json
+  server = startServer({ DATA_DIR: configDir, STORAGE: 'json', STATE_FILE: '' });
+  await waitServer();
+  cfgState = await getState();
+  assert(
+    cfgState.projects[cfgProjectId] && cfgState.projects[cfgProjectId].people[cfgPersonId],
+    'TXT 后端重启后数据恢复',
+  );
+  assert(existsSync(path.join(configDir, 'state.txt')), 'state.txt 已生成');
+  const txtContent = readFileSync(path.join(configDir, 'state.txt'), 'utf8');
+  assert(txtContent.includes('\n  "version": 2'), 'TXT 内容是缩进 JSON');
+  const healthRes = await fetch(BASE + '/api/health');
+  const healthPayload = await healthRes.json();
+  assert(healthPayload.storage === 'txt' && healthPayload.storageOk === true, '健康检查报告 txt 且正常');
+
+  storageRes = await putJson({ kind: 'json', options: { file: 'fresh.json' } });
+  assert(storageRes.ok, '仅保存配置（不迁移）');
+  await stopServer(server);
+  server = startServer({ DATA_DIR: configDir, STORAGE: 'txt', STATE_FILE: '' });
+  await waitServer();
+  const freshState = await getState();
+  const freshPeople = Object.values(freshState.projects).flatMap((p) => Object.keys(p.people));
+  assert(!freshPeople.includes(cfgPersonId), '仅保存不迁移时新后端为空');
+  assert(Object.keys(freshState.projects).length >= 1, '空库启动自动创建默认项目');
+
+  await stopServer(server);
+  writeFileSync(path.join(configDir, 'storage.json'), '{not-json');
+  const badProc = startServer({ DATA_DIR: configDir });
+  const badCode = await new Promise((resolve) => badProc.once('exit', resolve));
+  assert(badCode !== 0, '损坏 storage.json 导致启动失败');
+
+  console.log('存储配置密码保护:');
+  const secretDir = mkdtempSync(path.join(tmpdir(), 'sb-secret-'));
+  const secret = 'sb-super-secret-password';
+  server = startServer({ DATA_DIR: secretDir, STORAGE: 'json', STATE_FILE: '' });
+  await waitServer();
+  storageRes = await authFetch('/api/v1/storage', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      kind: 'postgres',
+      options: {
+        host: '127.0.0.1', port: 5432, user: 'u', database: 'scoreboard', password: secret,
+      },
+    }),
+  });
+  const putText = await storageRes.text();
+  assert(storageRes.ok, '保存带密码的数据库配置');
+  assert(!putText.includes(secret), '保存响应不包含密码');
+  storageRes = await authFetch('/api/v1/storage');
+  const getText = await storageRes.text();
+  assert(!getText.includes(secret), '读取配置不包含密码');
+  assert(JSON.parse(getText).data.config.hasPassword === true, '配置标记已设置密码');
+  const secretFile = readFileSync(path.join(secretDir, 'storage.json'), 'utf8');
+  assert(secretFile.includes(secret), '配置文件保存密码');
+  if (process.platform !== 'win32') {
+    assert((statSync(path.join(secretDir, 'storage.json')).mode & 0o777) === 0o600, '密码配置文件权限 0600');
+  }
+  storageRes = await authFetch('/api/v1/storage/test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      kind: 'postgres',
+      options: {
+        host: '127.0.0.1', port: 1, user: 'u', database: 'scoreboard', password: secret,
+      },
+    }),
+  });
+  testPayload = await storageRes.json();
+  assert(testPayload.data.ok === false, '不可达数据库测试连接失败');
+  assert(!JSON.stringify(testPayload).includes(secret), '测试连接错误不泄露密码');
+  await stopServer(server);
+  rmSync(secretDir, { recursive: true, force: true });
+
+  rmSync(configDir, { recursive: true, force: true });
   rmSync(DATA_DIR, { recursive: true, force: true });
   rmSync(legacyDir, { recursive: true, force: true });
 

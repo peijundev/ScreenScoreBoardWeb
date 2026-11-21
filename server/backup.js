@@ -3,7 +3,8 @@
 const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
-const { state, DATA_DIR } = require('./state');
+const { state } = require('./state');
+const { DATA_DIR } = require('./paths');
 const { logger } = require('./logger');
 
 function envNumber(name, fallback) {

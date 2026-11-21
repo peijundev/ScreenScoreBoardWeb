@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { config } = require('../config');
 const { logger } = require('../logger');
-const { DATA_DIR } = require('../state');
+const { DATA_DIR } = require('../paths');
 const { NotFoundError, ForbiddenError } = require('../validation');
 const { isRole } = require('./policy');
 const {

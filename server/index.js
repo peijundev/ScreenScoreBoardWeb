@@ -19,7 +19,8 @@ const {
   init: initState,
   AVATAR_DIR,
   SOUND_DIR,
-  storageKind,
+  getStorageKind,
+  getStorageStatus,
   exportProjectData,
   sanitizeImportedProject,
   walkAssetRefs,
@@ -341,7 +342,8 @@ function routeRequest(req, res) {
       ok: true,
       version: APP_VERSION,
       uptimeSec: Math.round(process.uptime()),
-      storage: storageKind,
+      storage: getStorageKind(),
+      storageOk: !getStorageStatus().conflict,
       wsClients: wssInstance ? wssInstance.clients.size : 0,
       projects: Object.keys(state.projects).length,
       ts: Date.now(),
@@ -558,7 +560,7 @@ async function start(options = {}) {
   });
   logger.info('计分板服务已启动', {
     version: APP_VERSION,
-    storage: storageKind,
+    storage: getStorageKind(),
     frontend: REACT_BUILT ? 'React' : '未构建',
     host: listenHost,
     port: actualPort,

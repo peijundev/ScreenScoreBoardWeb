@@ -73,6 +73,18 @@ function toApiError(error) {
   if (error && error.name === 'SyntaxError') {
     return new ApiError(400, 'MALFORMED_JSON', '请求体不是合法 JSON');
   }
+  if (error && error.name === 'StorageConfigError') {
+    return new ApiError(422, error.code || 'STORAGE_CONFIG_INVALID', message, error.details);
+  }
+  if (error && error.name === 'StorageConflictError') {
+    return new ApiError(409, 'STORAGE_CONFLICT', message, error.details);
+  }
+  if (error && error.name === 'StorageDriverMissingError') {
+    return new ApiError(422, 'STORAGE_DRIVER_MISSING', message, error.details);
+  }
+  if (error && error.name === 'StorageUnsupportedError') {
+    return new ApiError(422, 'STORAGE_UNSUPPORTED', message, error.details);
+  }
   if (error instanceof OpError || (error && error.name === 'OpError')) {
     // 上限类错误语义上更接近 422，但仍保持稳定的 400 兼容旧客户端断言
     return new ApiError(400, 'INVALID_ARGUMENT', message);

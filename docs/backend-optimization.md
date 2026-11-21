@@ -93,11 +93,14 @@
 - ⏳ 按使用场景明确不做：HTTP/WS 限流。
 - ⏳ 未做：完整审计、严格 CSP。
 
-## Phase 4（多实例）— 已完成单写者保护
+## Phase 4（多实例）— 已完成单写者保护与乐观并发
 
 - ✅ 单实例锁：`DATA_DIR/scoreboard.lock`（含 PID 与启动时间），第二个实例明确报错退出；进程已退出的陈旧锁自动清理；`ALLOW_MULTI_INSTANCE=1` 可强制绕过（仅调试）。
 - ✅ SQLite `busy_timeout = 5000`。
-- ⏳ 未做：Postgres advisory lock / MySQL GET_LOCK（跨主机多实例）、版本号 + CAS、Redis/差分订阅协议。
+- ✅ 跨主机单写者：PostgreSQL advisory lock、MySQL `GET_LOCK`、Redis `SET NX PX` + 续租。
+- ✅ 版本号 + CAS：SQL/Mongo/Redis 使用整数 `revision`，JSON/TXT 使用内容哈希；旧表启动时自动补列。冲突时停止落盘并要求重启，不覆盖新数据。
+- ✅ 存储后端扩展：TXT、MongoDB、SQL Server、Oracle（Thin）、Redis；管理端可视化配置、测试连接、迁移/空库切换。详见 `docs/storage-backends.md`。
+- ⏳ 未做：MongoDB/SQL Server/Oracle 的跨主机锁、Redis Cluster/Sentinel、active-active 多副本、差分订阅协议。
 
 ## Phase 5（完整 API / MCP）— 已完成
 
@@ -111,4 +114,6 @@
 
 ## 明确不做
 
-迁移 Express/Fastify、全量 TypeScript 重写、Redis/微服务、替换序列化协议、增量日志存储 —— 当前规模下收益/风险比不划算。
+迁移 Express/Fastify、全量 TypeScript 重写、Redis 微服务/缓存层、替换序列化协议、增量日志存储 —— 当前规模下收益/风险比不划算。
+
+> 说明：Redis **可作为存储后端**（见 `docs/storage-backends.md`），这与「不做 Redis 微服务/缓存层」不冲突；作为权威存储时必须开启 AOF 与 noeviction。

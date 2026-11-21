@@ -33,7 +33,8 @@ docker compose ps
 curl http://127.0.0.1:3000/api/health
 ```
 
-- 数据在 `./data`，包含 `state.json`、`auth.json`、头像、音效与 `backups/`。
+- 数据在 `./data`，包含 `state.json`（或所选后端的文件）、`storage.json`、`auth.json`、头像、音效与 `backups/`。
+- `storage.json` 是管理端保存的存储配置（含数据库密码，权限 0600），**优先于** `STORAGE` 等环境变量；修改后需重启容器。
 - 容器根文件系统只读，`/data` 与 `/tmp` 例外；健康检查直接请求 `/api/health`。
 - 首次启动必须提供 `ADMIN_PASSWORD`（容器内请求不是 loopback，网页初始化会被拒绝）。
 - 使用 PostgreSQL：
@@ -43,6 +44,17 @@ curl http://127.0.0.1:3000/api/health
   DATABASE_URL='postgres://scoreboard:scoreboard@db:5432/scoreboard' \
   docker compose --profile postgres up -d --build
   ```
+
+- 使用 MongoDB / Redis（Redis 已开启 AOF 与 noeviction）：
+
+  ```bash
+  STORAGE=mongodb MONGODB_URL='mongodb://mongo:27017/scoreboard' \
+    docker compose --profile mongo up -d --build
+  STORAGE=redis REDIS_URL='redis://redis:6379/0' \
+    docker compose --profile redis up -d --build
+  ```
+
+  更推荐在管理端「存储后端」中测试连接并迁移数据，让配置写入 `/data/storage.json`。
 
 `./data` 需要能被 uid 1000 写入。若宿主机用户不是 uid 1000，先执行 `sudo chown -R 1000:1000 data`，或改用[命名卷](#docker-rootless)。
 

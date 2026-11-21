@@ -39,6 +39,7 @@ interface Props {
   onOpenTheme: () => void;
   onOpenStudio: () => void;
   onOpenAccount: () => void;
+  onOpenStorage: () => void;
 }
 
 export default function MobileNav({
@@ -59,6 +60,7 @@ export default function MobileNav({
   onOpenTheme,
   onOpenStudio,
   onOpenAccount,
+  onOpenStorage,
 }: Props): JSX.Element {
   const sendOp = useAppStore((s) => s.sendOp);
   const logout = useAuthStore((s) => s.logout);
@@ -197,6 +199,9 @@ export default function MobileNav({
                 </button>
                 <button className="btn mobile-wide" type="button" onClick={onOpenAssets} disabled={!project}>
                   资源库
+                </button>
+                <button className="btn mobile-wide" type="button" onClick={onOpenStorage}>
+                  存储后端
                 </button>
               </>
             )}

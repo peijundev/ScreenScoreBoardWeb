@@ -9,6 +9,7 @@ import AssetLibraryDialog from './components/AssetLibraryDialog';
 import ThemeEditorDialog from './components/ThemeEditorDialog';
 import ThemeStudioDialog from './theme/studio/ThemeStudioDialog';
 import AccountDialog from './components/AccountDialog';
+import StorageDialog from './components/StorageDialog';
 import MobileNav, { type MobileTab } from './components/MobileNav';
 import { DialogHost } from './components/dialogs';
 import Toasts from './components/Toasts';
@@ -16,7 +17,7 @@ import { useMediaQuery } from './hooks/useMediaQuery';
 import { projectOf, projectsOf, useAppStore } from '../shared/store';
 import { useAuthStore } from '../shared/auth';
 
-type DialogKind = 'settings' | 'features' | 'assets' | 'theme' | 'studio' | 'account' | null;
+type DialogKind = 'settings' | 'features' | 'assets' | 'theme' | 'studio' | 'account' | 'storage' | null;
 
 export default function App(): JSX.Element {
   const snapshot = useAppStore((s) => s.snapshot);
@@ -73,6 +74,7 @@ export default function App(): JSX.Element {
           onOpenTheme={() => setDialog('theme')}
           onOpenStudio={() => setDialog('studio')}
           onOpenAccount={() => setDialog('account')}
+          onOpenStorage={() => setDialog('storage')}
         />
       )}
       <Toasts />
@@ -99,6 +101,7 @@ export default function App(): JSX.Element {
             onOpenTheme={() => setDialog('theme')}
             onOpenStudio={() => setDialog('studio')}
             onOpenAccount={() => setDialog('account')}
+            onOpenStorage={() => setDialog('storage')}
           />
           {/* 三个面板常驻挂载、仅隐藏，避免切 tab 丢失输入与预览状态 */}
           <div className={'mobile-panel' + (mobileTab === 'preview' ? '' : ' is-hidden')}>
@@ -136,6 +139,9 @@ export default function App(): JSX.Element {
       )}
       {authEnabled && dialog === 'account' && (
         <AccountDialog onClose={() => setDialog(null)} />
+      )}
+      {isAdmin && dialog === 'storage' && (
+        <StorageDialog onClose={() => setDialog(null)} />
       )}
       <DialogHost />
     </>

@@ -63,6 +63,12 @@ const V1_ROUTE_ACCESS = Object.freeze({
   'GET /state': 'public',
   'GET /themes/:themeId': 'public',
 
+  'GET /storage': 'admin',
+  'GET /storage/health': 'admin',
+  'PUT /storage': 'admin',
+  'POST /storage/test': 'admin',
+  'POST /storage/migrate': 'admin',
+
   'GET /assets': 'admin',
   'GET /backups': 'admin',
   'GET /orphans': 'admin',

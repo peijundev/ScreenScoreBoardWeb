@@ -37,9 +37,29 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1})'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     env:
       TEST_PG_URL: postgres://postgres:postgres@127.0.0.1:5432/scoreboard
       TEST_MYSQL_URL: mysql://root:root@127.0.0.1:3306/scoreboard
+      TEST_MONGO_URL: mongodb://127.0.0.1:27017/scoreboard
+      TEST_REDIS_URL: redis://127.0.0.1:6379/0
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -70,6 +90,9 @@ jobs:
         run: |
           npm run gen:contracts
           git diff --exit-code -- web/src/shared/settings.generated.ts web/src/shared/ops.generated.ts
+
+      - name: Storage tests
+        run: npm run test:storage
 
       - name: End-to-end verify
         run: npm run verify

@@ -7,7 +7,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      # 存储后端：json（默认）/ sqlite / postgres / mysql
+      # 存储后端：json（默认）/ txt / sqlite / postgres / mysql / mongodb / sqlserver / oracle / redis
+      # 也可在管理端「存储后端」保存到 /data/storage.json；该文件优先于这里的环境变量
       STORAGE: ${STORAGE:-json}
       TZ: ${TZ:-Asia/Shanghai}
       BACKUP_INTERVAL_MINUTES: "30"
@@ -29,6 +30,10 @@ services:
       # TLS_KEY_FILE: /certs/privkey.pem
       # 使用 SQLite 时：
       # SQLITE_FILE: /data/scoreboard.db
+      # 使用 MongoDB / Redis 时：
+      # MONGODB_URL: mongodb://mongo:27017/scoreboard
+      # REDIS_URL: redis://redis:6379/0
+      # 使用 SQL Server / Oracle 时：MSSQL_URL / ORACLE_URL（见 docs/storage-backends.md）
     volumes:
       # Docker Rootless 或无法使用 bind mount 时，叠加 docker-compose.rootless.yml 改用命名卷
       - ./data:/data
@@ -53,6 +58,12 @@ services:
       db:
         condition: service_healthy
         required: false
+      mongo:
+        condition: service_healthy
+        required: false
+      redis:
+        condition: service_healthy
+        required: false
 
   # PostgreSQL（可选）：docker compose --profile postgres up -d
   # 同时把 STORAGE=postgres 与 DATABASE_URL 传给 scoreboard
@@ -74,3 +85,41 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+
+  # MongoDB（可选）：docker compose --profile mongo up -d
+  mongo:
+    image: mongo:7
+    profiles: ["mongo"]
+    container_name: screen-scoreboard-mongo
+    volumes:
+      - ./mongodata:/data/db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ping:1})"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # Redis（可选）：docker compose --profile redis up -d
+  # 作为权威存储必须开启 AOF 与 noeviction，否则重启/淘汰可能丢状态
+  redis:
+    image: redis:7-alpine
+    profiles: ["redis"]
+    container_name: screen-scoreboard-redis
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --maxmemory-policy
+      - noeviction
+    volumes:
+      - ./redisdata:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10

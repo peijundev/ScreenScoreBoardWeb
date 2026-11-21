@@ -1,9 +1,11 @@
 'use strict';
 // 权威状态：多项目 + 存储后端（json/sqlite/postgres/mysql）
 const fs = require('fs');
-const path = require('path');
+const os = require('os');
 const crypto = require('crypto');
-const { createStorage } = require('./storage');
+const { createStorageFromConfig, StorageConflictError } = require('./storage');
+const { resolveStorageConfig, configFingerprint } = require('./storage-config');
+const { retry, withTimeout } = require('./storage/common');
 const runtime = require('./runtime');
 const { config } = require('./config');
 const { logger } = require('./logger');
@@ -20,16 +22,82 @@ const {
   genThemeId, normalizeTheme, normalizeDraft, themeBytes, themeSummary,
 } = require('./theme/schema');
 const lock = require('./lock');
+const { DATA_DIR, AVATAR_DIR, SOUND_DIR } = require('./paths');
 
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
-const AVATAR_DIR = path.join(DATA_DIR, 'avatars');
-const SOUND_DIR = path.join(DATA_DIR, 'sounds');
-
-
-const storage = createStorage();
+/** @type {any} */
+let storage = null;
+let storageKind = 'uninitialized';
+let storageSource = 'default';
+let storageConfigHash = '';
+let storageRevision = /** @type {any} */ (null);
+let storageConflict = false;
+let distributedLockHeld = false;
+let lastSaveAt = 0;
+let lastSaveError = /** @type {string|null} */ (null);
+const storageOwnerId = `${os.hostname()}:${process.pid}:${crypto.randomBytes(4).toString('hex')}`;
 
 let state = { version: 2, projects: {}, themes: {}, themeDrafts: {} };
 let initialized = false;
+
+function getStorageKind() {
+  return storageKind;
+}
+
+function getStorageStatus() {
+  return {
+    kind: storageKind,
+    source: storageSource,
+    revision: storageRevision,
+    lastSaveAt: lastSaveAt || null,
+    lastSaveError,
+    conflict: storageConflict,
+    initialized,
+    configHash: storageConfigHash,
+  };
+}
+
+/**
+ * @param {{ probe?: boolean }} [options]
+ */
+async function getStorageHealth(options = {}) {
+  if (!storage) {
+    return {
+      ok: false,
+      kind: storageKind,
+      revision: storageRevision,
+      lastSaveAt: lastSaveAt || null,
+      lastSaveError,
+      conflict: storageConflict,
+      warnings: ['存储尚未初始化'],
+    };
+  }
+  try {
+    const result = await withTimeout(
+      storage.health(options),
+      config.storage.healthTimeoutMs,
+      '存储健康检查',
+    );
+    return {
+      ...result,
+      conflict: storageConflict,
+      lock: {
+        supported: Boolean(storage.capabilities && storage.capabilities.distributedLock),
+        acquired: distributedLockHeld,
+        kind: storage.capabilities ? storage.capabilities.lockKind : null,
+      },
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      kind: storageKind,
+      revision: storageRevision,
+      lastSaveAt: lastSaveAt || null,
+      lastSaveError: lastSaveError || (error && error.message ? error.message : String(error)),
+      conflict: storageConflict,
+      warnings: [error && error.message ? error.message : String(error)],
+    };
+  }
+}
 
 function genId(prefix) {
   return prefix + '_' + crypto.randomBytes(4).toString('hex');
@@ -268,32 +336,97 @@ function normalizeState(raw) {
 
 // ---------- 初始化 ----------
 async function init() {
+  if (initialized) return;
   fs.mkdirSync(AVATAR_DIR, { recursive: true });
   fs.mkdirSync(SOUND_DIR, { recursive: true });
-  lock.acquire(DATA_DIR);
-  await storage.init();
-  const raw = await storage.load();
-  const normalized = normalizeState(raw);
-  for (const key of Object.keys(state)) delete state[key];
-  Object.assign(state, normalized);
-  initialized = true;
+  let localLocked = false;
+  let distributedLocked = false;
+  try {
+    // 先拿本地文件锁：同机双实例应在连接数据库前就失败。
+    lock.acquire(DATA_DIR);
+    localLocked = true;
+
+    const resolved = resolveStorageConfig();
+    storageSource = resolved.source;
+    storageConfigHash = configFingerprint(resolved.config);
+    storage = createStorageFromConfig(resolved.config);
+    storageKind = storage.kind;
+
+    const st = config.storage;
+    await retry(
+      () => withTimeout(storage.init(), st.connectTimeoutMs, '初始化存储'),
+      { retries: st.retries, baseDelayMs: st.retryBaseMs, label: '初始化存储' },
+    );
+
+    if (
+      !config.allowMultiInstance &&
+      storage.capabilities && storage.capabilities.distributedLock &&
+      typeof storage.acquireLock === 'function'
+    ) {
+      await withTimeout(
+        storage.acquireLock(storageOwnerId, {
+          ttlMs: st.lockTtlMs,
+          renewMs: st.lockRenewMs,
+          waitMs: st.lockWaitMs,
+        }),
+        st.connectTimeoutMs,
+        '获取存储锁',
+      );
+      distributedLocked = true;
+      distributedLockHeld = true;
+    }
+
+    const raw = await withTimeout(storage.load(), st.connectTimeoutMs, '读取状态');
+    storageRevision = typeof storage.getRevision === 'function' ? storage.getRevision() : null;
+    const normalized = normalizeState(raw);
+    for (const key of Object.keys(state)) delete state[key];
+    Object.assign(state, normalized);
+    initialized = true;
+  } catch (error) {
+    if (distributedLocked && storage && typeof storage.releaseLock === 'function') {
+      try { await storage.releaseLock(storageOwnerId); } catch (_) {}
+    }
+    distributedLockHeld = false;
+    if (storage) {
+      try { await storage.close(); } catch (_) {}
+    }
+    if (localLocked) lock.release();
+    storage = null;
+    storageKind = 'uninitialized';
+    throw error;
+  }
 }
 
-// ---------- 持久化（100ms 防抖 + 串行写队列） ----------
+// ---------- 持久化（100ms 防抖 + 串行写队列 + 失败退避重试） ----------
 let saveTimer = null;
+let saveRetryTimer = null;
+let saveRetryDelayMs = 0;
 let saving = false;
 let dirty = false;
 
 function save() {
-  if (saveTimer) return;
+  if (!initialized || storageConflict) return;
+  if (saveTimer || saveRetryTimer) return;
   saveTimer = setTimeout(() => {
     saveTimer = null;
     void doSave();
   }, 100);
 }
 
+function scheduleSaveRetry() {
+  if (saveRetryTimer || storageConflict || !initialized) return;
+  saveRetryDelayMs = saveRetryDelayMs
+    ? Math.min(config.storage.saveRetryMaxMs, saveRetryDelayMs * 2)
+    : config.storage.saveRetryBaseMs;
+  saveRetryTimer = setTimeout(() => {
+    saveRetryTimer = null;
+    void doSave();
+  }, saveRetryDelayMs);
+  if (saveRetryTimer && typeof saveRetryTimer.unref === 'function') saveRetryTimer.unref();
+}
+
 async function doSave() {
-  if (!initialized) return;
+  if (!initialized || !storage || storageConflict) return;
   if (saving) {
     dirty = true;
     return;
@@ -302,9 +435,28 @@ async function doSave() {
   do {
     dirty = false;
     try {
-      await storage.save(state);
+      const result = await storage.save(state, { expectedRevision: storageRevision });
+      storageRevision = result && result.revision !== undefined
+        ? result.revision
+        : (typeof storage.getRevision === 'function' ? storage.getRevision() : storageRevision);
+      lastSaveAt = Date.now();
+      lastSaveError = null;
+      saveRetryDelayMs = 0;
     } catch (e) {
+      lastSaveError = e && e.message ? e.message : String(e);
+      if (e instanceof StorageConflictError || (e && e.name === 'StorageConflictError')) {
+        storageConflict = true;
+        logger.error('检测到外部写入，已停止落盘以避免覆盖新数据；请重启或检查是否有另一个实例', {
+          error: lastSaveError,
+          expected: storageRevision,
+          current: e && e.currentRevision,
+        });
+        break;
+      }
       logger.error('状态保存失败', { error: e.message, stack: e.stack });
+      scheduleSaveRetry();
+      dirty = true;
+      break;
     }
   } while (dirty);
   saving = false;
@@ -314,6 +466,21 @@ async function flushSave() {
   if (saveTimer) {
     clearTimeout(saveTimer);
     saveTimer = null;
+  }
+  if (saveRetryTimer) {
+    clearTimeout(saveRetryTimer);
+    saveRetryTimer = null;
+  }
+  if (saving) {
+    await new Promise((resolve) => {
+      const timer = setInterval(() => {
+        if (!saving) {
+          clearInterval(timer);
+          resolve(undefined);
+        }
+      }, 10);
+      if (timer && typeof timer.unref === 'function') timer.unref();
+    });
   }
   await doSave();
 }
@@ -350,9 +517,20 @@ async function shutdown(exitCode = 0) {
   ]);
   if (!flushed) log.error('落盘超时，状态可能未保存', { timeoutMs });
 
-  try {
-    await Promise.race([storage.close(), new Promise((r) => setTimeout(r, 5000))]);
-  } catch (_) {}
+  if (storage) {
+    if (distributedLockHeld && typeof storage.releaseLock === 'function') {
+      try {
+        await Promise.race([
+          storage.releaseLock(storageOwnerId),
+          new Promise((r) => setTimeout(r, 2000)),
+        ]);
+      } catch (_) {}
+      distributedLockHeld = false;
+    }
+    try {
+      await Promise.race([storage.close(), new Promise((r) => setTimeout(r, 5000))]);
+    } catch (_) {}
+  }
   lock.release();
   process.exit(exitCode);
 }
@@ -997,7 +1175,10 @@ module.exports = {
   DATA_DIR,
   AVATAR_DIR,
   SOUND_DIR,
-  storageKind: storage.kind,
+  getStorageKind,
+  getStorageStatus,
+  getStorageHealth,
+  get storageKind() { return storageKind; },
   exportProjectData,
   sanitizeImportedProject,
   walkAssetRefs,

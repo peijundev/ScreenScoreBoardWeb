@@ -61,6 +61,18 @@ function load() {
       keyFile: tlsKeyFile,
       passphrase: process.env.TLS_PASSPHRASE || '',
     },
+    storage: {
+      connectTimeoutMs: posInt('STORAGE_CONNECT_TIMEOUT_MS', 5000),
+      retries: Math.max(0, num('STORAGE_CONNECT_RETRIES', 2)),
+      retryBaseMs: Math.max(0, num('STORAGE_RETRY_BASE_MS', 300)),
+      saveRetryBaseMs: Math.max(100, num('STORAGE_SAVE_RETRY_BASE_MS', 2000)),
+      saveRetryMaxMs: Math.max(1000, num('STORAGE_SAVE_RETRY_MAX_MS', 30000)),
+      healthTimeoutMs: posInt('STORAGE_HEALTH_TIMEOUT_MS', 5000),
+      lockTtlMs: posInt('STORAGE_LOCK_TTL_MS', 30000),
+      lockRenewMs: posInt('STORAGE_LOCK_RENEW_MS', 10000),
+      lockWaitMs: posInt('STORAGE_LOCK_WAIT_MS', 5000),
+      migrationMaxBytes: Math.max(1024 * 1024, num('STORAGE_MIGRATION_MAX_BYTES', 64 * 1024 * 1024)),
+    },
     broadcast: {
       coalesceMs: num('BROADCAST_COALESCE_MS', 50),
       largeCoalesceMs: num('BROADCAST_LARGE_COALESCE_MS', 250),

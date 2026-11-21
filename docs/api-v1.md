@@ -240,6 +240,20 @@ curl -X PATCH http://localhost:3000/api/v1/themes/th_x/layers \
 | GET | `/orphans` | 扫描孤儿文件 |
 | POST | `/orphans/cleanup` | 清理孤儿，body 必须显式 `{ "dryRun": true }` 或 `false` |
 
+### 存储后端（管理员）
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/storage` | 脱敏配置、来源、后端元数据、运行状态、`restartRequired` |
+| GET | `/storage/health` | 连接/锁/revision/warnings；`?refresh=1` 强制探测 |
+| PUT | `/storage` | 保存配置（不迁移），body `{ "kind": "txt", "options": {…}, "clearPassword": false }` |
+| POST | `/storage/test` | 测试连接，body `{ "kind": "redis", "options": {…} }`；失败也返回 200 与 `{ "ok": false }` |
+| POST | `/storage/migrate` | 迁移/空库并保存，body `{ "mode": "copy" \| "empty", "overwrite": false, "config": { "kind": "txt", "options": {…} } }` |
+
+- 仅管理员可访问，且不会出现在 MCP 工具表中。
+- 响应永不包含密码；配置写入 `DATA_DIR/storage.json`（0600）。
+- 保存/迁移后需要重启服务；详见 [storage-backends.md](storage-backends.md)。
+
 上传示例：
 
 ```bash

@@ -1,6 +1,6 @@
 'use strict';
 const APP_VERSION = require('../../../package.json').version;
-const { publicState, storageKind } = require('../../state');
+const { publicState, getStorageKind, getStorageStatus } = require('../../state');
 const { clientCount } = require('../../wss');
 const runtime = require('../../runtime');
 const { buildOpenApi } = require('../openapi');
@@ -11,7 +11,8 @@ function health() {
     ok: true,
     version: APP_VERSION,
     uptimeSec: Math.round(process.uptime()),
-    storage: storageKind,
+    storage: getStorageKind(),
+    storageOk: !getStorageStatus().conflict,
     wsClients: clientCount(),
     projects: Object.keys(publicState().projects).length,
     ts: Date.now(),
