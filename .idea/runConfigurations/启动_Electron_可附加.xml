@@ -1,0 +1,11 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="启动 · Electron（可附加）" type="NodeJSConfigurationType" nameIsGenerated="false" path-to-js-file="$PROJECT_DIR$/node_modules/electron/cli.js" working-dir="$PROJECT_DIR$" application-parameters="--inspect=9331 --remote-debugging-port=9222 electron/main.js">
+    <node-interpreter value="project" />
+    <envs>
+      <env name="ELECTRON_ENABLE_LOGGING" value="1" />
+    </envs>
+    <method v="2">
+      <option name="RunConfigurationTask" enabled="true" run_configuration_name="构建 · 前端（SourceMap）" run_configuration_type="js.build_tools.npm" />
+    </method>
+  </configuration>
+</component>

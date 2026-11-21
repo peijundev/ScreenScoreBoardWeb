@@ -1,0 +1,3 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="调试 · Electron 渲染进程（9222）" type="ChromiumRemoteDebugType" factoryName="Chromium Remote" nameIsGenerated="false" host="127.0.0.1" port="9222" />
+</component>

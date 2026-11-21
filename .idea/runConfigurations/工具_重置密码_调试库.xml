@@ -1,0 +1,15 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="工具 · 重置密码（调试库）" type="js.build_tools.npm" nameIsGenerated="false">
+    <package-json value="$PROJECT_DIR$/package.json" />
+    <command value="run" />
+    <scripts>
+      <script value="auth:reset" />
+    </scripts>
+    <arguments value="--username admin" />
+    <node-interpreter value="project" />
+    <envs>
+      <env name="DATA_DIR" value="data/debug" />
+    </envs>
+    <method v="2" />
+  </configuration>
+</component>

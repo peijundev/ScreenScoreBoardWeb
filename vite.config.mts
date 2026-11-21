@@ -14,6 +14,8 @@ export default defineConfig(({ command }) => ({
     outDir: path.resolve(process.cwd(), 'public/v2'),
     emptyOutDir: true,
     target: 'es2022',
+    // 调试 Electron 渲染进程时用 VITE_SOURCEMAP=1 构建，默认生产构建不产出 sourcemap
+    sourcemap: process.env.VITE_SOURCEMAP === '1',
     rollupOptions: {
       input: {
         admin: path.resolve(root, 'admin.html'),
@@ -23,6 +25,8 @@ export default defineConfig(({ command }) => ({
   },
   server: {
     port: 5173,
+    // 端口被占用时直接失败，避免漂移到 5174 导致 WebStorm 调试地址失效
+    strictPort: true,
     proxy: {
       '/api': 'http://localhost:3000',
       '/ws': { target: 'ws://localhost:3000', ws: true },

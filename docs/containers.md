@@ -99,10 +99,11 @@ podman run -d --name screenscoreboard -p 3000:3000 \
 `.devcontainer/devcontainer.json` 使用 `mcr.microsoft.com/devcontainers/javascript-node:24-bookworm`，打开仓库即可获得 Node 24 开发环境：
 
 - `postCreateCommand` 自动执行 `npm ci`。
-- 转发 3000（后端与构建后的前端）与 5173（Vite）。
+- 转发 3000（后端与构建后的前端）、5173（Vite），以及调试端口 9222（Electron 渲染进程）、9331（Electron 主进程）、9332/9333（测试子进程）。
 - 时区固定为 `Asia/Shanghai`。
+- `customizations.jetbrains.backend` 声明为 `WebStorm`，JetBrains Gateway 会按 WebStorm 打开项目。
 
-VS Code / WebStorm 都可以直接识别。基础镜像选 Debian 而不是 Alpine，因为 JetBrains 远程后端依赖 glibc；需要更小的开发镜像时可以自行改成 Alpine，但 IDE 的远程开发功能可能不可用。
+VS Code / WebStorm 都可以直接识别。基础镜像选 Debian 而不是 Alpine，因为 JetBrains 远程后端依赖 glibc；需要更小的开发镜像时可以自行改成 Alpine，但 IDE 的远程开发功能可能不可用。`.idea/runConfigurations/` 会随项目进入容器，调试配置里的 `node-interpreter value="project"` 会解析到容器内的 Node 24。
 
 在容器里继续玩 Docker / Podman 时，按需把宿主 socket 挂进来，例如 VS Code 的 `docker-outside-of-docker` Feature；Rootless Docker 的 socket 位于 `$XDG_RUNTIME_DIR/docker.sock`，需要自定义 mount。
 

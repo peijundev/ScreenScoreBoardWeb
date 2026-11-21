@@ -1,0 +1,21 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="调试 · 全栈（后端 + Vite + Admin）" type="CompoundRunConfigurationType" factoryName="Compound" nameIsGenerated="false">
+    <option name="configurations">
+      <list>
+        <TypeNameTarget>
+          <option name="name" value="调试 · 后端" />
+          <option name="type" value="NodeJSConfigurationType" />
+        </TypeNameTarget>
+        <TypeNameTarget>
+          <option name="name" value="开发 · Vite" />
+          <option name="type" value="js.build_tools.npm" />
+        </TypeNameTarget>
+        <TypeNameTarget>
+          <option name="name" value="调试 · 前端 Admin（仅附加）" />
+          <option name="type" value="JavascriptDebugType" />
+        </TypeNameTarget>
+      </list>
+    </option>
+    <method v="2" />
+  </configuration>
+</component>
