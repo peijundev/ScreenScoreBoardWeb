@@ -11,6 +11,9 @@ import WebSocket from 'ws';
 
 const PORT = 3456;
 const BASE = `http://127.0.0.1:${PORT}`;
+const PKG_VERSION = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+).version;
 const DATA_DIR = mkdtempSync(path.join(tmpdir(), 'sb-verify-'));
 const TEST_ADMIN = 'admin';
 const TEST_PASSWORD = 'test-admin-pass';
@@ -249,7 +252,7 @@ async function main() {
   console.log('版本信息:');
   const verRes = await fetch(BASE + '/api/version');
   const verData = await verRes.json();
-  assert(verRes.ok && verData.version === '1.6.3', '版本接口返回 1.6.3');
+  assert(verRes.ok && verData.version === PKG_VERSION, '版本接口返回 ' + PKG_VERSION);
   assert(verData.finalForTechStack === false, '不再标记为原技术栈最终版');
   assert(verData.frontend === 'react' || verData.frontend === 'missing', '版本接口返回当前前端类型');
 

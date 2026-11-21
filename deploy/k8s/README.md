@@ -57,11 +57,11 @@ imagePullSecrets:
 ### 方式 B：本机构建后导入（内网无法访问 GHCR 时）
 
 ```bash
-docker build -t ghcr.io/peijundev/screenscoreboard:1.6.3 .
-docker save ghcr.io/peijundev/screenscoreboard:1.6.3 | sudo k3s ctr images import -
+docker build -t ghcr.io/peijundev/screenscoreboard:1.6.4 .
+docker save ghcr.io/peijundev/screenscoreboard:1.6.4 | sudo k3s ctr images import -
 
 # 或用 Podman
-podman save ghcr.io/peijundev/screenscoreboard:1.6.3 | sudo k3s ctr images import -
+podman save ghcr.io/peijundev/screenscoreboard:1.6.4 | sudo k3s ctr images import -
 ```
 
 导入后把 `kustomization.yaml` 的 `newTag` 改成对应版本（默认是 `latest`，本地导入时请改成具体版本）。

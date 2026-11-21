@@ -1,18 +1,19 @@
 # 实时计分板
 
-显示端 + 管理端的实时计分板。后端为 Node 原生 http + WebSocket；前端为 React 19 + Vite + TypeScript（源码在 `web/`，构建产物在 `public/v2/`）。支持多项目（每个项目一个独立积分榜）和可切换的存储后端（JSON / SQLite / PostgreSQL / MySQL）。
+显示端 + 管理端的实时计分板。后端为 Node 原生 http + WebSocket；前端为 React 19 + Vite + TypeScript（源码在 `web/`，构建产物在 `public/v2/`）。支持多项目（每个项目一个独立积分榜）、9 种可切换存储后端，以及三套设计语言、共六套管理端主题。
 
-> ## 版本 1.6.3 — Node.js 24 基线
+> ## 版本 1.6.4 — 可切换存储后端与六套管理端主题
 >
-> - **破坏性变更**：最低 Node.js 版本提升到 24，不再支持 Node 20 / 22；升级后需重新安装依赖，并用 Node 24 重建 `better-sqlite3`
-> - **改进**：`@types/node` 对齐 24.x；`test:theme` 纳入 CI；Dockerfile 支持 `NODE_VERSION` 构建参数，并修复 Vite 8 rolldown 原生绑定导致的镜像构建失败
-> - **延续 1.6.2**：Electron 启动页三模式（本地 / 远程管理 / 远程屏幕），远程管理只填服务器地址 / 账号 / 密码，远程屏幕只填完整显示端网址
-> - **延续 1.6.1**：纯突显（不加分）、官方 npm SDK（REST + MCP）、部署模式访问控制（可关闭登录系统，完全开放）
-> - **延续 1.6.0**：完整多用户鉴权（管理员 / 操作员 / 只读）、CSRF、会话与 API 令牌、HTTPS、Electron 本地/远程双模式与运行中返回欢迎页
-> - **延续 1.5.2**：REST API v1（90+ 条端点，含鉴权 + OpenAPI 3.1）、MCP（HTTP / stdio，90 个业务工具）、手机全功能管理端
-> - **1.4.0 已封存**：原技术栈（零构建、原生 DOM 前端）的最终版本，不再更新，历史说明见 [CHANGELOG.md](CHANGELOG.md)。
-> - **1.5.0 起**：前端为 React 19 + Vite + TypeScript（源码 `web/`，构建产物 `public/v2/`）；后端仍为 Node 原生 http + WebSocket。
-> - `data/` 数据格式、存储后端与 WS 协议与 1.5.0 兼容，可直接升级；首次运行 `npm start` 会自动构建前端。
+> - **存储后端（9 种）**：JSON / TXT / SQLite / PostgreSQL / MySQL / MongoDB / SQL Server / Oracle(Thin) / Redis；管理端可视化选择、测试连接、迁移现有数据或空库切换，保存后重启生效
+> - **可靠性与并发**：revision 乐观并发（CAS）、PostgreSQL advisory lock / MySQL `GET_LOCK` / Redis 分布式锁、连接重试与健康诊断；数据库密码保存在 `DATA_DIR/storage.json`（0600），不通过 API 回传
+> - **管理端主题（6 套）**：KDE Breeze / GNOME Adwaita / macOS 各深/浅；顶栏与移动端「更多 → 显示」可切换，localStorage 持久化，旧 `dark` / `light` 自动兼容
+> - **顶栏**：连接状态改为「已连接 / 断开」，版本号只显示 `vX.Y.Z`，「打开显示端」改成明显的按钮
+> - **部署与开发体验**：Dev Container、Kubernetes、Podman Quadlet、Alpine 镜像与 Docker Compose 加固、Electron 页面缩放、WebStorm 调试配置
+> - **延续 1.6.3**：最低 Node.js 24；升级后需 `npm install`，并用 Node 24 重建 `better-sqlite3`
+> - **延续 1.6.2**：Electron 启动页三模式（本地 / 远程管理 / 远程屏幕）；**1.6.1**：纯突显、官方 npm SDK、部署模式访问控制；**1.6.0**：完整多用户鉴权
+> - **1.4.0 已封存**：原技术栈（零构建、原生 DOM 前端）的最终版本，不再更新，历史说明见 [CHANGELOG.md](CHANGELOG.md)
+> - **1.5.0 起**：前端为 React 19 + Vite + TypeScript（源码 `web/`，构建产物 `public/v2/`）；后端仍为 Node 原生 http + WebSocket
+> - `data/` 旧 JSON 数据与 WS 协议保持兼容；新增 `storage.json` 管理存储配置；首次运行 `npm start` 会自动构建前端
 
 ## 为什么做这个项目？
 

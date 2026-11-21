@@ -2,7 +2,7 @@
 
 本项目遵循语义化版本。1.4.0 起，版本号在管理端顶栏与启动日志中显示。
 
-## 未发布 — 容器、Dev Container 与 Kubernetes
+## 1.6.4 — 可切换存储后端与六套管理端主题（2026-11-22）
 
 ### 新增
 
@@ -19,6 +19,7 @@
 - **可靠性与并发**：连接超时/重试、健康诊断（`/api/v1/storage/health`）、`revision` 乐观并发（CAS）、PostgreSQL advisory lock / MySQL `GET_LOCK` / Redis 分布式锁。
 - **测试**：新增 `npm run test:storage`；CI 增加 MongoDB 7 与 Redis 7 service；`npm run verify` 覆盖配置 API、TXT 迁移、密码不回传、非法配置与损坏配置。
 - **管理端主题**：在原有 KDE Breeze 深/浅之外新增 GNOME Adwaita 与 macOS 各深/浅，共六套；桌面顶栏与移动端「更多 → 显示」均可切换，选择保存在浏览器 localStorage，旧值 `dark`/`light` 自动兼容；Adwaita 使用 8px 圆角与 GNOME 蓝，macOS 使用系统蓝、6px 控件圆角与系统字体优先。
+- **管理端顶栏**：连接状态只显示「已连接 / 断开」；版本号只保留 `vX.Y.Z` 并移到「打开显示端」按钮左侧；「打开显示端」改为明显的按钮。
 
 ### 变更
 
@@ -27,6 +28,14 @@
 - 存储后端由 4 种扩展到 9 种；`scripts/gen-contracts.mjs` 改为直接读取 `server/settings.js`，不再通过 `state.js` 间接初始化存储，配置损坏不会阻断契约生成。
 - 旧 SQL 表在启动时自动补 `revision` 列并把旧行初始化为 1，无需手工迁移。
 - 存储保存改为 CAS：检测到外部写入时停止落盘并降级健康状态，避免旧快照覆盖新数据。
+
+### 升级注意
+
+- 执行 `npm install` 安装新增的可选数据库驱动（`mongodb` / `mssql` / `oracledb` / `redis`）；未安装的驱动只在选择对应后端时提示，不影响其他后端。
+- 在管理端保存或迁移存储配置后需要重启服务；迁移前请备份整个 `DATA_DIR`。
+- 旧 SQLite / PostgreSQL / MySQL 表会自动补 `revision` 列，无需手工迁移；JSON/TXT 旧文件可直接读取。
+- Redis 作为权威存储必须开启 AOF 并设置 `maxmemory-policy noeviction`。
+- 管理端旧主题值 `dark` / `light` 自动映射到 Breeze 深/浅。
 
 ## 1.6.3 — Node.js 24 基线
 
