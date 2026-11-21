@@ -35,7 +35,7 @@ test('MCP initialize、会话头、工具列表与工具调用', async () => {
         return rpcResult(message.id, {
           protocolVersion: '2025-06-18',
           capabilities: { tools: {} },
-          serverInfo: { name: 'screenscoreboard', version: '1.6.0' },
+          serverInfo: { name: 'screenscoreboard', version: '1.6.1' },
         }, [['Mcp-Session-Id', 'session-1']]);
       }
       if (message.method === 'notifications/initialized') {
@@ -130,7 +130,7 @@ test('MCP 工具错误与 JSON-RPC 错误', async () => {
         return rpcResult(message.id, {
           protocolVersion: '2025-06-18',
           capabilities: {},
-          serverInfo: { name: 'screenscoreboard', version: '1.6.0' },
+          serverInfo: { name: 'screenscoreboard', version: '1.6.1' },
         });
       }
       if (message.method === 'notifications/initialized') {

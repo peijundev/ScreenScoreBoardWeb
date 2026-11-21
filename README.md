@@ -2,9 +2,10 @@
 
 显示端 + 管理端的实时计分板。后端为 Node 原生 http + WebSocket；前端为 React 19 + Vite + TypeScript（源码在 `web/`，构建产物在 `public/v2/`）。支持多项目（每个项目一个独立积分榜）和可切换的存储后端（JSON / SQLite / PostgreSQL / MySQL）。
 
-> ## 版本 1.6.0 — 鉴权与远程部署
+> ## 版本 1.6.1 — 纯突显、SDK 与访问控制
 >
-> - **新增**：完整多用户鉴权（管理员 / 操作员 / 只读）、CSRF、会话与 API 令牌、HTTPS、Electron 本地/远程双模式与运行中返回欢迎页
+> - **新增**：纯突显（不加分）、官方 npm SDK（REST + MCP）、部署模式访问控制（可关闭登录系统，完全开放）
+> - **延续 1.6.0**：完整多用户鉴权（管理员 / 操作员 / 只读）、CSRF、会话与 API 令牌、HTTPS、Electron 本地/远程双模式与运行中返回欢迎页
 > - **延续 1.5.2**：REST API v1（90+ 条端点，含鉴权 + OpenAPI 3.1）、MCP（HTTP / stdio，90 个业务工具）、手机全功能管理端
 > - **1.4.0 已封存**：原技术栈（零构建、原生 DOM 前端）的最终版本，不再更新，历史说明见 [CHANGELOG.md](CHANGELOG.md)。
 > - **1.5.0 起**：前端为 React 19 + Vite + TypeScript（源码 `web/`，构建产物 `public/v2/`）；后端仍为 Node 原生 http + WebSocket。

@@ -323,7 +323,7 @@ await client.request('GET', '/state', { timeoutMs: 5000, signal: abortController
 
 - Node `>=20.19`（需要全局 `fetch`；更旧环境可通过 `fetch` 选项注入）。
 - 浏览器：现代 Chromium / Firefox / Safari。
-- 服务端：ScreenScoreBoard 1.6.0+；手动突显需要包含 `POST /api/v1/projects/:projectId/spotlight` 的版本。
+- 服务端：ScreenScoreBoard 1.6.1+；手动突显与访问控制需要该版本。
 - 包同时提供 ESM 与 CommonJS，无运行时依赖。
 
 ## 开发与发布（本仓库维护者）
