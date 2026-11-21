@@ -2,6 +2,22 @@
 
 本项目遵循语义化版本。1.4.0 起，版本号在管理端顶栏与启动日志中显示。
 
+## 未发布 — Node.js 24 基线
+
+### 破坏性变更
+
+- **最低 Node.js 版本提升到 24**：根包与 `@peijundev/screenscoreboard-sdk` 的 `engines.node` 均为 `">=24"`，不再声明支持 Node 20 / 22。
+- 升级后需要重新安装依赖，并用 Node 24 重新编译原生模块（`npm rebuild better-sqlite3`）；旧版本编译的 `better-sqlite3` 不能继续使用。
+- `@types/node` 对齐到 24.x，类型声明不再高于运行时版本。
+
+### 改进
+
+- `npm run test:theme` 依赖 Node 24 的原生 TypeScript 类型剥离（直接加载 `.ts` 源码），现已纳入 CI 与 Release Checks。
+- CI / Release 的 Node 版本改为读取 `.nvmrc`，与本地开发单一来源。
+- Dockerfile 支持 `--build-arg NODE_VERSION=24.22.1` 固定 Node 小版本，默认仍为 24。
+- 修复 Docker 前端构建阶段：Vite 8 的 rolldown 原生绑定是可选依赖，原 `npm ci --omit=optional` 会报 `Cannot find module '@rolldown/binding-linux-x64-gnu'`；改为 `npm ci --ignore-scripts`，同时避免下载 Electron 与编译 better-sqlite3。
+- README 与鉴权文档补充 Node 24+ 要求；Electron 45 内置 Node 24，但 ABI 与普通 Node 不同，SQLite 仍需 `npx electron-rebuild better-sqlite3`。
+
 ## 1.6.2 — Electron 三模式
 
 ### 改进

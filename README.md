@@ -32,7 +32,7 @@ npm start          # prestart 会自动构建 React 前端，然后启动服务
 
 局域网内其他设备用本机 IP 访问同一地址即可。端口可用 `PORT=8080 npm start` 修改。
 
-Node 版本要求 20.19+（Vite 构建要求），项目用 `.nvmrc` 固定为 24。如果切换了 Node 大版本，使用 SQLite 后端前需要重新编译原生模块：
+Node 版本要求 **24+**（`package.json` 已声明 `engines.node: ">=24"`），项目用 `.nvmrc` 固定为 24。`npm run test:theme` 直接加载 `.ts` 源码，依赖 Node 24 的原生 TypeScript 类型剥离。如果切换了 Node 大版本，使用 SQLite 后端前需要重新编译原生模块：
 
 ```bash
 npm rebuild better-sqlite3
@@ -49,7 +49,7 @@ npm rebuild better-sqlite3
 - 构建：`npm run build:web` 产出 `public/v2/`（已被 `.gitignore` 忽略；Electron 打包与 npm 发布会自动构建）
 - 类型检查：`npm run typecheck`
 
-技术基线：React 19 + Vite + TypeScript + Zustand；CSS 与 `body[data-*]` 主题体系沿用旧版。构建前端需要 Node 20.19+ / 22.12+（Vite 要求），推荐直接用 `.nvmrc` 的 24。
+技术基线：React 19 + Vite + TypeScript + Zustand；CSS 与 `body[data-*]` 主题体系沿用旧版。构建与运行统一要求 Node 24+，推荐直接用 `.nvmrc` 的 24。
 
 **IDE 运行配置**（`.idea/runConfigurations/`）：按「调试 / 启动 / 开发 / 构建 / 检查 / 测试 / 打包」分组；调试类配置使用 IDE 原生 Node.js / Chrome 调试，可直接下断点，其余为日常启动、构建与测试。
 
@@ -274,6 +274,8 @@ STORAGE=mysql MYSQL_URL=mysql://user:pass@localhost:3306/scoreboard npm start
 
 ## 部署（Docker / systemd）
 
+两种方式都要求 **Node 24+**：Docker 镜像默认 `node:24-bookworm-slim`，systemd 部署的宿主机需自行安装 Node 24+。
+
 Docker：
 
 ```bash
@@ -289,6 +291,12 @@ docker build -t screen-scoreboard .
 docker run -d -p 3000:3000 -v ./data:/data \
   -e ADMIN_PASSWORD='至少 8 位的强密码' \
   screen-scoreboard
+```
+
+镜像的 Node 版本由 `NODE_VERSION` 构建参数控制（默认 `24`），需要固定到具体小版本时：
+
+```bash
+docker build --build-arg NODE_VERSION=24.22.1 -t screen-scoreboard .
 ```
 
 systemd：
@@ -372,7 +380,7 @@ npm run dist:mac       # dmg + zip（必须在 macOS 上执行）
 - Windows 产物在 Linux 上交叉打包需要 wine；macOS 产物必须在 macOS 上构建
 - 未配置代码签名证书，安装包未签名
 - 使用默认 Electron 图标，可自行放入 `build/icon.png` 等自行替换
-- Electron 内默认使用 JSON 存储；若要在 Electron 里使用 SQLite，需要针对 Electron 的 Node ABI 重新编译 `better-sqlite3`（`npx electron-rebuild better-sqlite3`）
+- Electron 内默认使用 JSON 存储；若要在 Electron 里使用 SQLite，需要针对 Electron 的 Node ABI 重新编译 `better-sqlite3`（`npx electron-rebuild better-sqlite3`）。Electron 45 内置 Node 24，但它的 ABI（150）与普通 Node 24 不同，本机 `npm rebuild` 的产物不能直接复用
 
 ## 验证
 

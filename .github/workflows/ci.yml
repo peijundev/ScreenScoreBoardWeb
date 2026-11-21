@@ -47,7 +47,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies
@@ -61,6 +61,10 @@ jobs:
 
       - name: Backend typecheck
         run: npm run typecheck:server
+
+      # 依赖 Node 24 原生 TypeScript 类型剥离，直接加载 .ts 源码
+      - name: Theme tests
+        run: npm run test:theme
 
       - name: Generated contracts are up to date
         run: |

@@ -2,6 +2,8 @@
 
 本版本内置账号、角色、会话与 API 令牌。服务端是最终权限边界，管理端隐藏按钮只是体验优化。
 
+运行环境要求 **Node 24+**（`engines.node: ">=24"`）。systemd 部署的宿主机需要自行安装 Node 24+；Docker 镜像默认使用 `node:24-bookworm-slim`，可用 `--build-arg NODE_VERSION=24.22.1` 固定小版本。
+
 ## 角色
 
 | 角色 | 能力 |

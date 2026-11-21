@@ -2,7 +2,7 @@
 
 ScreenScoreBoard 的 TypeScript / JavaScript SDK，一套代码同时接入 **REST API v1** 与 **MCP**，适合 Node 服务、浏览器管理页、AI Agent、自动化脚本和第三方应用。
 
-- 零运行时依赖，Node 20.19+ / 现代浏览器
+- 零运行时依赖，Node 24+ / 现代浏览器
 - 支持 `Authorization: Bearer` API 令牌与账号密码会话（自动维护 Cookie / CSRF）
 - 完整的 REST 资源封装：项目、人员、团队、分数、手动突显、设置、运行态、主题、草稿、资源库、备份
 - MCP 客户端：`initialize`、`tools/list`、`tools/call`、`resources/list`、`resources/read`
@@ -321,8 +321,8 @@ await client.request('GET', '/state', { timeoutMs: 5000, signal: abortController
 
 ## 兼容性
 
-- Node `>=20.19`（需要全局 `fetch`；更旧环境可通过 `fetch` 选项注入）。
-- 浏览器：现代 Chromium / Firefox / Safari。
+- Node `>=24`（需要全局 `fetch`；更旧环境可通过 `fetch` 选项注入）。
+- 浏览器：现代 Chromium / Firefox / Safari（不受 Node `engines` 限制）。
 - 服务端：ScreenScoreBoard 1.6.1+；手动突显与访问控制需要该版本。
 - 包同时提供 ESM 与 CommonJS，无运行时依赖。
 
