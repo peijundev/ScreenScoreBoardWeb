@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: screenscoreboard
+  labels:
+    app.kubernetes.io/name: screenscoreboard
+  annotations:
+    # k3s 默认使用 Traefik；换成 nginx-ingress 时把 ingressClassName 改成 nginx
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  ingressClassName: traefik
+  rules:
+    # 把这里改成学校内网实际使用的主机名，并在 DNS 或 /etc/hosts 中指向入口节点
+    - host: scoreboard.intranet
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: screenscoreboard
+                port:
+                  number: 80

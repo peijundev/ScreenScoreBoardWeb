@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: screenscoreboard-config
+  labels:
+    app.kubernetes.io/name: screenscoreboard
+data:
+  PORT: "3000"
+  DATA_DIR: "/data"
+  TZ: "Asia/Shanghai"
+  # json / sqlite / postgres / mysql；用外部数据库时把连接串放进 Secret
+  STORAGE: "json"
+  BACKUP_INTERVAL_MINUTES: "30"
+  BACKUP_KEEP: "20"
+  SESSION_TTL_HOURS: "24"
+  SESSION_REMEMBER_DAYS: "30"
+  COOKIE_SECURE: "auto"
+  # 经由 Ingress 访问时保持 1；若直接用 NodePort 暴露，改成 0 避免伪造 X-Forwarded-*
+  TRUST_PROXY: "1"
+  ADMIN_USERNAME: "admin"

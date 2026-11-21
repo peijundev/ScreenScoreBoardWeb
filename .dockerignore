@@ -1,8 +1,13 @@
 node_modules
 data
+pgdata
 dist
 .git
 .github
 .idea
+.devcontainer
+deploy
+docs
+packages
 *.log
 .DS_Store

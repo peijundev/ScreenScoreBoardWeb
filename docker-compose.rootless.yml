@@ -1,0 +1,16 @@
+# Docker Rootless / Podman Rootless 叠加文件
+#
+# 用法：
+#   docker compose -f docker-compose.yml -f docker-compose.rootless.yml up -d
+#   podman compose -f docker-compose.yml -f docker-compose.rootless.yml up -d
+#
+# 为什么需要它：rootless 模式下容器内的 uid 1000 会映射到宿主机的高位 subuid，
+# 直接 bind mount ./data 时容器用户无法写入；命名卷由容器运行时创建并按镜像内
+# 的 node:node 属主初始化，因此可以直接使用。
+services:
+  scoreboard:
+    volumes:
+      - screenscoreboard-data:/data
+
+volumes:
+  screenscoreboard-data:

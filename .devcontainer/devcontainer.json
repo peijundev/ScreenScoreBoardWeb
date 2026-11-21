@@ -1,0 +1,25 @@
+{
+  "name": "ScreenScoreBoard (Node 24)",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:24-bookworm",
+  "containerEnv": {
+    "TZ": "Asia/Shanghai"
+  },
+  "forwardPorts": [3000, 5173],
+  "portsAttributes": {
+    "3000": {
+      "label": "后端（含构建后的前端）",
+      "onAutoForward": "notify"
+    },
+    "5173": {
+      "label": "Vite 开发服务器",
+      "onAutoForward": "silent"
+    }
+  },
+  "postCreateCommand": "npm ci",
+  "customizations": {
+    "vscode": {
+      "extensions": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode"]
+    }
+  },
+  "remoteUser": "node"
+}

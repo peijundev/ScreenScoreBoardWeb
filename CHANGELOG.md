@@ -2,6 +2,21 @@
 
 本项目遵循语义化版本。1.4.0 起，版本号在管理端顶栏与启动日志中显示。
 
+## 未发布 — 容器、Dev Container 与 Kubernetes
+
+### 新增
+
+- **Dev Container**：`.devcontainer/devcontainer.json` 提供 Node 24 开发环境，自动 `npm ci`，转发 3000 / 5173。
+- **Kubernetes**：`deploy/k8s/` 提供 Kustomize 清单（Namespace、ConfigMap、Secret 示例、PVC、单副本 Deployment、Service、Traefik Ingress），默认按 k3s 编写，并附带从零安装、镜像导入、升级、备份与排错的完整说明。
+- **Podman Quadlet**：`deploy/quadlet/screenscoreboard.container` 作为 systemd 用户服务长期运行。
+- **镜像发布**：新增 GitHub Actions 工作流，Release 时推送 `ghcr.io/peijundev/screenscoreboard:<版本>` 与 `:latest`。
+- **容器文档**：新增 `docs/containers.md`，覆盖 Docker、Docker Rootless、Podman、Dev Container 与 K8s。
+
+### 变更
+
+- 运行镜像从 Debian slim 改为 **Alpine**，最终镜像约 200 MB；`better-sqlite3` 在构建阶段现场编译 musl 版本，构建工具不进入运行镜像。
+- `docker-compose.yml` 增加健康检查、只读根文件系统、`no-new-privileges`、PostgreSQL profile；新增 `docker-compose.rootless.yml` 解决 rootless 下 bind mount 权限问题。
+
 ## 1.6.3 — Node.js 24 基线
 
 ### 破坏性变更

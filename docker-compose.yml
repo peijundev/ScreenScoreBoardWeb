@@ -1,13 +1,15 @@
 services:
   scoreboard:
     build: .
+    image: screenscoreboard:local
     container_name: screen-scoreboard
+    init: true
     ports:
       - "3000:3000"
     environment:
       # 存储后端：json（默认）/ sqlite / postgres / mysql
-      STORAGE: json
-      TZ: Asia/Shanghai
+      STORAGE: ${STORAGE:-json}
+      TZ: ${TZ:-Asia/Shanghai}
       BACKUP_INTERVAL_MINUTES: "30"
       BACKUP_KEEP: "20"
       # 首次启动必须设置管理员密码；之后修改无效（用 npm run auth:reset）
@@ -19,25 +21,56 @@ services:
       COOKIE_SECURE: ${COOKIE_SECURE:-auto}
       TRUST_PROXY: ${TRUST_PROXY:-0}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      # 使用 PostgreSQL 时：
+      # STORAGE=postgres DATABASE_URL=postgres://scoreboard:password@db:5432/scoreboard
+      DATABASE_URL: ${DATABASE_URL:-}
       # Node 内置 HTTPS（可选；证书需要额外挂载到容器内）
       # TLS_CERT_FILE: /certs/fullchain.pem
       # TLS_KEY_FILE: /certs/privkey.pem
       # 使用 SQLite 时：
       # SQLITE_FILE: /data/scoreboard.db
-      # 使用 PostgreSQL 时：
-      # STORAGE: postgres
-      # DATABASE_URL: postgres://scoreboard:password@db:5432/scoreboard
     volumes:
+      # Docker Rootless 或无法使用 bind mount 时，叠加 docker-compose.rootless.yml 改用命名卷
       - ./data:/data
     restart: unless-stopped
+    # 加固：根文件系统只读，只有 /data 与 /tmp 可写
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/health').then(r=>r.json()).then(j=>process.exit(j.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    depends_on:
+      db:
+        condition: service_healthy
+        required: false
 
-  # PostgreSQL 示例（需要时取消注释并把上面的 STORAGE 改为 postgres）
-  # db:
-  #   image: postgres:17
-  #   environment:
-  #     POSTGRES_DB: scoreboard
-  #     POSTGRES_USER: scoreboard
-  #     POSTGRES_PASSWORD: password
-  #   volumes:
-  #     - ./pgdata:/var/lib/postgresql/data
-  #   restart: unless-stopped
+  # PostgreSQL（可选）：docker compose --profile postgres up -d
+  # 同时把 STORAGE=postgres 与 DATABASE_URL 传给 scoreboard
+  db:
+    image: postgres:17-alpine
+    profiles: ["postgres"]
+    container_name: screen-scoreboard-db
+    environment:
+      POSTGRES_DB: scoreboard
+      POSTGRES_USER: scoreboard
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-scoreboard}
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scoreboard -d scoreboard"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s

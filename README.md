@@ -274,9 +274,9 @@ STORAGE=mysql MYSQL_URL=mysql://user:pass@localhost:3306/scoreboard npm start
 
 > 安全提示：导出、导入、备份与清理接口需要管理员登录；显示端仍然公开只读。远程部署请使用 HTTPS，详见 [docs/authentication.md](docs/authentication.md)。
 
-## 部署（Docker / systemd）
+## 部署（Docker / Podman / Kubernetes / systemd）
 
-两种方式都要求 **Node 24+**：Docker 镜像默认 `node:24-bookworm-slim`，systemd 部署的宿主机需自行安装 Node 24+。
+所有方式都要求 **Node 24+**。运行镜像基于 Alpine（约 200 MB），Docker、Docker Rootless、Podman、Dev Container 与 Kubernetes 的完整说明见 [docs/containers.md](docs/containers.md)，K8s 从零部署步骤见 [deploy/k8s/README.md](deploy/k8s/README.md)。
 
 Docker：
 
@@ -298,7 +298,7 @@ docker run -d -p 3000:3000 -v ./data:/data \
 镜像的 Node 版本由 `NODE_VERSION` 构建参数控制（默认 `24`），需要固定到具体小版本时：
 
 ```bash
-docker build --build-arg NODE_VERSION=24.22.1 -t screen-scoreboard .
+docker build --build-arg NODE_VERSION=24.22.3 -t screen-scoreboard .
 ```
 
 systemd：

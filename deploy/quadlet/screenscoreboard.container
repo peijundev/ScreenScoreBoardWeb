@@ -1,0 +1,40 @@
+# Podman Quadlet 单元（rootless，systemd 用户服务）
+#
+# 安装：
+#   mkdir -p ~/.config/containers/systemd ~/.config/screenscoreboard \
+#            ~/.local/share/screenscoreboard/data
+#   cp deploy/quadlet/screenscoreboard.container ~/.config/containers/systemd/
+#   install -m 600 /dev/null ~/.config/screenscoreboard/env
+#   echo "ADMIN_PASSWORD=至少8位的强密码" > ~/.config/screenscoreboard/env
+#   systemctl --user daemon-reload
+#   systemctl --user start screenscoreboard
+#   loginctl enable-linger "$USER"   # 未登录时也保持运行
+#
+# 查看日志：journalctl --user -u screenscoreboard -f
+
+[Unit]
+Description=ScreenScoreBoard 计分板服务
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=ghcr.io/peijundev/screenscoreboard:latest
+ContainerName=screenscoreboard
+PublishPort=3000:3000
+Environment=TZ=Asia/Shanghai
+Environment=STORAGE=json
+EnvironmentFile=%h/.config/screenscoreboard/env
+# :Z 处理 SELinux 标签，:U 把目录属主调整为容器内用户
+Volume=%h/.local/share/screenscoreboard/data:/data:Z,U
+ReadOnly=true
+Tmpfs=/tmp
+NoNewPrivileges=true
+DropCapability=ALL
+User=1000:1000
+AutoUpdate=registry
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

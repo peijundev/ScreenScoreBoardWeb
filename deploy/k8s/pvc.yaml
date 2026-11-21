@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: screenscoreboard-data
+  labels:
+    app.kubernetes.io/name: screenscoreboard
+spec:
+  # 单副本 + ReadWriteOnce；k3s 默认的 local-path 会使用节点本地磁盘
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  # 需要指定存储类时取消注释（k3s 默认 local-path）
+  # storageClassName: local-path
