@@ -15,6 +15,8 @@ export interface SpotlightTarget {
   key: string;
   els: HTMLElement[];
   delta?: number;
+  /** 手动/API 突显可覆盖本张卡片的总时长 */
+  durationMs?: number;
 }
 
 interface SlotCard {
@@ -31,6 +33,7 @@ interface Slot {
   baseWidth: number;
   baseHeight: number;
   timer: number;
+  durationMs?: number;
   leaving: boolean;
   fresh: boolean;
 }
@@ -57,7 +60,9 @@ const SCRIM_FADE = 200;
 
 let session: Session | null = null;
 
-function themeDuration(s: Settings): number {
+function themeDuration(s: Settings, override?: number): number {
+  const n = Number(override);
+  if (Number.isFinite(n) && n > 0) return clamp(n, 200, 10000);
   if ((s.spotlightTheme || 'pop') === 'pop') {
     return Math.max(1200, Number(s.scoreEffectDuration) + 600);
   }
@@ -139,6 +144,7 @@ function buildSlot(target: SpotlightTarget, s: Settings): Slot | null {
     baseWidth: width,
     baseHeight: height,
     timer: 0,
+    durationMs: target.durationMs,
     leaving: false,
     fresh: true,
   };
@@ -317,7 +323,7 @@ export function playSpotlightParallel(
     sess.overlay.appendChild(slot.group);
     slot.timer = window.setTimeout(() => {
       leaveSlot(sess, slot, s);
-    }, themeDuration(s) + sess.transition);
+    }, themeDuration(s, slot.durationMs) + sess.transition);
   }
   layout(sess, s);
   if (!sess.slots.length) maybeClose(sess);

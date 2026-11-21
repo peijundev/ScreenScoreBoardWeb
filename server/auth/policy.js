@@ -13,6 +13,7 @@ const OPERATOR_OPS = new Set([
   'addScore',
   'setScore',
   'addTeamScore',
+  'triggerSpotlight',
   'undoScore',
   'undoTo',
 ]);
@@ -74,6 +75,7 @@ const V1_ROUTE_ACCESS = Object.freeze({
   'POST /projects/:projectId/people/:personId/score/add': 'operator',
   'POST /projects/:projectId/people/:personId/score/set': 'operator',
   'POST /projects/:projectId/teams/:teamId/score/add': 'operator',
+  'POST /projects/:projectId/spotlight': 'operator',
   'POST /projects/:projectId/runtime/undo': 'operator',
   'POST /projects/:projectId/runtime/undo-to': 'operator',
   'POST /ops': 'operator',

@@ -164,6 +164,7 @@ export default function PeoplePanel({ project, canScore, isAdmin }: Props): JSX.
             presets={presets}
             quickScore={Boolean(settings.featureQuickScore)}
             avatarEdit={settings.featureAvatarEdit !== false}
+            spotlightTrigger={settings.featureSpotlightTrigger !== false}
             mobile={mobile}
             canScore={canScore}
             isAdmin={isAdmin}
@@ -186,6 +187,7 @@ interface RowProps {
   presets: number[];
   quickScore: boolean;
   avatarEdit: boolean;
+  spotlightTrigger: boolean;
   mobile: boolean;
   canScore: boolean;
   isAdmin: boolean;
@@ -200,6 +202,7 @@ function PersonRowBase({
   presets,
   quickScore,
   avatarEdit,
+  spotlightTrigger,
   mobile,
   canScore,
   isAdmin,
@@ -353,6 +356,22 @@ function PersonRowBase({
           ))}
         </span>
       ))}
+
+      {canScore && spotlightTrigger && (
+        <button
+          className="btn small spotlight-trigger"
+          type="button"
+          title="在大屏居中突显，不改变分数"
+          onClick={() =>
+            projectOp(projectId, 'triggerSpotlight', {
+              targetType: 'person',
+              targetId: person.id,
+            }).catch((err: Error) => toast(err.message))
+          }
+        >
+          突显
+        </button>
+      )}
 
       {canScore && (!mobile || !quickScore) && (
         <span className="score-ctl">

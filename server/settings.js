@@ -49,6 +49,7 @@ const DEFAULT_SETTINGS = {
   spotlightParallelGap: 20,       // 并列模式卡片间距 px（0–120）
   spotlightParallelTransition: 300, // 并列模式加入/退场/重排时长 ms（0–1500）
   spotlightInterruptFade: 150,    // 打断模式旧特效淡出时长 ms（0–1000）
+  spotlightTriggerDuration: 0,     // 手动/API 突显总时长 ms；0=跟随突显主题
   spotlightScrimEnabled: true,    // 突显时压暗背景
   spotlightScrimOpacity: 0.45,    // 压暗强度 0–1
   scoreEffectDuration: 700, // 特效时长 ms（200–3000）
@@ -115,6 +116,7 @@ const DEFAULT_SETTINGS = {
   featureSearch: true,
   featureQuickScore: true,
   featureTeamScore: true,
+  featureSpotlightTrigger: true, // 允许管理端 / API 手动触发起居突显（不加分）
   featureUndo: true,
   featureResetScores: true,
   featureClock: false,
@@ -334,6 +336,7 @@ const SETTINGS_VALIDATORS = {
   spotlightParallelGap: (v) => intRange(v, 0, 120, '并列卡片间距须为 0–120'),
   spotlightParallelTransition: (v) => intRange(v, 0, 1500, '并列卡片过渡时长须为 0–1500 ms'),
   spotlightInterruptFade: (v) => intRange(v, 0, 1000, '打断淡出时长须为 0–1000 ms'),
+  spotlightTriggerDuration: (v) => intRange(v, 0, 10000, '手动突显时长须为 0–10000 ms（0=跟随主题）'),
   scoreEffectDuration: (v) => {
     const n = Number(v);
     if (!Number.isInteger(n) || n < 200 || n > 3000) throw new OpError('特效时长须为 200–3000 的整数');
@@ -443,6 +446,7 @@ const SETTINGS_VALIDATORS = {
   featureSearch: (v) => boolStrict(v, '搜索开关'),
   featureQuickScore: (v) => boolStrict(v, '快捷记分开关'),
   featureTeamScore: (v) => boolStrict(v, '团队记分开关'),
+  featureSpotlightTrigger: (v) => boolStrict(v, '手动突显开关'),
   featureUndo: (v) => boolStrict(v, '撤销开关'),
   featureResetScores: (v) => boolStrict(v, '重置分数开关'),
   featureClock: (v) => boolStrict(v, '时钟开关'),

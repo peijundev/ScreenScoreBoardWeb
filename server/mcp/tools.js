@@ -26,6 +26,12 @@ const TOOL_INPUTS = {
   add_score: { projectId: { type: 'string' }, personId: { type: 'string' }, delta: { type: 'number' } },
   set_score: { projectId: { type: 'string' }, personId: { type: 'string' }, score: { type: 'number' } },
   add_team_score: { projectId: { type: 'string' }, teamId: { type: 'string' }, delta: { type: 'number' } },
+  trigger_spotlight: {
+    projectId: { type: 'string' },
+    targetType: { type: 'string', enum: ['person', 'team'], description: '突显对象类型' },
+    targetId: { type: 'string', description: '人员 ID 或团队 ID' },
+    durationMs: { type: 'integer', minimum: 0, maximum: 10000, description: '0 或省略时跟随项目设置' },
+  },
   reset_scores: { projectId: { type: 'string' } },
   update_settings: { projectId: { type: 'string' }, patch: { type: 'object', additionalProperties: true } },
   start_countdown: { projectId: { type: 'string' }, durationSec: { type: 'integer', minimum: 1, maximum: 3600 } },
@@ -48,6 +54,10 @@ const TOOL_INPUTS = {
   call_project_op: { op: { type: 'string' }, payload: { type: 'object', additionalProperties: true } },
 };
 
+const TOOL_REQUIRED = {
+  trigger_spotlight: ['targetType', 'targetId'],
+};
+
 function pathParams(pathPattern) {
   return pathPattern.split('/').filter((part) => part.startsWith(':')).map((part) => part.slice(1));
 }
@@ -58,8 +68,8 @@ function schemaFor(route) {
   const override = TOOL_INPUTS[route.mcp] || {};
   for (const [key, schema] of Object.entries(override)) {
     properties[key] = schema;
-    if (route.path.includes(':' + key) || ['projectId', 'personId', 'teamId', 'themeId'].includes(key)) {
-      if (route.path.includes(':' + key)) required.push(key);
+    if (route.path.includes(':' + key) || (TOOL_REQUIRED[route.mcp] || []).includes(key)) {
+      required.push(key);
     }
   }
   for (const param of pathParams(route.path)) {

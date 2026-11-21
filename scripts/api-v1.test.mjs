@@ -173,6 +173,13 @@ test('REST v1 全量资源、revision 与旧 API 兼容', async (t) => {
   assert.ok(peopleOp);
   assert.ok(peopleOp.parameters.some((p) => p.name === 'q'));
   assert.ok(peopleOp.responses['403'] && peopleOp.responses['413'] && peopleOp.responses['428']);
+  const spotlightOp = openapi.json.paths['/projects/{projectId}/spotlight'].post;
+  assert.equal(spotlightOp['x-required-role'], 'operator', 'OpenAPI 标记手动突显为 operator');
+  assert.deepEqual(
+    spotlightOp.requestBody.content['application/json'].schema.required,
+    ['targetType', 'targetId'],
+    'OpenAPI 要求 targetType 与 targetId',
+  );
 
   const create = await api('/projects', { method: 'POST', body: JSON.stringify({ name: 'API 测试' }) });
   assert.equal(create.status, 201);
@@ -354,6 +361,54 @@ test('REST v1 全量资源、revision 与旧 API 兼容', async (t) => {
     opSession,
   );
   assert.equal(opScore.status, 200, '操作员可以记分');
+
+  const scoreBeforeSpot = (await api(`/projects/${projectId}/people/${personId}`)).json.data.score;
+  const spotAdmin = await api(`/projects/${projectId}/spotlight`, {
+    method: 'POST',
+    body: JSON.stringify({ targetType: 'person', targetId: personId, durationMs: 1200 }),
+  });
+  assert.equal(spotAdmin.status, 200, '管理员可凭空触发突显');
+  assert.equal(spotAdmin.json.data.targetType, 'person');
+  assert.equal(spotAdmin.json.data.targetId, personId);
+  assert.equal(spotAdmin.json.data.durationMs, 1200);
+  const scoreAfterSpot = (await api(`/projects/${projectId}/people/${personId}`)).json.data.score;
+  assert.equal(scoreAfterSpot, scoreBeforeSpot, '突显不改变分数');
+  const spotOp = await api(`/projects/${projectId}/spotlight`, {
+    method: 'POST',
+    body: JSON.stringify({ targetType: 'person', targetId: personId }),
+  }, opSession);
+  assert.equal(spotOp.status, 200, '操作员可触发突显');
+  const spotAnonymous = await api(`/projects/${projectId}/spotlight`, {
+    method: 'POST',
+    body: JSON.stringify({ targetType: 'person', targetId: personId }),
+  }, null);
+  assert.equal(spotAnonymous.status, 401, '匿名不能触发突显');
+  const spotMissing = await api(`/projects/${projectId}/spotlight`, {
+    method: 'POST',
+    body: JSON.stringify({ targetType: 'person', targetId: 'p_missing' }),
+  }, opSession);
+  assert.equal(spotMissing.status, 404, '突显不存在的人员返回 404');
+  const badSpotDuration = await api(`/projects/${projectId}/spotlight`, {
+    method: 'POST',
+    body: JSON.stringify({ targetType: 'person', targetId: personId, durationMs: 10001 }),
+  }, opSession);
+  assert.equal(badSpotDuration.status, 400, '突显时长越界返回 400');
+  const disableSpot = await api(`/projects/${projectId}/settings`, {
+    method: 'PATCH',
+    body: JSON.stringify({ patch: { featureSpotlightTrigger: false } }),
+  });
+  assert.equal(disableSpot.status, 200);
+  const spotDisabled = await api(`/projects/${projectId}/spotlight`, {
+    method: 'POST',
+    body: JSON.stringify({ targetType: 'person', targetId: personId }),
+  }, opSession);
+  assert.equal(spotDisabled.status, 403, '关闭手动突显后返回 403');
+  assert.equal(spotDisabled.json.error.code, 'FEATURE_DISABLED');
+  await api(`/projects/${projectId}/settings`, {
+    method: 'PATCH',
+    body: JSON.stringify({ patch: { featureSpotlightTrigger: true } }),
+  });
+
   const opSettings = await api(
     `/projects/${projectId}/settings`,
     { method: 'PATCH', body: JSON.stringify({ patch: { accent: '#000000' } }) },

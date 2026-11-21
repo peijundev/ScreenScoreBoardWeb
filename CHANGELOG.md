@@ -2,6 +2,16 @@
 
 本项目遵循语义化版本。1.4.0 起，版本号在管理端顶栏与启动日志中显示。
 
+## 未发布
+
+### 新增
+
+- **纯突显（不加分）**：新增 `triggerSpotlight` op，可通过管理端人员 / 团队行的「突显」按钮、WebSocket op、`POST /api/v1/projects/:projectId/spotlight` 或 MCP 工具 `trigger_spotlight` 凭空触发「居中放大突显」，不改变分数、不写撤销栈与分数日志
+- 复用既有突显参数（主题、范围、宽高、播放模式、压暗等）；新增 `featureSpotlightTrigger` 开关与 `spotlightTriggerDuration` 时长（0=跟随主题）；单次 API 调用可用 `durationMs` 覆盖
+- 运行时新增 `spotlightEvents`（按项目、递增 `seq`），显示端只在检测到新事件时播放，重连/刷新不会补播历史突显
+- **官方 SDK**：新增独立 npm 包 `@peijundev/screenscoreboard-sdk`（`packages/sdk`），同时封装 REST API v1 与 MCP；支持 API 令牌、账号密码会话、CSRF、401 自动重登、超时/取消、统一错误类型，ESM + CommonJS 双格式、零运行时依赖；覆盖项目/人员/团队/分数/手动突显/设置/运行态/主题/草稿/资源库/备份，并提供 `client.request()` 通用通道
+- SDK 文档与 AI 接入示例见 [packages/sdk/README.md](packages/sdk/README.md)；CI 增加 SDK 构建与单元/集成测试
+
 ## 1.6.0 — 鉴权与远程部署
 
 ### 新增

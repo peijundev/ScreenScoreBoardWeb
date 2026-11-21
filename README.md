@@ -5,7 +5,7 @@
 > ## 版本 1.6.0 — 鉴权与远程部署
 >
 > - **新增**：完整多用户鉴权（管理员 / 操作员 / 只读）、CSRF、会话与 API 令牌、HTTPS、Electron 本地/远程双模式与运行中返回欢迎页
-> - **延续 1.5.2**：REST API v1（90+ 条端点，含鉴权 + OpenAPI 3.1）、MCP（HTTP / stdio，87 个业务工具）、手机全功能管理端
+> - **延续 1.5.2**：REST API v1（90+ 条端点，含鉴权 + OpenAPI 3.1）、MCP（HTTP / stdio，90 个业务工具）、手机全功能管理端
 > - **1.4.0 已封存**：原技术栈（零构建、原生 DOM 前端）的最终版本，不再更新，历史说明见 [CHANGELOG.md](CHANGELOG.md)。
 > - **1.5.0 起**：前端为 React 19 + Vite + TypeScript（源码 `web/`，构建产物 `public/v2/`）；后端仍为 Node 原生 http + WebSocket。
 > - `data/` 数据格式、存储后端与 WS 协议与 1.5.0 兼容，可直接升级；首次运行 `npm start` 会自动构建前端。
@@ -70,7 +70,7 @@ npm rebuild better-sqlite3
 
 ## REST API、MCP 与手机管理端
 
-- **REST API v1**：`/api/v1` 覆盖项目、人员、团队、分数、设置、运行态、主题库与主题子资源、主题草稿、导入导出、上传、备份和低层 `op`。所有写操作都走同一 `applyOp` 入口，并通过 WebSocket 实时同步。机器可读契约：`GET /api/v1/openapi.json`（OpenAPI 3.1）。
+- **REST API v1**：`/api/v1` 覆盖项目、人员、团队、分数、手动突显、设置、运行态、主题库与主题子资源、主题草稿、导入导出、上传、备份和低层 `op`。所有写操作都走同一 `applyOp` 入口，并通过 WebSocket 实时同步。机器可读契约：`GET /api/v1/openapi.json`（OpenAPI 3.1）。
 - **MCP**：`POST /mcp`（HTTP）与 `bin/screenscoreboard-mcp.js`（stdio）两种形态，共用同一套工具定义，可直接被 Claude Desktop / Claude Code / 自研 AI 客户端调用。
 - **手机管理端**：管理端在 ≤860px 自动切换为底部标签布局，全部功能（含主题工作室与矢量编辑）可用；对话框全屏、触控目标可调。
 
@@ -83,6 +83,49 @@ SCOREBOARD_URL=http://127.0.0.1:3000 SCOREBOARD_TOKEN=ssb_xxx node bin/screensco
 ```
 
 文档：[API v1](docs/api-v1.md) · [MCP](docs/mcp.md) · [手机管理端](docs/mobile-admin.md) · [安全说明](docs/security-notes.md)
+
+## SDK（Node / 浏览器 / AI 接入）
+
+独立 npm 包 `@peijundev/screenscoreboard-sdk` 同时封装 REST API v1 与 MCP，零运行时依赖，自带 TypeScript 类型：
+
+```bash
+npm install @peijundev/screenscoreboard-sdk
+```
+
+```ts
+import { ScreenScoreBoardClient } from '@peijundev/screenscoreboard-sdk';
+
+const client = new ScreenScoreBoardClient({
+  baseUrl: 'https://score.example.com',
+  token: process.env.SCOREBOARD_TOKEN,
+});
+
+const projects = await client.projects.list();
+const person = await client.people.add(projects[0].id, { name: '张三' });
+await client.people.addScore(projects[0].id, person.id, 5);
+await client.spotlight.person(projects[0].id, person.id); // 纯突显，不加分
+
+// MCP：给 AI 使用同一套工具
+const tools = await client.mcp.listTools();
+await client.mcp.callToolOrThrow('add_score', {
+  projectId: projects[0].id, personId: person.id, delta: 1,
+});
+```
+
+- 支持 API 令牌、账号密码会话、Cookie + CSRF、401 自动重登、请求超时与取消
+- 覆盖项目 / 人员 / 团队 / 分数 / 手动突显 / 设置 / 运行态 / 主题 / 草稿 / 资源库 / 备份
+- 未封装端点可用 `client.request(method, path, options)` 直接访问
+- MCP 支持 `initialize`、`tools/list`、`tools/call`、`resources/read`，可直接把工具定义交给 AI
+
+完整文档：[packages/sdk/README.md](packages/sdk/README.md)
+
+本仓库内验证：
+
+```bash
+npm run sdk:build
+npm run sdk:test
+npm run sdk:pack
+```
 
 > **安全提示：** 本版本已内置账号、角色、会话与 API 令牌鉴权。首次启动请设置 `ADMIN_PASSWORD`，或只在本机打开管理端完成初始化；远程部署请置于 HTTPS 反向代理之后。完整说明见 [docs/authentication.md](docs/authentication.md)。应用内明确不做 WS/HTTP 限流。
 
@@ -159,6 +202,7 @@ STORAGE=mysql MYSQL_URL=mysql://user:pass@localhost:3306/scoreboard npm start
 - 人员 / 团队搜索过滤
 - 人员 / 团队手动调序：列表中的 ↑↓ 按钮调整顺序，首次调序会自动切换到「自定义顺序」，大屏卡片随即按该顺序展示
 - 给人员记分：输入分数，点「+分」「−分」（支持负分），可选 +1/+5/+10/−1 快捷按钮
+- 纯突显（不加分）：人员行 / 团队行的「突显」按钮，或 `POST /api/v1/projects/:id/spotlight`，在不改变分数的情况下让大屏居中放大突显指定对象；可在功能开关中关闭，时长与既有突显主题参数均可调
 - 团队整体记分：+1/+5/−1，对每位成员各加减一次
 - 撤销上一步记分、一键重置本局分数（均可关闭对应功能）
 - 所有新增功能都有独立开关（设置 → 功能开关），可单独隐藏/禁用
@@ -333,6 +377,8 @@ npm run test:mcp     # HTTP / stdio MCP 工具一致性与实际调用、管理�
 npm run test:mobile  # 390×844 手机布局（无 Chromium 自动 skip）
 npm run test:auth    # 角色矩阵、CSRF、setup、会话吊销、Electron 模式
 npm run test:theme
+npm run sdk:test     # SDK 构建、单元测试与真实服务端集成测试
+npm run sdk:pack     # 检查 SDK npm 包内容
 npm run test:all     # 聚合 API / MCP / 主题 / 手机端 / 鉴权
 ```
 
@@ -360,6 +406,7 @@ server/static.js  静态文件服务（防路径穿越）
 bin/              CLI 入口（服务 + stdio MCP）
 public/           静态资源（CSS / 图片 / 媒体）；React 构建产物在 public/v2/
 web/              React + TypeScript 前端源码（admin / display）
+packages/sdk/     独立 npm SDK（REST API v1 + MCP，ESM/CJS + 类型）
 docs/             文档（API / MCP / 手机端 / 安全 / 主题规范）
 scripts/          契约生成与测试：verify / api-v1 / mcp / mobile-ui / theme-*
 Dockerfile / docker-compose.yml / deploy/screenscoreboard.service 部署

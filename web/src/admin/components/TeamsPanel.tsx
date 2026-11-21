@@ -307,6 +307,22 @@ function TeamBlock({
           </span>
         ))}
 
+        {canScore && project.settings.featureSpotlightTrigger !== false && (
+          <button
+            className="btn small spotlight-trigger"
+            type="button"
+            title="在大屏居中突显，不改变分数"
+            onClick={() =>
+              projectOp(project.id, 'triggerSpotlight', {
+                targetType: 'team',
+                targetId: team.id,
+              }).catch((err: Error) => toast(err.message))
+            }
+          >
+            突显
+          </button>
+        )}
+
         {isAdmin && (
           <>
             <label className="btn small file-mini" title="团队卡片背景图">

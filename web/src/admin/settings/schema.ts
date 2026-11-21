@@ -353,6 +353,16 @@ export const SETTINGS_GROUPS: Group[] = [
       { t: 'range', k: 'spotlightWidth', label: '突显宽度', min: 200, max: 1600, step: 20, fmt: 'num', unit: ' px' },
       { t: 'range', k: 'spotlightHeight', label: '突显高度', min: 0, max: 1200, step: 20, fmt: 'auto', unit: ' px' },
       { t: 'range', k: 'spotlightReturnDuration', label: '飞行动画时长', min: 600, max: 6000, step: 100, fmt: 'num', unit: ' ms' },
+      {
+        t: 'range',
+        k: 'spotlightTriggerDuration',
+        label: '手动 / API 突显时长（0=跟随主题）',
+        min: 0,
+        max: 10000,
+        step: 100,
+        fmt: 'auto',
+        unit: ' ms',
+      },
       { t: 'check', k: 'spotlightScrimEnabled', label: '突显时压暗背景' },
       {
         t: 'range',

@@ -239,6 +239,13 @@ test('MCP HTTP 与 stdio 工具一致且可调用', async (t) => {
   }
   const names = new Set(list.result.tools.map((tool) => tool.name));
   assert.ok(names.has('add_person'));
+  assert.ok(names.has('trigger_spotlight'));
+  const spotTool = list.result.tools.find((tool) => tool.name === 'trigger_spotlight');
+  assert.deepEqual(
+    [...spotTool.inputSchema.required].sort(),
+    ['projectId', 'targetId', 'targetType'],
+    '手动突显工具声明了必填参数',
+  );
   assert.ok(!names.has('update_theme_part'), '主题子资源使用分工具而非单一 update_theme_part');
   assert.ok(names.has('update_theme_layers'));
   assert.ok(names.has('call_op'));
@@ -255,6 +262,16 @@ test('MCP HTTP 与 stdio 工具一致且可调用', async (t) => {
   assert.equal(added.result.isError, false);
   const person = JSON.parse(added.result.content[0].text);
   assert.equal(person.name, 'AI 添加');
+
+  const spotlighted = await rpc('tools/call', {
+    name: 'trigger_spotlight',
+    arguments: { projectId, targetType: 'person', targetId: person.id, durationMs: 900 },
+  });
+  assert.equal(spotlighted.result.isError, false);
+  const spotlightEvent = JSON.parse(spotlighted.result.content[0].text);
+  assert.equal(spotlightEvent.targetType, 'person');
+  assert.equal(spotlightEvent.targetId, person.id);
+  assert.equal(spotlightEvent.durationMs, 900);
 
   const scored = await rpc('tools/call', {
     name: 'add_score', arguments: { projectId, personId: person.id, delta: 3 },

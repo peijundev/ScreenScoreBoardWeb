@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { projectOf, useAppStore } from '../shared/store';
-import type { Settings } from '../shared/types';
+import type { Project, Settings } from '../shared/types';
 import type { ThemeV2 } from '../shared/theme';
 import type { Item } from './lib/core';
 import {
@@ -39,6 +39,43 @@ const themeSpecCache = new Map<string, ThemeV2>();
 
 function itemScore(it: Item): number {
   return it.kind === 'person' && it.person ? it.person.score : it.members.reduce((s, m) => s + m.score, 0);
+}
+
+/** 按突显范围找到目标卡片；手动突显与记分突显共用同一套取卡规则。 */
+function spotlightElsFor(
+  board: HTMLElement,
+  project: Project,
+  targetType: 'person' | 'team',
+  targetId: string,
+  scope: string,
+): HTMLElement[] {
+  if (targetType === 'team') {
+    const teamEl = board.querySelector<HTMLElement>(
+      '.card[data-kind="team"][data-id="' + targetId + '"]',
+    );
+    return teamEl ? [teamEl] : [];
+  }
+  const person = project.people[targetId];
+  if (!person) return [];
+  const memberEl = board.querySelector<HTMLElement>('.member[data-person="' + person.id + '"]');
+  const personEl =
+    memberEl ||
+    board.querySelector<HTMLElement>('.card[data-kind="person"][data-id="' + person.id + '"]');
+  const teamEl = person.teamId
+    ? board.querySelector<HTMLElement>('.card[data-kind="team"][data-id="' + person.teamId + '"]')
+    : null;
+  if (scope === 'team') {
+    if (teamEl) return [teamEl];
+    return personEl ? [personEl] : [];
+  }
+  if (scope === 'person_team') {
+    if (memberEl && teamEl) return [memberEl, teamEl];
+    if (personEl) return [personEl];
+    return teamEl ? [teamEl] : [];
+  }
+  if (memberEl) return [memberEl];
+  if (personEl) return [personEl];
+  return teamEl ? [teamEl] : [];
 }
 
 export default function App(): JSX.Element {
@@ -97,6 +134,7 @@ export default function App(): JSX.Element {
   const prevScores = useRef<Record<string, number>>({});
   const prevRanks = useRef<Record<string, number>>({});
   const prevProject = useRef<string | null>(null);
+  const manualSpotlightSeen = useRef<{ projectId: string; seq: number } | null>(null);
   const prevRects = useRef(new Map<string, DOMRect>());
   const prevOrderKey = useRef('');
   const offsetMs = useMemo(
@@ -285,31 +323,14 @@ export default function App(): JSX.Element {
         const d = deltas.get(p.id);
         return d && !(settings.scoreEffectOnlyPositive && d < 0);
       });
-      const spotlightElsFor = (p: { id: string; teamId: string | null }): HTMLElement[] => {
-        const memberEl = board.querySelector<HTMLElement>('.member[data-person="' + p.id + '"]');
-        const personEl =
-          memberEl ||
-          board.querySelector<HTMLElement>('.card[data-kind="person"][data-id="' + p.id + '"]');
-        const teamEl = p.teamId
-          ? board.querySelector<HTMLElement>('.card[data-kind="team"][data-id="' + p.teamId + '"]')
-          : null;
-        if (scope === 'team') {
-          if (teamEl) return [teamEl];
-          return personEl ? [personEl] : [];
-        }
-        if (scope === 'person_team') {
-          if (memberEl && teamEl) return [memberEl, teamEl];
-          if (personEl) return [personEl];
-          return teamEl ? [teamEl] : [];
-        }
-        if (memberEl) return [memberEl];
-        if (personEl) return [personEl];
-        return teamEl ? [teamEl] : [];
-      };
       // 并列模式：同一次刷新的多人变化一起并列；队列/打断模式保持原行为（只播第一个人）
       const list = mode === 'parallel' ? changed : changed.slice(0, 1);
       const targets = list
-        .map((p) => ({ key: p.id, els: spotlightElsFor(p), delta: deltas.get(p.id) }))
+        .map((p) => ({
+          key: p.id,
+          els: spotlightElsFor(board, project, 'person', p.id, scope),
+          delta: deltas.get(p.id),
+        }))
         .filter((t) => t.els.length > 0);
       if (targets.length) {
         if (mode === 'parallel' && !prefersReducedMotion()) {
@@ -353,6 +374,65 @@ export default function App(): JSX.Element {
     prevScores.current = Object.fromEntries(people.map((p) => [p.id, p.score]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snapshot]);
+
+  // 手动 / API 纯突显：只播放居中放大特效，不改变分数
+  useEffect(() => {
+    if (!connected) {
+      manualSpotlightSeen.current = null;
+      return;
+    }
+    if (!project || !runtime) return;
+    const events = runtime.spotlightEvents?.[project.id] || [];
+    const latest = events.length ? events[events.length - 1].seq : 0;
+    const seen = manualSpotlightSeen.current;
+    if (!seen || seen.projectId !== project.id) {
+      // 首次连接 / 切换项目：只记录基线，不补播历史事件
+      manualSpotlightSeen.current = { projectId: project.id, seq: latest };
+      return;
+    }
+    const board = boardRef.current;
+    if (!board) return;
+    const fresh = events.filter((event) => event.seq > seen.seq);
+    if (!fresh.length) return;
+    manualSpotlightSeen.current = { projectId: project.id, seq: latest };
+    if (!settings || settings.featureSpotlightTrigger === false) return;
+    if (settings.displayStyle === 'trueage') return;
+
+    const scope = String(settings.spotlightScope || 'person');
+    const mode = String(settings.spotlightPlayMode || 'queue');
+    const configuredDuration = Number(settings.spotlightTriggerDuration);
+    const targets = fresh
+      .map((event) => {
+        const duration = Number(event.durationMs) || configuredDuration;
+        return {
+          key: event.targetType + ':' + event.targetId,
+          els: spotlightElsFor(
+            board,
+            project,
+            event.targetType === 'team' ? 'team' : 'person',
+            event.targetId,
+            scope,
+          ),
+          durationMs: Number.isFinite(duration) && duration > 0 ? duration : undefined,
+        };
+      })
+      .filter((target) => target.els.length > 0);
+    if (!targets.length) return;
+
+    if (mode === 'parallel' && !prefersReducedMotion()) {
+      playSpotlightParallel(board, targets, settings);
+      return;
+    }
+    if (mode === 'interrupt') {
+      const fade = Number(settings.spotlightInterruptFade);
+      const fadeMs = Number.isFinite(fade) ? fade : 150;
+      interruptSpotlights(fadeMs);
+      interruptSpotlightParallel(fadeMs);
+    }
+    for (const target of targets) {
+      spawnSpotlight(board, target.els, settings, undefined, target.durationMs);
+    }
+  }, [connected, project, settings, runtime]);
 
   // 轮播
   const carouselActive =

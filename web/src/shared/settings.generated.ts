@@ -43,6 +43,7 @@ export interface SettingsFields {
   spotlightParallelGap: number;
   spotlightParallelTransition: number;
   spotlightInterruptFade: number;
+  spotlightTriggerDuration: number;
   spotlightScrimEnabled: boolean;
   spotlightScrimOpacity: number;
   scoreEffectDuration: number;
@@ -102,6 +103,7 @@ export interface SettingsFields {
   featureSearch: boolean;
   featureQuickScore: boolean;
   featureTeamScore: boolean;
+  featureSpotlightTrigger: boolean;
   featureUndo: boolean;
   featureResetScores: boolean;
   featureClock: boolean;

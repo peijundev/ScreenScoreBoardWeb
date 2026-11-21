@@ -363,6 +363,32 @@ const routes = [
       return { data: result };
     },
   },
+  {
+    method: 'POST', path: '/projects/:projectId/spotlight', mcp: 'trigger_spotlight', summary: '不改变分数，居中突显指定人员或团队', mutates: true,
+    input: {
+      type: 'object',
+      required: ['targetType', 'targetId'],
+      properties: {
+        targetType: { type: 'string', enum: ['person', 'team'], description: '突显对象类型' },
+        targetId: { type: 'string', description: '人员 ID 或团队 ID' },
+        durationMs: {
+          type: 'integer', minimum: 0, maximum: 10000,
+          description: '本次突显总时长；省略或 0 时使用项目设置「手动突显时长」，再回退到突显主题时长',
+        },
+      },
+      additionalProperties: false,
+    },
+    handler: (ctx) => {
+      requireProject(ctx.params.projectId);
+      const result = commit(OPS.triggerSpotlight, {
+        projectId: ctx.params.projectId,
+        targetType: ctx.body.targetType,
+        targetId: ctx.body.targetId,
+        durationMs: ctx.body.durationMs,
+      });
+      return { data: result };
+    },
+  },
 
   // ---------- 设置 / 布局 ----------
   {

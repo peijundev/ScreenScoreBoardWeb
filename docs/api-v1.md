@@ -8,6 +8,7 @@
 - 内容类型：除上传/下载外均为 `application/json; charset=utf-8`
 - 实时同步：写操作经唯一写入口 `applyOp` 落库，并通过现有 WebSocket `/ws` 广播新状态（唯一例外是 `POST /projects/import`：它需要先清洗导入数据并重映射资产，完成后同样落盘并广播）
 - 机器可读契约：`GET /api/v1/openapi.json`（OpenAPI 3.1）
+- 官方 SDK：`@peijundev/screenscoreboard-sdk`，同时封装 REST 与 MCP，见 [packages/sdk/README.md](../packages/sdk/README.md)
 
 ## 响应格式
 
@@ -94,7 +95,7 @@ curl -X PATCH http://localhost:3000/api/v1/themes/th_x/layers \
 - 会话 Cookie：`ssb_session`，HttpOnly、`SameSite=Lax`、`Path=/`；CSRF Cookie：`ssb_csrf`（JS 可读）。
 - 非 GET 的 Cookie 请求需要 `X-CSRF-Token`；`Authorization: Bearer ssb_...` 豁免。
 - 公开读：`/health`、`/version`、`/state`、`/themes/:themeId`。
-- 其余 GET 至少需要 `viewer`；写操作默认需要 `admin`；记分相关写接口允许 `operator`。
+- 其余 GET 至少需要 `viewer`；写操作默认需要 `admin`；记分相关写接口与手动突显接口允许 `operator`。
 - `/mcp` 仅管理员。
 
 ## 端点
@@ -162,6 +163,7 @@ curl -X PATCH http://localhost:3000/api/v1/themes/th_x/layers \
 | POST | `/projects/:projectId/people/:personId/score/add` | 加减分，body `{ "delta": 5 }`；body 可省略 `projectId`/`personId` |
 | POST | `/projects/:projectId/people/:personId/score/set` | 直接设分，body `{ "score": 10 }` |
 | POST | `/projects/:projectId/teams/:teamId/score/add` | 团队全员加减分，body `{ "delta": 2 }` |
+| POST | `/projects/:projectId/spotlight` | 凭空触发起居放大突显，不改变分数、不写撤销栈；body `{ "targetType": "person" \| "team", "targetId": "…", "durationMs?": 2000 }`，允许 `operator` |
 | POST | `/projects/:projectId/scores/reset` | 重置本局全部分数 |
 | GET | `/projects/:projectId/runtime` | 撤销栈、分数日志、倒计时 |
 | POST | `/projects/:projectId/runtime/undo` | 撤销最近一步记分 |
@@ -170,6 +172,8 @@ curl -X PATCH http://localhost:3000/api/v1/themes/th_x/layers \
 | POST | `/projects/:projectId/runtime/countdown/pause` | 暂停 |
 | POST | `/projects/:projectId/runtime/countdown/resume` | 继续 |
 | POST | `/projects/:projectId/runtime/countdown/reset` | 重置 |
+
+手动突显遵循项目设置：`featureSpotlightTrigger` 关闭时接口返回 `403 FEATURE_DISABLED`；`durationMs` 省略或为 `0` 时使用 `spotlightTriggerDuration`（0=跟随突显主题），再回退到主题自身时长。它复用 `spotlightTheme`、`spotlightScope`、`spotlightPlayMode`、`spotlightWidth/Height`、压暗等全部既有参数；显示端按 `spotlightEvents` 中递增的 `seq` 播放，不会把历史事件当成新的触发。
 
 ### 设置与布局
 

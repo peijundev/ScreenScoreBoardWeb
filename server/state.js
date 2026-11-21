@@ -697,6 +697,22 @@ function applyOp(op, payload, actor = currentActor()) {
       runtime.pushScoreLog(project.id, label, delta);
       return { count: members.length };
     }
+    case OPS.triggerSpotlight: {
+      requireFeature(project, 'featureSpotlightTrigger');
+      const targetType = payload.targetType;
+      if (targetType !== 'person' && targetType !== 'team') {
+        throw new OpError('突显目标类型须为 person 或 team');
+      }
+      const targetId = needString(payload.targetId, '突显目标', 64);
+      if (targetType === 'person') needPerson(project, targetId);
+      else needTeam(project, targetId);
+      let durationMs;
+      if (payload.durationMs !== undefined && payload.durationMs !== null) {
+        durationMs = intRange(payload.durationMs, 0, 10000, '突显时长须为 0–10000 ms（0=跟随主题）');
+        if (durationMs === 0) durationMs = undefined;
+      }
+      return runtime.pushSpotlight(project.id, { targetType, targetId, durationMs });
+    }
     case OPS.resetScores: {
       requireFeature(project, 'featureResetScores');
       const changed = Object.values(project.people).filter((p) => p.score !== 0);

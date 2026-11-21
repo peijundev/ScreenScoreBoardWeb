@@ -567,13 +567,24 @@ function centerTargets(
   }
 }
 
+/** 手动/API 突显可覆盖总时长；0/非法值回退到主题自身的时长。 */
+function spotlightTotal(override: number | undefined, fallback: number): number {
+  const n = Number(override);
+  if (Number.isFinite(n) && n > 0) return clamp(n, 200, 10000);
+  return fallback;
+}
+
 function spawnSpotlightReturn(
   els: HTMLElement[],
   s: Settings,
   delta?: number,
   extraCleanup?: () => void,
+  durationOverride?: number,
 ): void {
-  const total = clamp(Number(s.spotlightReturnDuration) || 1600, 600, 6000);
+  const total = spotlightTotal(
+    durationOverride,
+    clamp(Number(s.spotlightReturnDuration) || 1600, 600, 6000),
+  );
   const overlay = document.createElement('div');
   overlay.className = 'spotlight-return-overlay';
   overlay.style.setProperty('--spot-duration', total + 'ms');
@@ -623,8 +634,16 @@ function spawnSpotlightReturn(
   }, total + 150);
 }
 
-function spawnSpotlightGenie(els: HTMLElement[], s: Settings, delta?: number): void {
-  const total = clamp(Number(s.spotlightReturnDuration) || 1800, 600, 6000);
+function spawnSpotlightGenie(
+  els: HTMLElement[],
+  s: Settings,
+  delta?: number,
+  durationOverride?: number,
+): void {
+  const total = spotlightTotal(
+    durationOverride,
+    clamp(Number(s.spotlightReturnDuration) || 1800, 600, 6000),
+  );
   const overlay = document.createElement('div');
   overlay.className = 'spotlight-return-overlay';
   const scrim = document.createElement('div');
@@ -678,8 +697,17 @@ function spawnSpotlightGenie(els: HTMLElement[], s: Settings, delta?: number): v
   }, total + 150);
 }
 
-function spawnSpotlightSqueeze(board: HTMLElement, els: HTMLElement[], s: Settings, delta?: number): void {
-  const total = clamp(Number(s.spotlightReturnDuration) || 1600, 600, 6000);
+function spawnSpotlightSqueeze(
+  board: HTMLElement,
+  els: HTMLElement[],
+  s: Settings,
+  delta?: number,
+  durationOverride?: number,
+): void {
+  const total = spotlightTotal(
+    durationOverride,
+    clamp(Number(s.spotlightReturnDuration) || 1600, 600, 6000),
+  );
   const boardRect = board.getBoundingClientRect();
   const centerX = boardRect.left + boardRect.width / 2;
 
@@ -703,11 +731,16 @@ function spawnSpotlightSqueeze(board: HTMLElement, els: HTMLElement[], s: Settin
     );
   });
 
-  spawnSpotlightReturn(els, s, delta, () => awayAnims.forEach((a) => a.cancel()));
+  spawnSpotlightReturn(els, s, delta, () => awayAnims.forEach((a) => a.cancel()), durationOverride);
 }
 
-function spawnSpotlightPop(els: HTMLElement[], s: Settings, delta?: number): void {
-  const total = Math.max(1200, Number(s.scoreEffectDuration) + 600);
+function spawnSpotlightPop(
+  els: HTMLElement[],
+  s: Settings,
+  delta?: number,
+  durationOverride?: number,
+): void {
+  const total = spotlightTotal(durationOverride, Math.max(1200, Number(s.scoreEffectDuration) + 600));
   const overlay = document.createElement('div');
   overlay.className = 'spotlight-overlay';
   overlay.style.setProperty('--spot-duration', total + 'ms');
@@ -745,14 +778,15 @@ export function spawnSpotlight(
   els: HTMLElement[],
   s: Settings,
   delta?: number,
+  durationOverride?: number,
 ): void {
   const theme = s.spotlightTheme || (s.spotlightReturnToOrigin ? 'fly' : 'pop');
   if (!prefersReducedMotion()) {
-    if (theme === 'fly') return spawnSpotlightReturn(els, s, delta);
-    if (theme === 'genie') return spawnSpotlightGenie(els, s, delta);
-    if (theme === 'squeeze') return spawnSpotlightSqueeze(board, els, s, delta);
+    if (theme === 'fly') return spawnSpotlightReturn(els, s, delta, undefined, durationOverride);
+    if (theme === 'genie') return spawnSpotlightGenie(els, s, delta, durationOverride);
+    if (theme === 'squeeze') return spawnSpotlightSqueeze(board, els, s, delta, durationOverride);
   }
-  spawnSpotlightPop(els, s, delta);
+  spawnSpotlightPop(els, s, delta, durationOverride);
 }
 
 export function spawnHighlight(els: HTMLElement[], s: Settings): void {

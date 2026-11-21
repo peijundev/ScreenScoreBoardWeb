@@ -8,6 +8,7 @@
 - 两种传输：**stdio**（本机进程）与 **HTTP**（`POST /mcp`）
 - 工具定义由 REST 路由表自动派生，两种传输的工具列表完全一致
 - 常用工具提供显式 `inputSchema`；其余工具回退到 `{ path 参数, body, payload }` 通用结构
+- 官方 SDK `@peijundev/screenscoreboard-sdk` 内置 MCP 客户端（`initialize` / `tools/list` / `tools/call` / `resources/read`），见 [packages/sdk/README.md](../packages/sdk/README.md)
 
 ## 传输一：stdio
 
@@ -96,7 +97,7 @@ curl -s http://localhost:3000/mcp \
 
 ## 工具
 
-工具数量随 REST 路由增长（当前 **87** 个；以 `tools/list` 为准）。命名与资源对应，主要分组：
+工具数量随 REST 路由增长（当前 **90** 个；以 `tools/list` 为准）。命名与资源对应，主要分组：
 
 | 分组 | 代表工具 |
 |---|---|
@@ -104,7 +105,7 @@ curl -s http://localhost:3000/mcp \
 | 项目 | `list_projects`、`create_project`、`get_project`、`rename_project`、`delete_project` |
 | 人员 | `list_people`、`add_person`、`update_person`、`remove_person`、`move_person`、`set_person_*` |
 | 团队 | `list_teams`、`add_team`、`update_team`、`remove_team`、`assign_team` |
-| 分数 | `add_score`、`set_score`、`add_team_score`、`reset_scores` |
+| 分数 | `add_score`、`set_score`、`add_team_score`、`trigger_spotlight`、`reset_scores` |
 | 运行态 | `undo_score`、`undo_to`、`start_countdown`、`pause_countdown`、`resume_countdown`、`reset_countdown` |
 | 设置/布局 | `get_settings`、`update_settings`、`reset_layout` |
 | 主题 | `list_themes`、`get_theme`、`create_theme`、`duplicate_theme`、`rename_theme`、`apply_theme`、`delete_theme` |

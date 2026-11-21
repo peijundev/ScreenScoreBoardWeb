@@ -706,6 +706,60 @@ async function main() {
     assert(/突显宽度/.test(e.message), '非法突显宽度被拒绝');
   });
 
+  // 纯突显：管理端 / API 可凭空触发居中放大，但绝不改分数、不写撤销栈或分数日志
+  console.log('手动突显（不加分）:');
+  const manualBefore = await getState();
+  const manualScore = manualBefore.projects[projectId].people[pid].score;
+  const undoBefore = manualBefore.runtime.undoCounts[projectId] || 0;
+  const logsBefore = (manualBefore.runtime.scoreLogs?.[projectId] || []).length;
+  let markSpot = viewer.runtimes.length;
+  const spotAck = await adminOp('triggerSpotlight', {
+    targetType: 'person', targetId: pid, durationMs: 1500,
+  });
+  assert(spotAck.result && spotAck.result.targetType === 'person' &&
+    spotAck.result.targetId === pid && spotAck.result.durationMs === 1500,
+    '手动突显返回运行时事件');
+  await viewer.waitRuntime((r) => (r.spotlightEvents?.[projectId] || []).some(
+    (e) => e.targetType === 'person' && e.targetId === pid && e.durationMs === 1500), markSpot);
+  const manualAfter = await getState();
+  assert(manualAfter.projects[projectId].people[pid].score === manualScore, '手动突显不改变分数');
+  assert((manualAfter.runtime.undoCounts[projectId] || 0) === undoBefore, '手动突显不进入撤销栈');
+  assert((manualAfter.runtime.scoreLogs?.[projectId] || []).length === logsBefore,
+    '手动突显不写分数日志');
+  markSpot = viewer.runtimes.length;
+  await adminOp('triggerSpotlight', { targetType: 'team', targetId: tid });
+  await viewer.waitRuntime((r) => (r.spotlightEvents?.[projectId] || []).some(
+    (e) => e.targetType === 'team' && e.targetId === tid), markSpot);
+  assert(true, '手动突显团队');
+  await adminOp('triggerSpotlight', { targetType: 'person', targetId: 'p_missing' }).catch((e) => {
+    assert(/不存在/.test(e.message), '手动突显不存在的人员被拒绝');
+  });
+  await adminOp('triggerSpotlight', { targetType: 'group', targetId: pid }).catch((e) => {
+    assert(/目标类型/.test(e.message), '非法突显目标类型被拒绝');
+  });
+  await adminOp('triggerSpotlight', {
+    targetType: 'person', targetId: pid, durationMs: 10001,
+  }).catch((e) => {
+    assert(/突显时长/.test(e.message), '非法手动突显时长被拒绝');
+  });
+  await adminOp('updateSettings', {
+    patch: { featureSpotlightTrigger: false, spotlightTriggerDuration: 2400 },
+  });
+  s = await viewer.waitState((st) => P(st).settings.featureSpotlightTrigger === false &&
+    P(st).settings.spotlightTriggerDuration === 2400);
+  assert(true, '手动突显开关与时长同步');
+  await adminOp('triggerSpotlight', { targetType: 'person', targetId: pid }).catch((e) => {
+    assert(/未开启/.test(e.message), '手动突显关闭时拒绝');
+  });
+  await adminOp('updateSettings', { patch: { spotlightTriggerDuration: 10001 } }).catch((e) => {
+    assert(/手动突显时长/.test(e.message), '非法手动突显时长设置被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { featureSpotlightTrigger: 'yes' } }).catch((e) => {
+    assert(/布尔/.test(e.message), '非法手动突显开关被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { featureSpotlightTrigger: true } });
+  await viewer.waitState((st) => P(st).settings.featureSpotlightTrigger === true);
+
   await adminOp('updateSettings', {
     patch: {
       fontFamily: 'serif', fontScale: 1.2, titleSize: 72, titleAlign: 'left', titleColor: '#ff0000',
@@ -1234,8 +1288,9 @@ async function main() {
     rp.settings.spotlightScrimOpacity === 0.25 && rp.settings.spotlightPlayMode === 'parallel' &&
     rp.settings.spotlightParallelMax === 6 && rp.settings.spotlightParallelGap === 36 &&
     rp.settings.spotlightParallelTransition === 500 && rp.settings.spotlightInterruptFade === 250 &&
+    rp.settings.featureSpotlightTrigger === true && rp.settings.spotlightTriggerDuration === 2400 &&
     rp.settings.scoreRolling === false,
-    '重启后居中突显/范围/宽高/主题/飞入飞回时长/压暗开关与强度/播放模式/并列与打断参数/滚动数字/自定义音效恢复');
+    '重启后居中突显/范围/宽高/主题/飞入飞回时长/压暗开关与强度/播放模式/并列与打断参数/手动突显/滚动数字/自定义音效恢复');
   assert(rp.settings.countdownDisplayMode === 'fullscreen' && rp.settings.countdownShape === 'rounded-rect' &&
     rp.settings.countdownSize === 600 && rp.settings.countdownHeight === 300 &&
     rp.settings.countdownFontSize === 96 && rp.settings.countdownPosition === 'bottom-right' &&
@@ -1251,8 +1306,8 @@ async function main() {
     rp.settings.featureCountdown === false, '重启后新功能开关恢复');
   assert(rp.settings.featureMobileAdmin === false && rp.settings.adminTouchTargetSize === 52,
     '重启后管理端移动布局与触控目标尺寸恢复');
-  assert(!restored.runtime.undoCounts[projectId] && !restored.runtime.countdowns[projectId],
-    '重启后撤销栈与倒计时运行态清空');
+  assert(!restored.runtime.undoCounts[projectId] && !restored.runtime.countdowns[projectId] &&
+    !restored.runtime.spotlightEvents[projectId], '重启后撤销栈、倒计时与手动突显运行态清空');
 
   console.log('存储后端（SQLite）:');
   await stopServer(server);

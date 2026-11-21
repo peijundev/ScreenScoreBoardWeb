@@ -4,8 +4,9 @@ node_modules/
 # 运行时数据（人员/团队/头像，重启可重建）
 data/
 
-# Electron 打包产物
+# Electron 打包产物 / npm pack 临时包
 dist/
+*.tgz
 
 # React v2 构建产物（由 npm run build:web 生成）
 public/v2/

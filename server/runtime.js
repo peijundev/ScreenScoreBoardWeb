@@ -5,8 +5,11 @@ const UNDO_LIMIT = 50;
 const undoStacks = new Map();   // projectId -> [{ label, entries, at }]
 const countdowns = new Map();   // projectId -> { state, durationMs, endsAt, remainingMs, endedAt, timer }
 const scoreLogs = new Map();    // projectId -> [{ at, label, delta }]
+const spotlightEvents = new Map(); // projectId -> [{ seq, targetType, targetId, at, durationMs? }]
 
 const SCORE_LOG_LIMIT = 200;
+const SPOTLIGHT_EVENT_LIMIT = 20;
+let spotlightSeq = 0;
 
 let broadcast = () => {};
 function setBroadcaster(fn) {
@@ -74,6 +77,27 @@ function getScoreLogs(projectId, n) {
   const logs = scoreLogs.get(projectId);
   if (!logs || !logs.length) return [];
   return logs.slice(-n).reverse();
+}
+
+// ---------- 纯突显事件（不加分） ----------
+function pushSpotlight(projectId, event) {
+  if (!projectId) return null;
+  const entry = {
+    seq: ++spotlightSeq,
+    targetType: event.targetType,
+    targetId: event.targetId,
+    at: Date.now(),
+  };
+  if (Number.isFinite(event.durationMs) && event.durationMs > 0) entry.durationMs = event.durationMs;
+  const list = spotlightEvents.get(projectId) || [];
+  list.push(entry);
+  while (list.length > SPOTLIGHT_EVENT_LIMIT) list.shift();
+  spotlightEvents.set(projectId, list);
+  return entry;
+}
+
+function getSpotlightEvents(projectId) {
+  return spotlightEvents.get(projectId) || [];
 }
 
 // ---------- 倒计时 ----------
@@ -168,6 +192,7 @@ function clearProjectRuntime(projectId) {
   resetCountdown(projectId);
   clearUndo(projectId);
   scoreLogs.delete(projectId);
+  spotlightEvents.delete(projectId);
 }
 
 // ---------- 广播快照 ----------
@@ -188,11 +213,16 @@ function getRuntimeSnapshot() {
   for (const [projectId] of scoreLogs) {
     snapshotLogs[projectId] = getScoreLogs(projectId, 50);
   }
+  const snapshotSpotlights = {};
+  for (const [projectId, events] of spotlightEvents) {
+    if (events.length) snapshotSpotlights[projectId] = events.slice();
+  }
   return {
     undoCounts,
     undoLabels: undoLabelsMap,
     scoreLogs: snapshotLogs,
     countdowns: snapshotCountdowns,
+    spotlightEvents: snapshotSpotlights,
     serverNow: Date.now(),
   };
 }
@@ -207,6 +237,8 @@ module.exports = {
   clearUndo,
   pushScoreLog,
   getScoreLogs,
+  pushSpotlight,
+  getSpotlightEvents,
   startCountdown,
   pauseCountdown,
   resumeCountdown,

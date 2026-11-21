@@ -20,6 +20,7 @@ const OPS = Object.freeze({
   addScore: 'addScore',
   setScore: 'setScore',
   addTeamScore: 'addTeamScore',
+  triggerSpotlight: 'triggerSpotlight',
   resetScores: 'resetScores',
   undoScore: 'undoScore',
   undoTo: 'undoTo',

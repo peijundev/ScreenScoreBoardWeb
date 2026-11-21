@@ -7,6 +7,7 @@ const FEATURES: Array<[string, string]> = [
   ['featureSearch', '人员 / 团队搜索'],
   ['featureQuickScore', '快捷记分按钮'],
   ['featureTeamScore', '团队整体记分'],
+  ['featureSpotlightTrigger', '手动 / API 突显（不加分）'],
   ['featureUndo', '撤销上一步记分'],
   ['featureResetScores', '重置本局分数'],
   ['featureClock', '时钟'],

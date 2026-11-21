@@ -78,3 +78,6 @@ jobs:
 
       - name: Auth tests
         run: npm run test:auth
+
+      - name: SDK build & tests
+        run: npm run sdk:test
