@@ -119,7 +119,7 @@ function buildSlot(target: SpotlightTarget, s: Settings): Slot | null {
     card.className = 'spotlight-parallel-card';
     card.style.width = size.width + 'px';
     card.style.height = size.height + 'px';
-    const clone = cloneCard(el);
+    const clone = cloneCard(el, s);
     injectSpotDelta(clone, target.delta, s);
     card.appendChild(clone);
     group.appendChild(card);

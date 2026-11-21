@@ -1123,6 +1123,11 @@ body[data-score-effect="shake"] .fx { animation: fx-shake var(--fx-duration, 700
   overflow: auto;
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
 }
+/* 突显专属：隐藏头像（人物卡片头像为根节点直接子元素，团队卡片在 .team-head 内） */
+.spotlight-card.spotlight-hide-avatar > img,
+.spotlight-card.spotlight-hide-avatar .team-head > img {
+  display: none;
+}
 @keyframes spot-pop {
   0% { transform: scale(0.72); opacity: 0; }
   16% { transform: scale(1.08); opacity: 1; }

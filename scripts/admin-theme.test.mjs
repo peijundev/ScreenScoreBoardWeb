@@ -97,6 +97,9 @@ test('CSS 包含六套主题与 Adwaita / macOS 变量', () => {
   assert.match(css, /--accent:\s*#007aff/);
   assert.match(css, /--radius:\s*8px/);
   assert.match(css, /--radius:\s*6px/);
+  assert.match(css, /--radius-large:\s*0px/);
+  assert.match(css, /--on-positive:\s*#ffffff/);
+  assert.match(css, /border-radius:\s*var\(--radius-large, var\(--radius, 0\)\)/);
 });
 
 test('管理端入口包含首屏主题初始化脚本', () => {

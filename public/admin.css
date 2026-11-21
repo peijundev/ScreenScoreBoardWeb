@@ -18,6 +18,10 @@ body[data-theme="breeze-dark"] {
   --subcard: #202326;       /* 卡片内的次级块 */
   --btn-bg: #2a2e32;        /* 普通按钮 / 标签 */
   --border-strong: #4b5158;
+  --radius: 0px;
+  --radius-large: 0px;
+  --on-positive: #ffffff;
+  --on-danger: #ffffff;
 }
 body[data-theme="light"],
 body[data-theme="breeze-light"] {
@@ -38,6 +42,10 @@ body[data-theme="breeze-light"] {
   --subcard: #f2f3f5;
   --btn-bg: #e8eaec;
   --border-strong: #9aa3a8;
+  --radius: 0px;
+  --radius-large: 0px;
+  --on-positive: #ffffff;
+  --on-danger: #ffffff;
 }
 
 /* GNOME Adwaita：更大的圆角、蓝色强调、浅色/深色对比更柔和 */
@@ -60,6 +68,9 @@ body[data-theme="adwaita-dark"] {
   --btn-bg: #3a3a3a;
   --border-strong: #5e5e5e;
   --radius: 8px;
+  --radius-large: 10px;
+  --on-positive: #002e19;
+  --on-danger: #ffffff;
 }
 body[data-theme="adwaita-light"] {
   --bg: #fafafa;
@@ -80,6 +91,9 @@ body[data-theme="adwaita-light"] {
   --btn-bg: #ebebeb;
   --border-strong: #c0bfbc;
   --radius: 8px;
+  --radius-large: 10px;
+  --on-positive: #002e19;
+  --on-danger: #ffffff;
 }
 
 /* macOS Aqua：系统蓝、较轻的边框、6px 控件圆角 */
@@ -103,6 +117,8 @@ body[data-theme="macos-dark"] {
   --border-strong: #545458;
   --radius: 6px;
   --radius-large: 10px;
+  --on-positive: #00300f;
+  --on-danger: #ffffff;
 }
 body[data-theme="macos-light"] {
   --bg: #ececec;
@@ -124,6 +140,8 @@ body[data-theme="macos-light"] {
   --border-strong: #b0b0b0;
   --radius: 6px;
   --radius-large: 10px;
+  --on-positive: #00300f;
+  --on-danger: #ffffff;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -603,7 +621,7 @@ body {
   min-height: calc(var(--touch-target, 44px) * 1.5);
   padding: 10px 16px;
   border: 1px solid var(--card-border);
-  border-radius: 14px;
+  border-radius: var(--radius-large, var(--radius, 0));
   font: inherit;
   font-size: 22px;
   font-weight: 700;
@@ -615,8 +633,8 @@ body {
   transition: transform 80ms ease, filter 120ms ease;
 }
 .remote-btn:active { transform: scale(0.96); filter: brightness(1.15); }
-.remote-plus { background: var(--positive); border-color: var(--positive); color: #fff; }
-.remote-minus { background: var(--danger); border-color: var(--danger); color: #fff; }
+.remote-plus { background: var(--positive); border-color: var(--positive); color: var(--on-positive, #fff); }
+.remote-minus { background: var(--danger); border-color: var(--danger); color: var(--on-danger, #fff); }
 
 /* 顶部音效快捷菜单 */
 .sound-quick { position: relative; }

@@ -616,6 +616,10 @@ async function main() {
       spotlightReturnDuration: 2200, spotlightScrimEnabled: true, spotlightScrimOpacity: 0.25,
       spotlightPlayMode: 'parallel', spotlightParallelMax: 6, spotlightParallelGap: 36,
       spotlightParallelTransition: 500, spotlightInterruptFade: 250,
+      spotlightFontFamily: 'custom', spotlightFontFamilyCustom: 'LXGW WenKai',
+      spotlightFontScale: 1.6, spotlightAvatarEnabled: false,
+      spotlightAvatarSizeMode: 'manual', spotlightAvatarSize: 120,
+      spotlightAvatarPosition: 'top',
       customSound: soundUp.path,
     },
   });
@@ -626,8 +630,15 @@ async function main() {
     P(s).settings.spotlightScrimEnabled === true && P(s).settings.spotlightScrimOpacity === 0.25 &&
     P(s).settings.spotlightPlayMode === 'parallel' && P(s).settings.spotlightParallelMax === 6 &&
     P(s).settings.spotlightParallelGap === 36 && P(s).settings.spotlightParallelTransition === 500 &&
-    P(s).settings.spotlightInterruptFade === 250,
-    '居中突显特效/范围/宽高/主题/飞入飞回时长/压暗开关与强度/播放模式/并列与打断参数/自定义音效同步');
+    P(s).settings.spotlightInterruptFade === 250 &&
+    P(s).settings.spotlightFontFamily === 'custom' &&
+    P(s).settings.spotlightFontFamilyCustom === 'LXGW WenKai' &&
+    P(s).settings.spotlightFontScale === 1.6 &&
+    P(s).settings.spotlightAvatarEnabled === false &&
+    P(s).settings.spotlightAvatarSizeMode === 'manual' &&
+    P(s).settings.spotlightAvatarSize === 120 &&
+    P(s).settings.spotlightAvatarPosition === 'top',
+    '居中突显特效/范围/宽高/主题/飞入飞回时长/压暗开关与强度/播放模式/并列与打断参数/字体/字号/头像/自定义音效同步');
   await adminOp('updateSettings', { patch: { spotlightPlayMode: 'warp' } }).catch((e) => {
     assert(/播放模式/.test(e.message), '非法播放模式被拒绝');
   });
@@ -666,6 +677,18 @@ async function main() {
   });
   await adminOp('updateSettings', { patch: { spotlightScrimEnabled: 'yes' } }).catch((e) => {
     assert(/压暗开关/.test(e.message), '非法突显压暗开关被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { spotlightFontScale: 3 } }).catch((e) => {
+    assert(/突显字号缩放/.test(e.message), '非法突显字号缩放被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { spotlightAvatarSize: 10 } }).catch((e) => {
+    assert(/突显头像大小/.test(e.message), '非法突显头像大小被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { spotlightAvatarPosition: 'center' } }).catch((e) => {
+    assert(/突显头像位置/.test(e.message), '非法突显头像位置被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { spotlightFontFamily: 'warp' } }).catch((e) => {
+    assert(/突显字体/.test(e.message), '非法突显字体被拒绝');
   });
   await adminOp('updateSettings', { patch: { scoreEffect: 'highlight', scoreRolling: false } });
   s = await viewer.waitState((st) => P(st).settings.scoreEffect === 'highlight' &&
@@ -1291,9 +1314,16 @@ async function main() {
     rp.settings.spotlightScrimOpacity === 0.25 && rp.settings.spotlightPlayMode === 'parallel' &&
     rp.settings.spotlightParallelMax === 6 && rp.settings.spotlightParallelGap === 36 &&
     rp.settings.spotlightParallelTransition === 500 && rp.settings.spotlightInterruptFade === 250 &&
+    rp.settings.spotlightFontFamily === 'custom' &&
+    rp.settings.spotlightFontFamilyCustom === 'LXGW WenKai' &&
+    rp.settings.spotlightFontScale === 1.6 &&
+    rp.settings.spotlightAvatarEnabled === false &&
+    rp.settings.spotlightAvatarSizeMode === 'manual' &&
+    rp.settings.spotlightAvatarSize === 120 &&
+    rp.settings.spotlightAvatarPosition === 'top' &&
     rp.settings.featureSpotlightTrigger === true && rp.settings.spotlightTriggerDuration === 2400 &&
     rp.settings.scoreRolling === false,
-    '重启后居中突显/范围/宽高/主题/飞入飞回时长/压暗开关与强度/播放模式/并列与打断参数/手动突显/滚动数字/自定义音效恢复');
+    '重启后居中突显/范围/宽高/主题/飞入飞回时长/压暗开关与强度/播放模式/并列与打断参数/字体/字号/头像/手动突显/滚动数字/自定义音效恢复');
   assert(rp.settings.countdownDisplayMode === 'fullscreen' && rp.settings.countdownShape === 'rounded-rect' &&
     rp.settings.countdownSize === 600 && rp.settings.countdownHeight === 300 &&
     rp.settings.countdownFontSize === 96 && rp.settings.countdownPosition === 'bottom-right' &&

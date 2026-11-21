@@ -506,7 +506,7 @@ export function injectSpotDelta(clone: HTMLElement, delta: number | null | undef
   scoreEl.appendChild(badge);
 }
 
-export function cloneCard(el: HTMLElement): HTMLElement {
+export function cloneCard(el: HTMLElement, s?: Settings): HTMLElement {
   const clone = el.cloneNode(true) as HTMLElement;
   clone.querySelectorAll('.resize-handle, .fx-delta, .confetti-layer').forEach((n) => n.remove());
   // visibility 必须清掉：特效播放期间原卡是内联 hidden，cloneNode 会把该内联样式一起复制，
@@ -518,7 +518,49 @@ export function cloneCard(el: HTMLElement): HTMLElement {
   clone.removeAttribute('data-person');
   clone.removeAttribute('data-kind');
   clone.removeAttribute('data-id');
+  if (s) applySpotlightCardStyle(clone, s);
   return clone;
+}
+
+/** 把突显专属的字体、字号、头像大小/位置覆盖到克隆卡片上。 */
+function applySpotlightCardStyle(clone: HTMLElement, s: Settings): void {
+  clone.classList.add('spotlight-card');
+
+  const family = String(s.spotlightFontFamily || 'auto');
+  if (family !== 'auto') {
+    const stack = family === 'custom' && s.spotlightFontFamilyCustom
+      ? '"' + String(s.spotlightFontFamilyCustom).replace(/["\\]/g, '') + '", ' + FONT_STACKS.system
+      : (FONT_STACKS[family] || FONT_STACKS.system);
+    clone.style.fontFamily = stack;
+    clone.style.setProperty('--score-font', stack);
+  }
+
+  const scale = clamp(Number(s.spotlightFontScale) || 1, 0.7, 2.5);
+  if (scale !== 1) {
+    const base = clamp(Number(s.fontScale) || 1, 0.7, 1.5);
+    clone.style.setProperty('--font-scale', String(Math.round(base * scale * 100) / 100));
+  }
+
+  if (s.spotlightAvatarEnabled === false) {
+    clone.classList.add('spotlight-hide-avatar');
+    return;
+  }
+
+  if (s.spotlightAvatarSizeMode === 'manual') {
+    const size = clamp(Number(s.spotlightAvatarSize) || 96, 24, 240);
+    clone.style.setProperty('--person-avatar', size + 'px');
+    clone.style.setProperty('--team-avatar', Math.round(size * 0.7) + 'px');
+    clone.style.setProperty('--avatar', size + 'px');
+  }
+
+  const position = String(s.spotlightAvatarPosition || 'auto');
+  if (['left', 'right', 'top', 'bottom'].includes(position)) {
+    const targets: HTMLElement[] = [clone, ...Array.from(clone.querySelectorAll<HTMLElement>('.team-head'))];
+    for (const target of targets) {
+      for (const side of ['left', 'right', 'top', 'bottom']) target.classList.remove('av-' + side);
+      target.classList.add('av-' + position);
+    }
+  }
 }
 
 export function spotlightSize(el: HTMLElement, s: Settings): { width: number; height: number; rect: DOMRect } {
@@ -540,7 +582,7 @@ function buildSpotlightItems(
   for (const el of els) {
     const rect = el.getBoundingClientRect();
     if (!rect.width || !rect.height) continue;
-    const clone = cloneCard(el);
+    const clone = cloneCard(el, s);
     injectSpotDelta(clone, delta, s);
     const { width, height } = spotlightSize(el, s);
     const box = document.createElement('div');
@@ -749,7 +791,7 @@ function spawnSpotlightPop(
   stack.style.setProperty('--spot-duration', total + 'ms');
 
   for (const el of els) {
-    const clone = cloneCard(el);
+    const clone = cloneCard(el, s);
     injectSpotDelta(clone, delta, s);
     const width = clamp(Number(s.spotlightWidth) || 520, 200, 1600);
     const height = Number(s.spotlightHeight) || 0;

@@ -52,6 +52,13 @@ const DEFAULT_SETTINGS = {
   spotlightTriggerDuration: 0,     // 手动/API 突显总时长 ms；0=跟随突显主题
   spotlightScrimEnabled: true,    // 突显时压暗背景
   spotlightScrimOpacity: 0.45,    // 压暗强度 0–1
+  spotlightFontFamily: 'auto',    // auto（跟随卡片）| system | serif | kai | custom
+  spotlightFontFamilyCustom: '',  // 自定义字体名（spotlightFontFamily=custom 时生效）
+  spotlightFontScale: 1,          // 突显字号缩放 0.7–2.5（相对普通卡片）
+  spotlightAvatarEnabled: true,   // 突显时显示头像
+  spotlightAvatarSizeMode: 'auto', // auto（跟随卡片）| manual
+  spotlightAvatarSize: 96,        // 突显头像手动大小 px（24–240）
+  spotlightAvatarPosition: 'auto', // auto（跟随卡片）| left | right | top | bottom
   scoreEffectDuration: 700, // 特效时长 ms（200–3000）
   scoreEffectColor: '',     // '' = 自动（加分绿/减分红）；或 #rrggbb
   scoreEffectOnlyPositive: false, // 仅加分触发特效
@@ -337,6 +344,26 @@ const SETTINGS_VALIDATORS = {
   spotlightParallelTransition: (v) => intRange(v, 0, 1500, '并列卡片过渡时长须为 0–1500 ms'),
   spotlightInterruptFade: (v) => intRange(v, 0, 1000, '打断淡出时长须为 0–1000 ms'),
   spotlightTriggerDuration: (v) => intRange(v, 0, 10000, '手动突显时长须为 0–10000 ms（0=跟随主题）'),
+  spotlightFontFamily: (v) =>
+    (['auto', 'system', 'serif', 'kai', 'custom'].includes(v)
+      ? v
+      : (() => { throw new OpError('突显字体选择非法'); })()),
+  spotlightFontFamilyCustom: fontNameOrEmpty,
+  spotlightFontScale: (v) => {
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0.7 || n > 2.5) throw new OpError('突显字号缩放须在 0.7–2.5 之间');
+    return Math.round(n * 100) / 100;
+  },
+  spotlightAvatarEnabled: (v) => boolStrict(v, '突显头像开关'),
+  spotlightAvatarSizeMode: (v) =>
+    (['auto', 'manual'].includes(v)
+      ? v
+      : (() => { throw new OpError('突显头像大小模式非法'); })()),
+  spotlightAvatarSize: (v) => intRange(v, 24, 240, '突显头像大小须为 24–240'),
+  spotlightAvatarPosition: (v) =>
+    (['auto', 'left', 'right', 'top', 'bottom'].includes(v)
+      ? v
+      : (() => { throw new OpError('突显头像位置非法'); })()),
   scoreEffectDuration: (v) => {
     const n = Number(v);
     if (!Number.isInteger(n) || n < 200 || n > 3000) throw new OpError('特效时长须为 200–3000 的整数');

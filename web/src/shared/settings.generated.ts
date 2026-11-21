@@ -46,6 +46,13 @@ export interface SettingsFields {
   spotlightTriggerDuration: number;
   spotlightScrimEnabled: boolean;
   spotlightScrimOpacity: number;
+  spotlightFontFamily: string;
+  spotlightFontFamilyCustom: string;
+  spotlightFontScale: number;
+  spotlightAvatarEnabled: boolean;
+  spotlightAvatarSizeMode: string;
+  spotlightAvatarSize: number;
+  spotlightAvatarPosition: string;
   scoreEffectDuration: number;
   scoreEffectColor: string;
   scoreEffectOnlyPositive: boolean;
