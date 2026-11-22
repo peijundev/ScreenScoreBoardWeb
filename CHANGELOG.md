@@ -2,7 +2,7 @@
 
 本项目遵循语义化版本。1.4.0 起，版本号在管理端顶栏与启动日志中显示。
 
-## 未发布
+## 1.6.6 — 17 种存储后端与八套管理端主题（2026-11-22）
 
 ### 新增
 
@@ -34,6 +34,7 @@
 - 移动端 +1 / −1 快捷记分按钮改为跟随管理端主题：Breeze 下为方角，Adwaita / macOS / Android 下使用各自圆角；亮色主题使用深色文字，避免亮绿背景上白字对比度不足。
 - **音效快捷菜单被设置窗口遮挡**：macOS 主题为顶栏添加的 `backdrop-filter` 会创建层叠上下文，下拉菜单的 `z-index` 只在顶栏内部生效，因而被排版设置等窗口盖住。弹出层改为通过 portal 挂到 `body` 并使用 fixed 定位，滚动、窗口缩放或尺寸变化时自动关闭。
 - **管理端队长标签不再跟随显示端字号**：人员管理列表中的队长标签固定为 11px，只保留突显色；`teamCaptainSizeMode` / `teamCaptainSize` 仅作用于显示端人员卡片与团队卡片成员。
+- **后端类型检查恢复**：补齐 LMDB `mapSizeMb` 在 `StorageOptions` 中的类型声明，修复 `npm run typecheck:server` 报错 `Property 'mapSizeMb' does not exist on type 'StorageOptions'` 导致 CI 与 Release 产物构建连续失败的问题。
 
 ## 1.6.4 — 可切换存储后端与六套管理端主题（2026-11-22）
 

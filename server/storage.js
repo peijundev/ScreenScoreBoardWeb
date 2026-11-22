@@ -43,6 +43,7 @@ const DEFAULT_FILES = {
  * @property {string} [file]
  * @property {boolean} [pretty]
  * @property {number} [busyTimeoutMs]
+ * @property {number} [mapSizeMb]
  * @property {string} [url]
  */
 
