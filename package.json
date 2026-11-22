@@ -1,6 +1,6 @@
 {
   "name": "@peijundev/screenscoreboard",
-  "version": "1.6.6",
+  "version": "1.6.7",
   "description": "实时计分板（React UI）：显示端 + 管理端，多项目，WebSocket 实时同步，17 种可切换存储后端",
   "license": "MIT",
   "author": {
