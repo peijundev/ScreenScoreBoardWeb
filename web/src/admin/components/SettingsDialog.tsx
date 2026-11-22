@@ -22,7 +22,9 @@ export default function SettingsDialog({
 }): JSX.Element {
   const ctx = useSettingsCtx(project);
   const [tab, setTab] = useState<SettingsTab>('layout');
-  const groups = SETTINGS_GROUPS.filter((group) => group.tab === tab);
+  const groups = SETTINGS_GROUPS.filter(
+    (group) => group.tab === tab && (!group.visible || group.visible(project.settings)),
+  );
 
   return (
     <DialogShell
@@ -48,9 +50,15 @@ export default function SettingsDialog({
       {groups.map((group) => (
         <div className={'set-group' + (group.advanced ? ' advanced' : '')} key={group.title}>
           <h3>{group.title}</h3>
-          {group.fields.map((field, index) => (
-            <FieldControl key={field.t === 'custom' ? field.id : field.k + ':' + index} field={field} ctx={ctx} />
-          ))}
+          {group.fields
+            .filter((field) => !field.visible || field.visible(project.settings))
+            .map((field, index) => (
+              <FieldControl
+                key={field.t === 'custom' ? field.id : field.k + ':' + index}
+                field={field}
+                ctx={ctx}
+              />
+            ))}
         </div>
       ))}
     </DialogShell>

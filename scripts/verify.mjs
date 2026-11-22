@@ -259,6 +259,7 @@ async function main() {
   assert(verRes.ok && verData.version === PKG_VERSION, '版本接口返回 ' + PKG_VERSION);
   assert(verData.finalForTechStack === false, '不再标记为原技术栈最终版');
   assert(verData.frontend === 'react' || verData.frontend === 'missing', '版本接口返回当前前端类型');
+  assert(typeof verData.buildId === 'string' && verData.buildId.length > 0, '版本接口返回构建标识');
 
   console.log('头像上传:');
   r = await authFetch('/api/avatar', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: PNG });
@@ -723,9 +724,29 @@ async function main() {
   await adminOp('updateSettings', { patch: { spotlightScrimEnabled: 'yes' } }).catch((e) => {
     assert(/压暗开关/.test(e.message), '非法突显压暗开关被拒绝');
   });
-  await adminOp('updateSettings', { patch: { spotlightFontScale: 3 } }).catch((e) => {
+  await adminOp('updateSettings', { patch: { spotlightFontScale: 9 } }).catch((e) => {
     assert(/突显字号缩放/.test(e.message), '非法突显字号缩放被拒绝');
   });
+  // 自动缩放：字号与头像跟随突显宽度，范围已扩大到 4000 / 1024
+  await adminOp('updateSettings', {
+    patch: { spotlightAutoScale: true, spotlightWidth: 3200, spotlightHeight: 2400 },
+  });
+  s = await viewer.waitState((st) => P(st).settings.spotlightAutoScale === true);
+  assert(P(s).settings.spotlightWidth === 3200 && P(s).settings.spotlightHeight === 2400,
+    '突显自动缩放与扩展尺寸同步');
+  await adminOp('updateSettings', { patch: { spotlightWidth: 4001 } }).catch((e) => {
+    assert(/突显宽度/.test(e.message), '突显宽度超过新上限被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { spotlightAutoScale: 'yes' } }).catch((e) => {
+    assert(/自动缩放开关/.test(e.message), '非法突显自动缩放开关被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { spotlightSizeMode: 'scale' } });
+  s = await viewer.waitState((st) => P(st).settings.spotlightSizeMode === 'scale');
+  assert(true, '突显尺寸模式同步（原卡片按比例放大）');
+  await adminOp('updateSettings', { patch: { spotlightSizeMode: 'stretch' } }).catch((e) => {
+    assert(/突显尺寸模式/.test(e.message), '非法突显尺寸模式被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { spotlightAutoScale: true, spotlightWidth: 700, spotlightHeight: 420 } });
   await adminOp('updateSettings', { patch: { spotlightAvatarSize: 10 } }).catch((e) => {
     assert(/突显头像大小/.test(e.message), '非法突显头像大小被拒绝');
   });
@@ -1425,7 +1446,8 @@ async function main() {
     rp.settings.spotlightParallelTransition === 500 && rp.settings.spotlightInterruptFade === 250 &&
     rp.settings.spotlightFontFamily === 'custom' &&
     rp.settings.spotlightFontFamilyCustom === 'LXGW WenKai' &&
-    rp.settings.spotlightFontScale === 1.6 &&
+    rp.settings.spotlightFontScale === 1.6 && rp.settings.spotlightAutoScale === true &&
+    rp.settings.spotlightSizeMode === 'scale' &&
     rp.settings.spotlightAvatarEnabled === false &&
     rp.settings.spotlightAvatarSizeMode === 'manual' &&
     rp.settings.spotlightAvatarSize === 120 &&

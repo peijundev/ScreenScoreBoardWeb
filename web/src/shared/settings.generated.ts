@@ -48,6 +48,8 @@ export interface SettingsFields {
   spotlightScrimOpacity: number;
   spotlightFontFamily: string;
   spotlightFontFamilyCustom: string;
+  spotlightSizeMode: string;
+  spotlightAutoScale: boolean;
   spotlightFontScale: number;
   spotlightAvatarEnabled: boolean;
   spotlightAvatarSizeMode: string;

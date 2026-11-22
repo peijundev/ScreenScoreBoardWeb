@@ -1202,6 +1202,23 @@ select:focus { border-color: var(--accent); }
 }
 .settings-form input[type="range"] { accent-color: var(--accent); height: 18px; }
 .settings-form input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent); }
+/* 滑块旁的数值输入：所有范围类设置都可直接填数 */
+.settings-form .settings-field-head { display: flex; align-items: baseline; gap: 6px; }
+.settings-form .settings-field-value { color: var(--text-dim); font-size: 11px; }
+.settings-form .range-row { display: flex; align-items: center; gap: 8px; }
+.settings-form .range-row input[type="range"] { flex: 1; min-width: 0; }
+.settings-form .range-number {
+  width: 76px;
+  flex: 0 0 auto;
+  padding: 3px 6px;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
 
 /* 键盘可达性 */
 a:focus-visible,
@@ -2266,7 +2283,7 @@ body[data-theme^="android"] .settings-tabs button:only-child {
 }
 
 /* M3 filled 输入框：表面色 + 底部指示线，聚焦时 2px 主色 */
-body[data-theme^="android"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+body[data-theme^="android"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not(.range-number),
 body[data-theme^="android"] select,
 body[data-theme^="android"] textarea {
   background: var(--input-bg);
@@ -2274,7 +2291,7 @@ body[data-theme^="android"] textarea {
   border-bottom: 1px solid var(--border-strong);
   border-radius: 4px 4px 0 0;
 }
-body[data-theme^="android"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):focus,
+body[data-theme^="android"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not(.range-number):focus,
 body[data-theme^="android"] select:focus,
 body[data-theme^="android"] textarea:focus {
   border-bottom: 2px solid var(--accent);

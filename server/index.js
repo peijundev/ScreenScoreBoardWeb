@@ -14,6 +14,15 @@ const APP_VERSION = require('../package.json').version;
 // 1.4.0 是原技术栈（原生 JS 前端）的最后一个发布版本；此后前端迁移到 React
 const FINAL_TECH_STACK_RELEASE = '1.4.0';
 const REACT_BUILT = fs.existsSync(path.join(PUBLIC_DIR, 'v2', 'admin.html'));
+
+/** 前端构建标识：改用 display.html 的修改时间，显示端发现变化后自动刷新 */
+function frontendBuildId() {
+  try {
+    return String(fs.statSync(path.join(PUBLIC_DIR, 'v2', 'display.html')).mtimeMs);
+  } catch {
+    return '0';
+  }
+}
 const {
   state,
   init: initState,
@@ -384,6 +393,8 @@ function routeRequest(req, res) {
       finalForTechStack: APP_VERSION === FINAL_TECH_STACK_RELEASE,
       // 当前前端是否已构建：react = public/v2 已构建；missing = 尚未构建
       frontend: REACT_BUILT ? 'react' : 'missing',
+      // 前端构建标识：显示端据此发现新版本并自动刷新
+      buildId: frontendBuildId(),
     }), { 'Content-Type': 'application/json' });
   }
   if (req.method === 'GET' && p === '/api/export') {

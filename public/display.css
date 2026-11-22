@@ -1256,7 +1256,7 @@ body[data-score-effect="shake"] .fx { animation: fx-shake var(--fx-duration, 700
   position: fixed;
   inset: 0;
   z-index: 45;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(var(--spot-scrim-rgb, 0, 0, 0), var(--spot-scrim-alpha, 0.45));
   pointer-events: none;
   animation: highlight-fade 0.3s ease forwards;
 }
@@ -1288,6 +1288,8 @@ body[data-score-effect="shake"] .fx { animation: fx-shake var(--fx-duration, 700
 .rank-down .rank { color: #ff5c6c; animation: rank-down 0.6s ease; }
 
 /* 从原位置飞入居中，再飞回原位 */
+/* 图片式缩放：卡片按原位置坐标做绝对定位动画，不需要 flex 居中 */
+.spotlight-zoom-overlay { display: block; }
 .spotlight-return-overlay {
   position: fixed;
   inset: 0;
@@ -1796,6 +1798,14 @@ body[data-card-surface="acrylic"] .member {
   background-color: var(--card);
   -webkit-backdrop-filter: blur(var(--card-blur, 12px));
   backdrop-filter: blur(var(--card-blur, 12px));
+}
+/* 半透明 / 亚克力卡片放大后背后是遮罩，会整体发灰；突显时改用实心底色还原原卡片观感。
+   必须写在上面两条之后：同特异性，靠顺序覆盖。 */
+body[data-card-surface="translucent"] .spotlight-card,
+body[data-card-surface="acrylic"] .spotlight-card {
+  background-color: var(--card-solid, var(--card));
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 /* 团队卡左侧色条可关闭 */

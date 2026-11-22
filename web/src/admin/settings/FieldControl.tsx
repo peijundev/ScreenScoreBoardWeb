@@ -10,6 +10,15 @@ function rangeText(f: Extract<Field, { t: 'range' }>, value: number): string {
   return String(value) + (f.unit ?? '');
 }
 
+/** 数字输入按 min/step 对齐并限制范围，避免服务端因精度或越界拒绝 */
+function snapToStep(value: number, f: Extract<Field, { t: 'range' }>): number {
+  const clamped = Math.min(f.max, Math.max(f.min, value));
+  const step = f.step > 0 ? f.step : 1;
+  const snapped = Math.round((clamped - f.min) / step) * step + f.min;
+  const digits = step < 1 ? (String(step).split('.')[1]?.length ?? 0) : 0;
+  return Number(snapped.toFixed(digits));
+}
+
 export default function FieldControl({ field, ctx }: { field: Field; ctx: Ctx }): JSX.Element {
   const { settings, set } = ctx;
   const disabled = 'disabled' in field && field.disabled ? field.disabled(settings) : false;
@@ -19,16 +28,34 @@ export default function FieldControl({ field, ctx }: { field: Field; ctx: Ctx })
       const value = Number(settings[field.k] ?? field.min);
       return (
         <label>
-          {field.label} <span>{rangeText(field, value)}</span>
-          <input
-            type="range"
-            min={field.min}
-            max={field.max}
-            step={field.step}
-            value={value}
-            disabled={disabled}
-            onChange={(e) => set(field.k, Number(e.target.value))}
-          />
+          <span className="settings-field-head">
+            {field.label} <span className="settings-field-value">{rangeText(field, value)}</span>
+          </span>
+          <span className="range-row">
+            <input
+              type="range"
+              min={field.min}
+              max={field.max}
+              step={field.step}
+              value={value}
+              disabled={disabled}
+              onChange={(e) => set(field.k, Number(e.target.value))}
+            />
+            <input
+              type="number"
+              className="range-number"
+              min={field.min}
+              max={field.max}
+              step={field.step}
+              value={value}
+              disabled={disabled}
+              title="直接输入数值"
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                if (Number.isFinite(n)) set(field.k, snapToStep(n, field));
+              }}
+            />
+          </span>
         </label>
       );
     }

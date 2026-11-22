@@ -1,6 +1,7 @@
 // 显示端核心：外观变量、排序、名次、排行榜、特效（移植自 public/display.js）
 import type { Layout, Person, Project, Settings, Team } from '../../shared/types';
 import { playPresetSound, playSoundFile } from '../../shared/sound';
+import { spotlightMetrics } from '../../shared/spotlightMetrics';
 
 export const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, v));
 export const round2 = (v: number): number => Math.round(v * 100) / 100;
@@ -170,6 +171,8 @@ export function applyAppearance(s: Settings): void {
   const baseCard = s.cardBg || themeCard;
   const cardMode = s.cardBgMode || 'auto';
   body.dataset.cardSurface = cardMode;
+  // 突显卡片的实心底色：半透明/亚克力放大后背后是遮罩，会发灰，需要还原成原卡片观感
+  body.style.setProperty('--card-solid', baseCard);
   if (cardMode === 'translucent' || cardMode === 'acrylic') {
     body.style.setProperty('--card', hexToRgba(baseCard, s.cardOpacity));
     body.style.setProperty('--card-blur', s.cardAcrylicBlur + 'px');
@@ -536,8 +539,10 @@ function applySpotlightCardStyle(clone: HTMLElement, s: Settings): void {
     clone.style.setProperty('--score-font', stack);
   }
 
-  const scale = clamp(Number(s.spotlightFontScale) || 1, 0.7, 2.5);
-  if (scale !== 1) {
+  const metrics = spotlightMetrics(s);
+  const scale = metrics.fontScale;
+  // 按比例放大模式：内部字号/头像保持不变，由整体缩放完成
+  if (!metrics.proportional && scale !== 1) {
     const base = clamp(Number(s.fontScale) || 1, 0.7, 1.5);
     clone.style.setProperty('--font-scale', String(Math.round(base * scale * 100) / 100));
   }
@@ -547,8 +552,9 @@ function applySpotlightCardStyle(clone: HTMLElement, s: Settings): void {
     return;
   }
 
-  if (s.spotlightAvatarSizeMode === 'manual') {
-    const size = clamp(Number(s.spotlightAvatarSize) || 96, 24, 240);
+  // 自动缩放时头像大小同样跟随突显宽度；手动模式仍使用指定 px
+  if (!metrics.proportional && (metrics.auto || s.spotlightAvatarSizeMode === 'manual')) {
+    const size = metrics.avatarSize;
     clone.style.setProperty('--person-avatar', size + 'px');
     clone.style.setProperty('--team-avatar', Math.round(size * 0.7) + 'px');
     clone.style.setProperty('--avatar', size + 'px');
@@ -566,8 +572,21 @@ function applySpotlightCardStyle(clone: HTMLElement, s: Settings): void {
 
 export function spotlightSize(el: HTMLElement, s: Settings): { width: number; height: number; rect: DOMRect } {
   const rect = el.getBoundingClientRect();
-  const width = clamp(Number(s.spotlightWidth) || 520, 200, 1600);
-  let height = Number(s.spotlightHeight) || 0;
+  const metrics = spotlightMetrics(s);
+  if (metrics.proportional) {
+    // 原卡片整体等比放大：按目标宽度计算比例，超过屏幕宽/高上限时再等比缩小
+    let width = Math.min(metrics.width, window.innerWidth * 0.9);
+    let height = rect.height * (width / rect.width);
+    const maxHeight = window.innerHeight * 0.8;
+    if (height > maxHeight) {
+      const ratio = maxHeight / height;
+      width *= ratio;
+      height = maxHeight;
+    }
+    return { width: Math.round(Math.max(width, 120)), height: Math.round(Math.max(height, 120)), rect };
+  }
+  const width = metrics.width;
+  let height = metrics.height;
   if (!height) height = rect.height * (width / rect.width);
   height = Math.min(Math.max(height, 120), window.innerHeight * 0.8);
   return { width, height, rect };
@@ -586,8 +605,16 @@ function buildSpotlightItems(
     const clone = cloneCard(el, s);
     injectSpotDelta(clone, delta, s);
     const { width, height } = spotlightSize(el, s);
+    if (s.spotlightSizeMode === 'scale') {
+      // 保持原卡片布局与宽高比，用整体缩放放大，而不是拉宽卡片
+      const ratio = width / rect.width;
+      clone.style.width = rect.width + 'px';
+      clone.style.height = rect.height + 'px';
+      clone.style.transform = 'scale(' + ratio + ')';
+      clone.style.transformOrigin = 'top left';
+    }
     const box = document.createElement('div');
-    box.className = boxClass;
+    box.className = boxClass + (s.spotlightSizeMode === 'scale' ? ' spotlight-scaled' : '');
     box.style.left = rect.left + 'px';
     box.style.top = rect.top + 'px';
     box.style.width = rect.width + 'px';
@@ -740,20 +767,10 @@ function spawnSpotlightGenie(
   }, total + 150);
 }
 
-function spawnSpotlightSqueeze(
-  board: HTMLElement,
-  els: HTMLElement[],
-  s: Settings,
-  delta?: number,
-  durationOverride?: number,
-): void {
-  const total = spotlightTotal(
-    durationOverride,
-    clamp(Number(s.spotlightReturnDuration) || 1600, 600, 6000),
-  );
+/** 联动避开：让非目标卡片向两侧退让，返回取消函数。 */
+function runSqueezeAway(board: HTMLElement, els: HTMLElement[], total: number): () => void {
   const boardRect = board.getBoundingClientRect();
   const centerX = boardRect.left + boardRect.width / 2;
-
   const awayAnims: Animation[] = [];
   board.querySelectorAll<HTMLElement>('.card[data-kind], .member[data-person]').forEach((n) => {
     if (els.includes(n)) return;
@@ -773,8 +790,22 @@ function spawnSpotlightSqueeze(
       ),
     );
   });
+  return () => awayAnims.forEach((a) => a.cancel());
+}
 
-  spawnSpotlightReturn(els, s, delta, () => awayAnims.forEach((a) => a.cancel()), durationOverride);
+function spawnSpotlightSqueeze(
+  board: HTMLElement,
+  els: HTMLElement[],
+  s: Settings,
+  delta?: number,
+  durationOverride?: number,
+): void {
+  const total = spotlightTotal(
+    durationOverride,
+    clamp(Number(s.spotlightReturnDuration) || 1600, 600, 6000),
+  );
+  const cancelAway = runSqueezeAway(board, els, total);
+  spawnSpotlightReturn(els, s, delta, cancelAway, durationOverride);
 }
 
 function spawnSpotlightPop(
@@ -794,13 +825,26 @@ function spawnSpotlightPop(
   for (const el of els) {
     const clone = cloneCard(el, s);
     injectSpotDelta(clone, delta, s);
-    const width = clamp(Number(s.spotlightWidth) || 520, 200, 1600);
-    const height = Number(s.spotlightHeight) || 0;
+    const metrics = spotlightMetrics(s);
+    const width = metrics.width;
+    const height = metrics.height;
     const box = document.createElement('div');
     box.className = 'spotlight-item';
     box.style.width = width + 'px';
-    if (height > 0) {
-      box.style.height = Math.min(height, 1200) + 'px';
+    if (metrics.proportional) {
+      // 原卡片整体等比放大：保留原始布局，用缩放填满目标宽度
+      const rect = el.getBoundingClientRect();
+      const size = spotlightSize(el, s);
+      const ratio = rect.width ? size.width / rect.width : 1;
+      clone.style.width = rect.width + 'px';
+      clone.style.height = rect.height + 'px';
+      clone.style.transform = 'scale(' + ratio + ')';
+      clone.style.transformOrigin = 'top left';
+      box.classList.add('spotlight-scaled');
+      box.style.width = size.width + 'px';
+      box.style.height = size.height + 'px';
+    } else if (height > 0) {
+      box.style.height = height + 'px';
       clone.style.height = '100%';
     }
     box.appendChild(clone);
@@ -816,6 +860,74 @@ function spawnSpotlightPop(
   }, total + 250);
 }
 
+/** 从原卡片位置平滑放大到屏幕中心，停留后再缩回——像查看图片时的缩放。 */
+function spawnSpotlightZoom(
+  els: HTMLElement[],
+  s: Settings,
+  delta?: number,
+  durationOverride?: number,
+  setup?: (total: number) => () => void,
+): void {
+  const total = spotlightTotal(durationOverride, Math.max(1200, Number(s.scoreEffectDuration) + 600));
+  const extraCleanup = setup ? setup(total) : undefined;
+  const overlay = document.createElement('div');
+  overlay.className = 'spotlight-overlay spotlight-zoom-overlay';
+  overlay.style.setProperty('--spot-duration', total + 'ms');
+  document.body.appendChild(overlay);
+
+  const items = buildSpotlightItems(els, s, delta, 'spotlight-item');
+  if (!items.length) {
+    overlay.remove();
+    return;
+  }
+  centerTargets(items);
+
+  const easing = 'cubic-bezier(0.22, 0.61, 0.36, 1)';
+  for (const it of items) {
+    const { rect, target, box } = it;
+    if (!target) continue;
+    // 覆盖 overlay 的 flex 居中，按原卡片矩形做位置/尺寸动画
+    box.style.position = 'absolute';
+    overlay.appendChild(box);
+    const clone = box.firstElementChild as HTMLElement | null;
+    const ratio = rect.width ? target.width / rect.width : 1;
+    if (clone && s.spotlightSizeMode === 'scale' && ratio !== 1) {
+      // 内部保持原布局，从 1 倍平滑放大到目标比例，再缩回
+      clone.style.transform = 'scale(1)';
+      clone.animate(
+        [
+          { transform: 'scale(1)', offset: 0 },
+          { transform: 'scale(' + ratio + ')', offset: 0.28 },
+          { transform: 'scale(' + ratio + ')', offset: 0.78 },
+          { transform: 'scale(1)', offset: 1 },
+        ],
+        { duration: total, easing, fill: 'forwards' },
+      );
+    }
+    box.animate(
+      [
+        { left: rect.left + 'px', top: rect.top + 'px', width: rect.width + 'px', height: rect.height + 'px', offset: 0 },
+        { left: target.left + 'px', top: target.top + 'px', width: target.width + 'px', height: target.height + 'px', offset: 0.28 },
+        { left: target.left + 'px', top: target.top + 'px', width: target.width + 'px', height: target.height + 'px', offset: 0.78 },
+        { left: rect.left + 'px', top: rect.top + 'px', width: rect.width + 'px', height: rect.height + 'px', offset: 1 },
+      ],
+      { duration: total, easing, fill: 'forwards' },
+    );
+    hideOriginalCard(it.el);
+  }
+
+  const cleanup = () => {
+    extraCleanup?.();
+    items.forEach((it) => showOriginalCard(it.el));
+    overlay.remove();
+  };
+  const unregister = registerSpotlight(overlay, cleanup);
+  setTimeout(() => {
+    cleanup();
+    unregister();
+  }, total + 200);
+}
+
 export function spawnSpotlight(
   board: HTMLElement,
   els: HTMLElement[],
@@ -825,6 +937,13 @@ export function spawnSpotlight(
 ): void {
   const theme = s.spotlightTheme || (s.spotlightReturnToOrigin ? 'fly' : 'pop');
   if (!prefersReducedMotion()) {
+    // 原卡片按比例放大：统一使用图片式缩放（从原位置放大、停留、缩回）
+    if (s.spotlightSizeMode === 'scale') {
+      const setup = theme === 'squeeze'
+        ? (total: number) => runSqueezeAway(board, els, total)
+        : undefined;
+      return spawnSpotlightZoom(els, s, delta, durationOverride, setup);
+    }
     if (theme === 'fly') return spawnSpotlightReturn(els, s, delta, undefined, durationOverride);
     if (theme === 'genie') return spawnSpotlightGenie(els, s, delta, durationOverride);
     if (theme === 'squeeze') return spawnSpotlightSqueeze(board, els, s, delta, durationOverride);

@@ -39,8 +39,8 @@ const DEFAULT_SETTINGS = {
   glassOpacity: 0.55,       // 毛玻璃卡片不透明度（0.15–0.95）
   scoreEffect: 'bounce',    // none | bounce | glow | float | shake | confetti | spotlight
   spotlightScope: 'person', // team（仅团队）| person_team（人物 + 团队）| person（仅人物）
-  spotlightWidth: 520,      // 居中突显宽度 px（200–1600）
-  spotlightHeight: 0,       // 居中突显高度 px；0 = 自动
+  spotlightWidth: 520,      // 居中突显宽度 px（200–4000）
+  spotlightHeight: 0,       // 居中突显高度 px；0 = 自动（0–3000）
   spotlightTheme: 'pop',    // pop | fly | genie | squeeze
   spotlightReturnToOrigin: false, // （兼容）fly 主题开关
   spotlightReturnDuration: 1600,  // fly 主题时长 ms（600–6000）
@@ -54,10 +54,12 @@ const DEFAULT_SETTINGS = {
   spotlightScrimOpacity: 0.45,    // 压暗强度 0–1
   spotlightFontFamily: 'auto',    // auto（跟随卡片）| system | serif | kai | custom
   spotlightFontFamilyCustom: '',  // 自定义字体名（spotlightFontFamily=custom 时生效）
-  spotlightFontScale: 1,          // 突显字号缩放 0.7–2.5（相对普通卡片）
+  spotlightSizeMode: 'custom',    // custom（宽度 + 字号 + 头像）| scale（原卡片整体等比放大）
+  spotlightAutoScale: false,      // 字号与头像随突显宽度自动缩放（custom 模式）
+  spotlightFontScale: 1,          // 突显字号缩放 0.5–8（相对普通卡片）
   spotlightAvatarEnabled: true,   // 突显时显示头像
   spotlightAvatarSizeMode: 'auto', // auto（跟随卡片）| manual
-  spotlightAvatarSize: 96,        // 突显头像手动大小 px（24–240）
+  spotlightAvatarSize: 96,        // 突显头像手动大小 px（24–1024）
   spotlightAvatarPosition: 'auto', // auto（跟随卡片）| left | right | top | bottom
   scoreEffectDuration: 700, // 特效时长 ms（200–3000）
   scoreEffectColor: '',     // '' = 自动（加分绿/减分红）；或 #rrggbb
@@ -331,8 +333,8 @@ const SETTINGS_VALIDATORS = {
     (['team', 'person_team', 'person'].includes(v)
       ? v
       : (() => { throw new OpError('突显范围非法'); })()),
-  spotlightWidth: (v) => intRange(v, 200, 1600, '突显宽度须为 200–1600'),
-  spotlightHeight: (v) => intRange(v, 0, 1200, '突显高度须为 0–1200（0=自动）'),
+  spotlightWidth: (v) => intRange(v, 200, 4000, '突显宽度须为 200–4000'),
+  spotlightHeight: (v) => intRange(v, 0, 3000, '突显高度须为 0–3000（0=自动）'),
   spotlightReturnToOrigin: (v) => boolStrict(v, '从哪来回哪去开关'),
   spotlightReturnDuration: (v) => intRange(v, 600, 6000, '飞入飞回时长须为 600–6000 ms'),
   spotlightScrimEnabled: (v) => boolStrict(v, '突显压暗开关'),
@@ -359,9 +361,14 @@ const SETTINGS_VALIDATORS = {
       ? v
       : (() => { throw new OpError('突显字体选择非法'); })()),
   spotlightFontFamilyCustom: fontNameOrEmpty,
+  spotlightSizeMode: (v) =>
+    (['custom', 'scale'].includes(v)
+      ? v
+      : (() => { throw new OpError('突显尺寸模式须为 custom 或 scale'); })()),
+  spotlightAutoScale: (v) => boolStrict(v, '突显自动缩放开关'),
   spotlightFontScale: (v) => {
     const n = Number(v);
-    if (!Number.isFinite(n) || n < 0.7 || n > 2.5) throw new OpError('突显字号缩放须在 0.7–2.5 之间');
+    if (!Number.isFinite(n) || n < 0.5 || n > 8) throw new OpError('突显字号缩放须在 0.5–8 之间');
     return Math.round(n * 100) / 100;
   },
   spotlightAvatarEnabled: (v) => boolStrict(v, '突显头像开关'),
@@ -369,7 +376,7 @@ const SETTINGS_VALIDATORS = {
     (['auto', 'manual'].includes(v)
       ? v
       : (() => { throw new OpError('突显头像大小模式非法'); })()),
-  spotlightAvatarSize: (v) => intRange(v, 24, 240, '突显头像大小须为 24–240'),
+  spotlightAvatarSize: (v) => intRange(v, 24, 1024, '突显头像大小须为 24–1024'),
   spotlightAvatarPosition: (v) =>
     (['auto', 'left', 'right', 'top', 'bottom'].includes(v)
       ? v

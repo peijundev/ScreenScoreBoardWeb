@@ -115,12 +115,22 @@ function buildSlot(target: SpotlightTarget, s: Settings): Slot | null {
   let height = 0;
   for (const el of visible) {
     const size = spotlightSize(el, s);
+    const rect = el.getBoundingClientRect();
     const card = document.createElement('div');
     card.className = 'spotlight-parallel-card';
     card.style.width = size.width + 'px';
     card.style.height = size.height + 'px';
     const clone = cloneCard(el, s);
     injectSpotDelta(clone, target.delta, s);
+    if (s.spotlightSizeMode === 'scale') {
+      // 原卡片整体等比放大：保留原布局与宽高比，用缩放填满卡片框
+      const ratio = rect.width ? size.width / rect.width : 1;
+      clone.style.width = rect.width + 'px';
+      clone.style.height = rect.height + 'px';
+      clone.style.transform = 'scale(' + ratio + ')';
+      clone.style.transformOrigin = 'top left';
+      card.classList.add('spotlight-scaled');
+    }
     card.appendChild(clone);
     group.appendChild(card);
     cards.push({ el: card, baseWidth: size.width, baseHeight: size.height });
