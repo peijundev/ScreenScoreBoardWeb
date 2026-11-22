@@ -99,7 +99,7 @@
 - ✅ SQLite `busy_timeout = 5000`。
 - ✅ 跨主机单写者：PostgreSQL advisory lock、MySQL `GET_LOCK`、Redis `SET NX PX` + 续租。
 - ✅ 版本号 + CAS：SQL/Mongo/Redis 使用整数 `revision`，JSON/TXT 使用内容哈希；旧表启动时自动补列。冲突时停止落盘并要求重启，不覆盖新数据。
-- ✅ 存储后端扩展：TXT、MongoDB、SQL Server、Oracle（Thin）、Redis；管理端可视化配置、测试连接、迁移/空库切换。详见 `docs/storage-backends.md`。
+- ✅ 存储后端扩展：TXT、MongoDB、SQL Server、Oracle（Thin）、Redis、libSQL/Turso、CouchDB、Cloudflare D1、AWS DynamoDB、Firestore、S3/MinIO、etcd、LMDB；管理端可视化配置、测试连接、迁移/空库切换。详见 `docs/storage-backends.md`。
 - ⏳ 未做：MongoDB/SQL Server/Oracle 的跨主机锁、Redis Cluster/Sentinel、active-active 多副本、差分订阅协议。
 
 ## Phase 5（完整 API / MCP）— 已完成

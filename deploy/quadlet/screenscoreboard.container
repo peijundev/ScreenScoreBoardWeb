@@ -22,7 +22,7 @@ Image=ghcr.io/peijundev/screenscoreboard:latest
 ContainerName=screenscoreboard
 PublishPort=3000:3000
 Environment=TZ=Asia/Shanghai
-# json / txt / sqlite / postgres / mysql / mongodb / sqlserver / oracle / redis
+# json / txt / sqlite / postgres / mysql / mongodb / sqlserver / oracle / redis / libsql / couchdb / d1 / dynamodb / firestore / s3 / etcd / lmdb
 # 管理端保存的 storage.json 优先于这里
 Environment=STORAGE=json
 EnvironmentFile=%h/.config/screenscoreboard/env

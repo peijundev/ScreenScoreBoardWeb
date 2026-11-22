@@ -161,6 +161,8 @@ export default function AssetLibraryDialog({ onClose }: { onClose: () => void })
       storageKey="assetLibraryDialog"
       defaultWidth={860}
       defaultHeight={680}
+      minWidth={560}
+      minHeight={440}
       onClose={onClose}
     >
       <div className="asset-library">

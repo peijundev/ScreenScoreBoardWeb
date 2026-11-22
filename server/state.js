@@ -3,7 +3,7 @@
 const fs = require('fs');
 const os = require('os');
 const crypto = require('crypto');
-const { createStorageFromConfig, StorageConflictError } = require('./storage');
+const { createStorageFromConfig, StorageConflictError, StorageConfigError } = require('./storage');
 const { resolveStorageConfig, configFingerprint } = require('./storage-config');
 const { retry, withTimeout } = require('./storage/common');
 const runtime = require('./runtime');
@@ -254,8 +254,14 @@ function normalizeProject(raw) {
       cardImage: team.cardImage === undefined ? null : team.cardImage,
       layout: team.layout === undefined ? null : team.layout,
       bio: typeof team.bio === 'string' ? team.bio : (typeof team.motto === 'string' ? team.motto : ''),
+      captainId: typeof team.captainId === 'string' ? team.captainId : null,
     };
     delete teams[id].motto;
+  }
+  // 队长必须是该团队的成员；悬空或跨队时清空。
+  for (const team of Object.values(teams)) {
+    const captain = team.captainId ? people[team.captainId] : null;
+    if (!captain || captain.teamId !== team.id) team.captainId = null;
   }
   const project = {
     id: typeof p.id === 'string' && p.id ? p.id : genId('pr'),
@@ -435,6 +441,16 @@ async function doSave() {
   do {
     dirty = false;
     try {
+      const snapshotLimit = Number(storage.maxSnapshotBytes) || 0;
+      if (snapshotLimit > 0) {
+        const bytes = Buffer.byteLength(JSON.stringify(state), 'utf8');
+        if (bytes > snapshotLimit) {
+          throw new StorageConfigError(
+            `状态快照 ${bytes} 字节超过 ${storageKind} 的保存上限 ${snapshotLimit} 字节，请精简项目或更换后端`,
+            { code: 'SNAPSHOT_TOO_LARGE' },
+          );
+        }
+      }
       const result = await storage.save(state, { expectedRevision: storageRevision });
       storageRevision = result && result.revision !== undefined
         ? result.revision
@@ -454,6 +470,10 @@ async function doSave() {
         break;
       }
       logger.error('状态保存失败', { error: e.message, stack: e.stack });
+      if (e && e.code === 'SNAPSHOT_TOO_LARGE') {
+        // 快照超限是永久错误，自动重试没有意义。
+        break;
+      }
       scheduleSaveRetry();
       dirty = true;
       break;
@@ -765,6 +785,10 @@ function applyOp(op, payload, actor = currentActor()) {
       if (payload.cardImage !== undefined) p.cardImage = needAvatar(payload.cardImage);
       if (payload.bio !== undefined) p.bio = needBio(payload.bio);
       if (payload.teamId !== undefined) {
+        if (p.teamId) {
+          const oldTeam = project.teams[p.teamId];
+          if (oldTeam && oldTeam.captainId === p.id) oldTeam.captainId = null;
+        }
         if (payload.teamId == null || payload.teamId === '') p.teamId = null;
         else p.teamId = needTeam(project, payload.teamId).id;
       }
@@ -776,7 +800,11 @@ function applyOp(op, payload, actor = currentActor()) {
       return { bio: entity.bio };
     }
     case OPS.removePerson: {
-      needPerson(project, payload.personId);
+      const person = needPerson(project, payload.personId);
+      if (person.teamId) {
+        const team = project.teams[person.teamId];
+        if (team && team.captainId === person.id) team.captainId = null;
+      }
       delete project.people[payload.personId];
       invalidateOrderCache(project);
       runtime.clearUndo(project.id);
@@ -797,10 +825,51 @@ function applyOp(op, payload, actor = currentActor()) {
         cardImage: needAvatar(payload.cardImage),
         bio: payload.bio === undefined ? '' : needBio(payload.bio),
         layout: null,
+        captainId: null,
         createdAt: Date.now(),
         order: nextOrder(project),
       };
       return { teamId: id };
+    }
+    case OPS.addTeamsBatch: {
+      requireFeature(project, 'featureBatchAdd');
+      const rawNames = Array.isArray(payload.names) ? payload.names : [];
+      if (!rawNames.length) throw new OpError('团队名列表为空');
+      if (rawNames.length > 200) throw new OpError('单次最多添加 200 个团队');
+      if (Object.keys(project.teams).length + rawNames.length > 500) {
+        throw new OpError('项目团队数已达上限（500）');
+      }
+      const existingNames = new Set(Object.values(project.teams).map((t) => t.name));
+      const seen = new Set();
+      const teamIds = [];
+      const skipped = [];
+      const now = Date.now();
+      rawNames.forEach((raw, index) => {
+        if (typeof raw !== 'string') throw new OpError(`第 ${index + 1} 个团队名非法`);
+        const name = raw.trim();
+        if (!name) return;
+        if (name.length > 20) throw new OpError(`第 ${index + 1} 个团队名过长（最多 20 字）`);
+        if (seen.has(name) || existingNames.has(name)) {
+          skipped.push(name);
+          return;
+        }
+        seen.add(name);
+        const id = genId('t');
+        project.teams[id] = {
+          id,
+          name,
+          avatar: null,
+          cardImage: null,
+          bio: '',
+          layout: null,
+          captainId: null,
+          createdAt: now + teamIds.length,
+          order: nextOrder(project),
+        };
+        teamIds.push(id);
+      });
+      if (!teamIds.length) throw new OpError('没有可添加的新团队');
+      return { teamIds, added: teamIds.length, skipped };
     }
     case OPS.renameTeam: {
       const t = needTeam(project, payload.teamId);
@@ -833,8 +902,26 @@ function applyOp(op, payload, actor = currentActor()) {
     case OPS.assignTeam: {
       const p = needPerson(project, payload.personId);
       if (payload.teamId != null) needTeam(project, payload.teamId);
+      if (p.teamId) {
+        const oldTeam = project.teams[p.teamId];
+        if (oldTeam && oldTeam.captainId === p.id) oldTeam.captainId = null;
+      }
       p.teamId = payload.teamId || null;
       return {};
+    }
+    case OPS.setTeamCaptain: {
+      requireFeature(project, 'featureTeamCaptain');
+      const team = needTeam(project, payload.teamId);
+      if (payload.personId == null || payload.personId === '') {
+        team.captainId = null;
+        return { teamId: team.id, captainId: null };
+      }
+      const person = needPerson(project, payload.personId);
+      if (person.teamId !== team.id) {
+        throw new OpError('只有加入该团队的人员才能设为队长');
+      }
+      team.captainId = person.id;
+      return { teamId: team.id, captainId: person.id };
     }
     case OPS.addScore: {
       const p = needPerson(project, payload.personId);
@@ -1106,6 +1193,7 @@ function sanitizeImportedProject(raw) {
       cardImage: rawTeam.cardImage ? needAvatar(rawTeam.cardImage) : null,
       layout: rawTeam.layout ? needLayout(rawTeam.layout) : null,
       bio: rawTeam.bio ? needBio(rawTeam.bio) : (rawTeam.motto ? needBio(rawTeam.motto) : ''),
+      captainId: null,
       createdAt: Number.isFinite(rawTeam.createdAt) ? rawTeam.createdAt : Date.now(),
       order: Number.isFinite(rawTeam.order) ? rawTeam.order : undefined,
     };

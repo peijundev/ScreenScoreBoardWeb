@@ -104,6 +104,11 @@ export interface SettingsFields {
   bioColor: string;
   bioOpacity: number;
   bioItalic: boolean;
+  featureTeamCaptain: boolean;
+  teamCaptainLabel: string;
+  teamCaptainSizeMode: string;
+  teamCaptainSize: number;
+  teamCaptainColor: string;
   featureAvatarEdit: boolean;
   featureSettingsResize: boolean;
   featureBatchAdd: boolean;

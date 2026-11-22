@@ -850,6 +850,32 @@ body[data-bio-italic="on"] .person-bio,
 body[data-bio-italic="on"] .team-bio,
 body[data-bio-italic="on"] .member-bio { font-style: italic; }
 
+/* ---- 队长标签 ---- */
+.captain-badge {
+  display: inline-block;
+  flex: 0 0 auto;
+  padding: 0 0.5em;
+  border-radius: 999px;
+  background: var(--accent, #3daee9);
+  color: var(--accent-text, #fff);
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.person-name-row,
+.member-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  min-width: 0;
+}
+.person-name-row > :first-child,
+.member-name-row > :first-child { min-width: 0; }
+.person-card.av-top .person-name-row,
+.person-card.av-bottom .person-name-row,
+.member.av-top .member-name-row,
+.member.av-bottom .member-name-row { justify-content: center; }
+
 /* ---- 团队卡片：顶部信息条 + 成员网格 ---- */
 .team-card {
   border-left: var(--team-bar-w, 4px) solid var(--team-accent-color, var(--accent));

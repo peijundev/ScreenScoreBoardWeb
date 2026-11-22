@@ -1,7 +1,15 @@
 'use strict';
-// Redis 后端：hash 快照 + Lua CAS + SET NX 分布式锁。
+// Redis 后端：hash 快照 + Lua CAS + SET NX 分布式锁；可选分块快照。
 // 作为权威存储时必须开启 AOF 且使用 noeviction，否则重启/淘汰可能丢数据。
 const { requireDriver, StorageConflictError, sleep } = require('./common');
+const {
+  normalizeChunkOptions,
+  createChunkPlan,
+  parseChunkManifest,
+  chunkRowId,
+  collectChunkIds,
+  assembleChunks,
+} = require('./chunking');
 
 const CAS_SCRIPT = `
 local cur = redis.call('HGET', KEYS[1], 'revision')
@@ -45,6 +53,52 @@ function createRedisStorage(options = {}) {
   const prefix = options.keyPrefix || 'scoreboard';
   const stateKey = prefix + ':state';
   const lockKey = prefix + ':lock';
+
+  function chunkKey(manifest, chunk) {
+    return prefix + ':' + chunkRowId(manifest, chunk);
+  }
+
+  async function savePlain(json, expectedRevision) {
+    const now = Date.now();
+    const expected = expectedRevision === undefined
+      ? ''
+      : String(expectedRevision === null ? 0 : expectedRevision);
+    const result = await client.eval(CAS_SCRIPT, {
+      keys: [stateKey],
+      arguments: [expected, json, String(now)],
+    });
+    const ok = Number(result && result[0]);
+    if (ok !== 1) {
+      throw new StorageConflictError('状态已被其他实例修改，拒绝覆盖', {
+        currentRevision: result ? Number(result[1]) : 0,
+      });
+    }
+    return Number(result[1]);
+  }
+
+  async function currentManifest() {
+    const data = await client.hGetAll(stateKey);
+    return data && data.data ? parseChunkManifest(data.data) : null;
+  }
+
+  async function readChunkRow(manifest, chunk) {
+    return client.get(chunkKey(manifest, chunk));
+  }
+
+  async function writeChunkRows(ids, parts) {
+    for (let i = 0; i < ids.length; i += 1) {
+      await client.set(ids[i], parts[i]);
+    }
+  }
+
+  async function deleteChunkRows(ids) {
+    if (ids.length) await client.del(ids);
+  }
+
+  async function deleteAllChunks() {
+    const keys = await client.keys(prefix + ':chunk:*');
+    if (keys.length) await client.del(keys);
+  }
 
   function stopRenew() {
     if (renewTimer) {
@@ -97,6 +151,15 @@ function createRedisStorage(options = {}) {
         return null;
       }
       revision = Number(data.revision) || 0;
+      const manifest = parseChunkManifest(data.data);
+      if (manifest) {
+        try {
+          const json = await assembleChunks(manifest, (chunk) => readChunkRow(manifest, chunk));
+          return JSON.parse(json);
+        } catch (_) {
+          return null;
+        }
+      }
       try { return JSON.parse(data.data); } catch (_) { return null; }
     },
     /**
@@ -105,25 +168,38 @@ function createRedisStorage(options = {}) {
      */
     async save(state, { expectedRevision } = {}) {
       const json = JSON.stringify(state);
-      const now = Date.now();
-      const expected = expectedRevision === undefined
-        ? ''
-        : String(expectedRevision === null ? 0 : expectedRevision);
+      const chunkOptions = normalizeChunkOptions(options);
       try {
-        const result = await client.eval(CAS_SCRIPT, {
-          keys: [stateKey],
-          arguments: [expected, json, String(now)],
-        });
-        const ok = Number(result && result[0]);
-        if (ok !== 1) {
-          throw new StorageConflictError('状态已被其他实例修改，拒绝覆盖', {
-            currentRevision: result ? Number(result[1]) : 0,
-          });
+        const previous = await currentManifest();
+        if (!chunkOptions.enabled) {
+          const next = await savePlain(json, expectedRevision);
+          if (previous) {
+            try { await deleteChunkRows(collectChunkIds(previous).map((id) => prefix + ':' + id)); } catch (_) {}
+          }
+          revision = next;
+          lastSaveAt = Date.now();
+          lastError = null;
+          return { revision: next };
         }
-        revision = Number(result[1]);
-        lastSaveAt = Date.now();
-        lastError = null;
-        return { revision };
+
+        const plan = createChunkPlan(json, chunkOptions);
+        const ids = plan.manifest.chunks.map((chunk) => chunkKey(plan.manifest, chunk));
+        await writeChunkRows(ids, plan.parts);
+        try {
+          const next = await savePlain(JSON.stringify(plan.manifest), expectedRevision);
+          revision = next;
+          lastSaveAt = Date.now();
+          lastError = null;
+          if (previous) {
+            try {
+              await deleteChunkRows(collectChunkIds(previous).map((id) => prefix + ':' + id));
+            } catch (_) {}
+          }
+          return { revision: next };
+        } catch (error) {
+          try { await deleteChunkRows(ids); } catch (_) {}
+          throw error;
+        }
       } catch (error) {
         lastError = error && error.message ? error.message : String(error);
         throw error;
@@ -228,6 +304,7 @@ function createRedisStorage(options = {}) {
     },
     async removeSnapshot() {
       await client.del(stateKey);
+      try { await deleteAllChunks(); } catch (_) {}
       revision = 0;
     },
   };

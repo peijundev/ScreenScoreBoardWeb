@@ -469,12 +469,30 @@ body {
   transform-origin: top left;
 }
 
-/* 批量添加等模态对话框的遮罩（桌面） */
-.batch-add-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 999;
-  background: rgba(0, 0, 0, 0.45);
+/* ---- 批量添加窗口（人员 / 团队） ---- */
+.batch-add-form {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.batch-add-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.batch-add-form textarea {
+  min-height: 180px;
+  padding: 8px;
+  background: var(--input-bg);
+  color: var(--text);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  font: inherit;
+  resize: vertical;
 }
 
 /* ---- 排版设置窗口：非模态、可拖动、可拉伸 ---- */
@@ -497,20 +515,38 @@ body {
   overflow: hidden;
   resize: none;
   container-type: inline-size;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
 }
 .settings-dialog[open] { display: flex; flex-direction: column; }
-.dialog-resize-handle {
+/* 八方向缩放热区：边缘 + 四角，像桌面窗口一样 */
+.dialog-resize-handle { position: absolute; z-index: 4; }
+.dialog-resize-n,
+.dialog-resize-s { left: 16px; right: 16px; height: 8px; cursor: ns-resize; }
+.dialog-resize-n { top: 0; }
+.dialog-resize-s { bottom: 0; }
+.dialog-resize-e,
+.dialog-resize-w { top: 16px; bottom: 16px; width: 8px; cursor: ew-resize; }
+.dialog-resize-e { right: 0; }
+.dialog-resize-w { left: 0; }
+.dialog-resize-ne,
+.dialog-resize-nw,
+.dialog-resize-se,
+.dialog-resize-sw { width: 16px; height: 16px; }
+.dialog-resize-ne { top: 0; right: 0; cursor: nesw-resize; }
+.dialog-resize-nw { top: 0; left: 0; cursor: nwse-resize; }
+.dialog-resize-se { bottom: 0; right: 0; cursor: nwse-resize; }
+.dialog-resize-sw { bottom: 0; left: 0; cursor: nesw-resize; }
+.dialog-resize-se::after {
+  content: '';
   position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 22px;
-  height: 22px;
-  cursor: nwse-resize;
-  z-index: 3;
+  right: 3px;
+  bottom: 3px;
+  width: 8px;
+  height: 8px;
   background:
-    linear-gradient(135deg, transparent 0 55%, var(--text-dim) 55% 60%, transparent 60% 70%,
-      var(--text-dim) 70% 75%, transparent 75%);
-  opacity: 0.75;
+    linear-gradient(135deg, transparent 0 45%, var(--text-dim) 45% 55%, transparent 55% 70%,
+      var(--text-dim) 70% 80%, transparent 80%);
+  opacity: 0.7;
 }
 .settings-dialog.no-resize .dialog-resize-handle { display: none; }
 .feature-grid {
@@ -570,6 +606,7 @@ body {
   gap: 12px;
   background: var(--panel-head);
   padding: 8px 12px;
+  cursor: move;
   border-bottom: 1px solid var(--card-border);
   cursor: move;
   user-select: none;
@@ -606,6 +643,19 @@ body {
   overflow: auto;
   flex: 1 1 auto;
   min-height: 0;
+  /* 缩放时保持滚动条宽度，避免出现/消失导致内容左右抖动 */
+  scrollbar-gutter: stable;
+  overflow-anchor: none;
+}
+/* 拖动/缩放期间避免内容 hover 与焦点样式反复重算 */
+.settings-dialog.dragging .settings-form { pointer-events: none; }
+
+/* 内容密集窗口：让滚动条内缩，右边缘留给缩放手柄，避免抢滚动条 */
+@media (min-width: 861px) {
+  .settings-dialog .settings-form:has(.storage-dialog),
+  .settings-dialog .settings-form:has(.asset-library) {
+    margin-right: 10px;
+  }
 }
 .settings-dialog .set-group {
   border: 1px solid var(--card-border);
@@ -916,6 +966,18 @@ select:focus { border-color: var(--accent); }
   object-fit: cover;
 }
 .person-row .p-name { font-weight: 600; min-width: 56px; word-break: break-all; }
+.captain-badge {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-text, #fff);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.captain-badge-inline { margin-left: 6px; vertical-align: middle; }
 .person-row .p-name.editable,
 .team-block .t-name.editable { cursor: pointer; }
 .person-row .p-name.editable:hover,
@@ -1027,7 +1089,8 @@ select:focus { border-color: var(--accent); }
   display: flex;
   flex-direction: column;
   gap: 14px;
-  min-height: 0;
+  min-width: 0;
+  contain: layout style;
 }
 .asset-library .set-group {
   display: flex;
@@ -1039,6 +1102,7 @@ select:focus { border-color: var(--accent); }
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
   gap: 10px;
+  align-content: start;
 }
 .asset-card {
   display: flex;
@@ -1459,7 +1523,6 @@ select:focus-visible {
   .mobile-topbar .btn.small { min-height: var(--touch-target, 44px); }
   .mobile-topbar .dot { margin: 0 6px; }
 
-  .batch-add-backdrop { display: none; }
   .mobile-content { padding: 12px; }
   .mobile-panel { padding: 12px 12px calc(84px + env(safe-area-inset-bottom)); }
   .mobile-panel.is-hidden { display: none; }
@@ -1765,10 +1828,9 @@ select:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: 14px 16px 20px;
+  min-width: 0;
+  padding: 4px 0 8px;
+  contain: layout style;
 }
 .storage-dialog h3 { margin: 0 0 8px; font-size: 14px; }
 .storage-dialog h4 { margin: 0 0 6px; font-size: 13px; }
@@ -1793,6 +1855,7 @@ select:focus-visible {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 8px;
+  align-content: start;
 }
 .storage-backend-card {
   display: flex;
@@ -1879,6 +1942,26 @@ select:focus-visible {
   border-top: 1px solid var(--card-border);
 }
 .storage-migrate .btn { align-self: flex-start; }
+.storage-pros-cons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+  padding: 10px;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  background: var(--btn-bg);
+  font-size: 12px;
+}
+.storage-pros-cons strong { display: block; margin-bottom: 4px; color: var(--text); }
+.storage-pros-cons ul {
+  margin: 0;
+  padding-left: 16px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+@media (max-width: 860px) {
+  .storage-pros-cons { grid-template-columns: 1fr; }
+}
 .storage-notice {
   padding: 8px 10px;
   font-size: 12px;

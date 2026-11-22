@@ -1,6 +1,7 @@
 // 端到端验证：HTTP / 上传 / WS 同步 / 多项目 / 持久化 / SQLite 存储 / 旧数据迁移
 // 运行: npm run verify
 import { spawn } from 'node:child_process';
+import { createRequire } from 'node:module';
 import http from 'node:http';
 import {
   mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync, statSync, utimesSync,
@@ -8,6 +9,9 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import WebSocket from 'ws';
+
+const require = createRequire(import.meta.url);
+const { KINDS } = require('../server/storage/registry.js');
 
 const PORT = 3456;
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -419,6 +423,28 @@ async function main() {
     .catch((e) => assert(/简介字号/.test(e.message), '简介字号越界被拒绝'));
   await adminOp('updateSettings', { patch: { bioOpacity: 0.1 } })
     .catch((e) => assert(/简介不透明度/.test(e.message), '简介不透明度越界被拒绝'));
+
+  await adminOp('updateSettings', {
+    patch: {
+      featureTeamCaptain: true,
+      teamCaptainLabel: '领队',
+      teamCaptainSizeMode: 'auto',
+      teamCaptainSize: 14,
+      teamCaptainColor: '#ffcc00',
+    },
+  });
+  s = await viewer.waitState((st) => P(st).settings.teamCaptainLabel === '领队');
+  assert(P(s).settings.featureTeamCaptain === true && P(s).settings.teamCaptainSizeMode === 'auto' &&
+    P(s).settings.teamCaptainSize === 14 && P(s).settings.teamCaptainColor === '#ffcc00',
+    '队长标签设置同步');
+  await adminOp('updateSettings', { patch: { teamCaptainLabel: '' } })
+    .catch((e) => assert(/队长标签/.test(e.message), '空队长标签被拒绝'));
+  await adminOp('updateSettings', { patch: { teamCaptainSize: 121 } })
+    .catch((e) => assert(/队长标签字号/.test(e.message), '队长标签字号越界被拒绝'));
+  await adminOp('updateSettings', { patch: { teamCaptainSizeMode: 'huge' } })
+    .catch((e) => assert(/队长字号模式/.test(e.message), '非法队长字号模式被拒绝'));
+  await adminOp('updateSettings', { patch: { teamCaptainColor: 'red' } })
+    .catch((e) => assert(/队长标签颜色/.test(e.message), '非法队长标签颜色被拒绝'));
 
   console.log('主题导入:');
   await adminOp('applyTheme', {
@@ -908,6 +934,37 @@ async function main() {
   const batchAck = await adminOp('addPeopleBatch', { names: ['甲', '乙', '甲', ' 丙 ', '张三'] });
   assert(batchAck.result.added === 3 && batchAck.result.skipped.length === 2, '批量添加去重/跳过重名');
   const batchIds = batchAck.result.personIds;
+
+  await adminOp('setTeamCaptain', { teamId: tid, personId: pid });
+  s = await viewer.waitState((st) => P(st) && P(st).teams[tid] && P(st).teams[tid].captainId === pid);
+  assert(true, '设置团队成员为队长');
+
+  const outsider = await adminOp('addPerson', { name: '队外人员' });
+  await adminOp('setTeamCaptain', { teamId: tid, personId: outsider.result.personId })
+    .catch((e) => assert(/只有加入该团队/.test(e.message), '非团队成员不能设为队长'));
+  await adminOp('removePerson', { personId: outsider.result.personId });
+
+  const tempCaptain = await adminOp('addPerson', { name: '临时队长', teamId: tid });
+  await adminOp('setTeamCaptain', { teamId: tid, personId: tempCaptain.result.personId });
+  await adminOp('assignTeam', { personId: tempCaptain.result.personId, teamId: null });
+  s = await viewer.waitState((st) => P(st) && P(st).teams[tid] && P(st).teams[tid].captainId === null);
+  assert(true, '换队后自动取消队长');
+  await adminOp('removePerson', { personId: tempCaptain.result.personId });
+
+  const removedCaptain = await adminOp('addPerson', { name: '待删队长', teamId: tid });
+  await adminOp('setTeamCaptain', { teamId: tid, personId: removedCaptain.result.personId });
+  await adminOp('removePerson', { personId: removedCaptain.result.personId });
+  s = await viewer.waitState((st) => P(st) && P(st).teams[tid] && P(st).teams[tid].captainId === null);
+  assert(true, '删除队长后自动清空');
+
+  await adminOp('updateSettings', { patch: { featureTeamCaptain: false } });
+  await adminOp('setTeamCaptain', { teamId: tid, personId: pid })
+    .catch((e) => assert(/未开启/.test(e.message), '队长功能关闭时拒绝设置'));
+  await adminOp('updateSettings', { patch: { featureTeamCaptain: true } });
+
+  await adminOp('setTeamCaptain', { teamId: tid, personId: null });
+  s = await viewer.waitState((st) => P(st) && P(st).teams[tid] && P(st).teams[tid].captainId === null);
+  assert(true, '取消团队队长');
   await adminOp('addPeopleBatch', { names: Array.from({ length: 201 }, (_, i) => '人' + i) }).catch((e) => {
     assert(/最多/.test(e.message), '批量添加上限被拒绝');
   });
@@ -919,6 +976,29 @@ async function main() {
     assert(/未开启/.test(e.message), '批量添加关闭时拒绝');
   });
   await adminOp('updateSettings', { patch: { featureBatchAdd: true } });
+
+  const teamBatchAck = await adminOp('addTeamsBatch', {
+    names: ['批量队甲', '批量队乙', '批量队甲', ' 批量队丙 '],
+  });
+  assert(
+    teamBatchAck.result.added === 3 && teamBatchAck.result.skipped.length === 1,
+    '批量添加团队去重/跳过重名',
+  );
+  const teamBatchIds = teamBatchAck.result.teamIds;
+  await adminOp('addTeamsBatch', { names: ['批量队甲'] }).catch((e) => {
+    assert(/没有可添加/.test(e.message), '团队全部重名时报错');
+  });
+  await adminOp('addTeamsBatch', {
+    names: Array.from({ length: 201 }, (_, i) => '批队' + i),
+  }).catch((e) => {
+    assert(/最多/.test(e.message), '批量团队上限被拒绝');
+  });
+  await adminOp('addTeamsBatch', { names: ['一'.repeat(21)] }).catch((e) => {
+    assert(/过长/.test(e.message), '批量团队名过长被拒绝');
+  });
+  for (const id of teamBatchIds) {
+    await adminOp('removeTeam', { teamId: id });
+  }
 
   const curBefore = await getState();
   const scoreBefore = curBefore.projects[projectId].people[pid].score;
@@ -962,14 +1042,18 @@ async function main() {
   });
   await adminOp('updateSettings', { patch: { quickScorePresets: [1, 5, 10, -1] } });
 
+  const rtSince = viewer.runtimes.length;
   await adminOp('addScore', { personId: pid, delta: 5 });
   await viewer.waitRuntime((r) => r.scoreLogs && r.scoreLogs[projectId]);
   assert(true, '分数日志记录 addScore');
   await adminOp('addScore', { personId: pid, delta: 3 });
   await adminOp('addScore', { personId: pid, delta: 2 });
-  const rt = viewer.runtimes[viewer.runtimes.length - 1];
-  assert(rt.undoLabels[projectId] && rt.undoLabels[projectId].length >= 3 &&
-    rt.scoreLogs[projectId].length >= 3, '撤销历史标签与分数日志快照');
+  const rt = await viewer.waitRuntime(
+    (r) => r.undoLabels && r.undoLabels[projectId] && r.undoLabels[projectId].length >= 3 &&
+      r.scoreLogs && r.scoreLogs[projectId] && r.scoreLogs[projectId].length >= 3,
+    rtSince,
+  );
+  assert(true, '撤销历史标签与分数日志快照');
   const beforeUndoCount = rt.undoCounts[projectId];
   await adminOp('undoTo', { keep: beforeUndoCount - 2 });
   s = await viewer.waitState((st) => P(st).people[pid] && P(st).people[pid].score === 12);
@@ -1286,6 +1370,9 @@ async function main() {
     rp.settings.featureBio === true && rp.settings.bioFont === 'kai' && rp.settings.bioSize === 20 &&
     rp.settings.bioColor === '#ff8800' && rp.settings.bioOpacity === 0.6 &&
     rp.settings.bioItalic === true, '重启后简介与外观设置恢复');
+  assert(rp.settings.featureTeamCaptain === true && rp.settings.teamCaptainLabel === '领队' &&
+    rp.settings.teamCaptainSizeMode === 'auto' && rp.settings.teamCaptainSize === 14 &&
+    rp.settings.teamCaptainColor === '#ffcc00', '重启后队长标签设置恢复');
   assert(rp.people[pid].layout.x === 200 && rp.people[pid].layout.w === 200 &&
     rp.people[pid].memberLayout.w === 20, '重启后卡片布局恢复（含画布外坐标）');
   assert(rp.settings.cardStyle === 'neon' && rp.settings.columns === 5 && rp.settings.avatarSize === 96, '重启后外观设置恢复');
@@ -1426,8 +1513,36 @@ async function main() {
   assert(storageRes.ok, '管理员可读取存储配置');
   let storagePayload = await storageRes.json();
   assert(storagePayload.data.config.kind === 'json', '默认后端为 json');
-  assert(storagePayload.data.backends.length === 9, '返回 9 种存储后端元数据');
-  assert(storagePayload.data.backends.some((b) => b.kind === 'redis' && b.recommended), 'Redis 标记为推荐');
+  assert(
+    storagePayload.data.backends.length === KINDS.length,
+    `返回 ${KINDS.length} 种存储后端元数据`,
+  );
+  assert(
+    storagePayload.data.backends.some(
+      (b) => b.kind === 'redis' && b.recommended && b.recommendedLabel === '效率推荐',
+    ),
+    'Redis 标记为效率推荐',
+  );
+  assert(
+    storagePayload.data.backends.some(
+      (b) => b.kind === 'sqlite' && b.recommended && b.recommendedLabel === '本地推荐',
+    ),
+    'SQLite 标记为本地推荐',
+  );
+  assert(storagePayload.data.backends[3].kind === 'redis', 'Redis 位于后端选择第四位');
+  assert(
+    storagePayload.data.backends.every(
+      (b) => Array.isArray(b.pros) && b.pros.length > 0 &&
+        Array.isArray(b.cons) && b.cons.length > 0 && b.warning,
+    ),
+    '每种后端都有优缺点与警告',
+  );
+  assert(
+    storagePayload.data.backends.some(
+      (b) => b.kind === 'postgres' && b.recommendedLabel === '生产推荐',
+    ),
+    'PostgreSQL 标记为生产推荐',
+  );
 
   const anonStorage = await fetch(BASE + '/api/v1/storage');
   assert(anonStorage.status === 401, '匿名访问存储配置返回 401');

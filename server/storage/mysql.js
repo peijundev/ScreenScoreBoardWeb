@@ -1,6 +1,14 @@
 'use strict';
-// MySQL / MariaDB 后端：mysql2/promise 连接池 + revision CAS + GET_LOCK。
+// MySQL / MariaDB 后端：mysql2/promise 连接池 + revision CAS + GET_LOCK；可选分块快照。
 const { requireDriver, StorageConflictError } = require('./common');
+const {
+  normalizeChunkOptions,
+  createChunkPlan,
+  parseChunkManifest,
+  chunkRowId,
+  collectChunkIds,
+  assembleChunks,
+} = require('./chunking');
 
 const LOCK_NAME = 'screenscoreboard:state';
 
@@ -21,15 +29,86 @@ function createMysqlStorage(options = {}) {
     return rows.length ? Number(rows[0].revision) || 0 : 0;
   }
 
+  async function readStateRow() {
+    return pool.query('SELECT data, revision FROM scoreboard_state WHERE id = ?', ['state']);
+  }
+
+  async function currentManifest() {
+    const [rows] = await readStateRow();
+    return rows.length ? parseChunkManifest(rows[0].data) : null;
+  }
+
+  async function readChunkRow(manifest, chunk) {
+    const [rows] = await pool.query('SELECT data FROM scoreboard_state WHERE id = ?', [
+      chunkRowId(manifest, chunk),
+    ]);
+    return rows.length ? rows[0].data : null;
+  }
+
+  async function writeChunkRows(ids, parts) {
+    const now = Date.now();
+    for (let i = 0; i < ids.length; i += 1) {
+      await pool.query(
+        'INSERT INTO scoreboard_state (id, data, revision, updated_at) VALUES (?, ?, 0, ?) ' +
+        'ON DUPLICATE KEY UPDATE data = VALUES(data), updated_at = VALUES(updated_at)',
+        [ids[i], parts[i], now],
+      );
+    }
+  }
+
+  async function deleteChunkRows(ids) {
+    for (const id of ids) {
+      await pool.query('DELETE FROM scoreboard_state WHERE id = ?', [id]);
+    }
+  }
+
+  async function savePlain(json, expectedRevision) {
+    const now = Date.now();
+    if (expectedRevision === undefined) {
+      await pool.query(
+        'INSERT INTO scoreboard_state (id, data, revision, updated_at) VALUES (?, ?, 1, ?) ' +
+        'ON DUPLICATE KEY UPDATE data = VALUES(data), revision = revision + 1, updated_at = VALUES(updated_at)',
+        ['state', json, now],
+      );
+      return currentRevision();
+    }
+    const expected = expectedRevision === null ? 0 : Number(expectedRevision);
+    if (expected === 0) {
+      const [result] = await pool.query(
+        'INSERT IGNORE INTO scoreboard_state (id, data, revision, updated_at) VALUES (?, ?, 1, ?)',
+        ['state', json, now],
+      );
+      if (!result.affectedRows) {
+        throw new StorageConflictError('状态已被其他实例写入，拒绝覆盖', {
+          currentRevision: await currentRevision(),
+        });
+      }
+      return 1;
+    }
+    const [result] = await pool.query(
+      'UPDATE scoreboard_state SET data = ?, revision = revision + 1, updated_at = ? ' +
+      "WHERE id = 'state' AND revision = ?",
+      [json, now, expected],
+    );
+    if (!result.affectedRows) {
+      throw new StorageConflictError('状态已被其他实例修改，拒绝覆盖', {
+        currentRevision: await currentRevision(),
+      });
+    }
+    return expected + 1;
+  }
+
+  const capabilities = {
+    cas: true,
+    revision: 'integer',
+    distributedLock: true,
+    lockKind: 'mysql-get-lock',
+    snapshot: 'row',
+  };
+
   return {
     kind: 'mysql',
-    capabilities: {
-      cas: true,
-      revision: 'integer',
-      distributedLock: true,
-      lockKind: 'mysql-get-lock',
-      snapshot: 'row',
-    },
+    capabilities,
     async init() {
       const mysql = requireDriver('mysql2/promise', 'MySQL');
       const url = options.url || process.env.MYSQL_URL;
@@ -71,16 +150,29 @@ function createMysqlStorage(options = {}) {
         await pool.query('ALTER TABLE scoreboard_state ADD COLUMN revision BIGINT NOT NULL DEFAULT 0');
       }
       await pool.query("UPDATE scoreboard_state SET revision = 1 WHERE id = 'state' AND revision = 0");
-      const [rows] = await pool.query('SELECT revision FROM scoreboard_state WHERE id = ?', ['state']);
-      revision = rows.length ? Number(rows[0].revision) || 0 : 0;
+      revision = await currentRevision();
+      // PlanetScale / Vitess 等协议兼容服务不支持会话级 GET_LOCK。
+      if (options.lockMode === 'none') {
+        capabilities.distributedLock = false;
+        capabilities.lockKind = null;
+      }
     },
     async load() {
-      const [rows] = await pool.query('SELECT data, revision FROM scoreboard_state WHERE id = ?', ['state']);
+      const [rows] = await readStateRow();
       if (!rows.length) {
         revision = 0;
         return null;
       }
       revision = Number(rows[0].revision) || 0;
+      const manifest = parseChunkManifest(rows[0].data);
+      if (manifest) {
+        try {
+          const json = await assembleChunks(manifest, (chunk) => readChunkRow(manifest, chunk));
+          return JSON.parse(json);
+        } catch (_) {
+          return null;
+        }
+      }
       try { return JSON.parse(rows[0].data); } catch (_) { return null; }
     },
     /**
@@ -89,45 +181,36 @@ function createMysqlStorage(options = {}) {
      */
     async save(state, { expectedRevision } = {}) {
       const json = JSON.stringify(state);
-      const now = Date.now();
+      const chunkOptions = normalizeChunkOptions(options);
       try {
-        if (expectedRevision === undefined) {
-          await pool.query(
-            'INSERT INTO scoreboard_state (id, data, revision, updated_at) VALUES (?, ?, 1, ?) ' +
-            'ON DUPLICATE KEY UPDATE data = VALUES(data), revision = revision + 1, updated_at = VALUES(updated_at)',
-            ['state', json, now],
-          );
-          revision = await currentRevision();
-        } else {
-          const expected = expectedRevision === null ? 0 : Number(expectedRevision);
-          if (expected === 0) {
-            const [result] = await pool.query(
-              'INSERT IGNORE INTO scoreboard_state (id, data, revision, updated_at) VALUES (?, ?, 1, ?)',
-              ['state', json, now],
-            );
-            if (!result.affectedRows) {
-              throw new StorageConflictError('状态已被其他实例写入，拒绝覆盖', {
-                currentRevision: await currentRevision(),
-              });
-            }
-            revision = 1;
-          } else {
-            const [result] = await pool.query(
-              "UPDATE scoreboard_state SET data = ?, revision = revision + 1, updated_at = ? " +
-              "WHERE id = 'state' AND revision = ?",
-              [json, now, expected],
-            );
-            if (!result.affectedRows) {
-              throw new StorageConflictError('状态已被其他实例修改，拒绝覆盖', {
-                currentRevision: await currentRevision(),
-              });
-            }
-            revision = expected + 1;
+        const previous = await currentManifest();
+        if (!chunkOptions.enabled) {
+          const next = await savePlain(json, expectedRevision);
+          if (previous) {
+            try { await deleteChunkRows(collectChunkIds(previous)); } catch (_) {}
           }
+          revision = next;
+          lastSaveAt = Date.now();
+          lastError = null;
+          return { revision: next };
         }
-        lastSaveAt = Date.now();
-        lastError = null;
-        return { revision };
+
+        const plan = createChunkPlan(json, chunkOptions);
+        const ids = plan.manifest.chunks.map((chunk) => chunkRowId(plan.manifest, chunk));
+        await writeChunkRows(ids, plan.parts);
+        try {
+          const next = await savePlain(JSON.stringify(plan.manifest), expectedRevision);
+          revision = next;
+          lastSaveAt = Date.now();
+          lastError = null;
+          if (previous) {
+            try { await deleteChunkRows(collectChunkIds(previous)); } catch (_) {}
+          }
+          return { revision: next };
+        } catch (error) {
+          try { await deleteChunkRows(ids); } catch (_) {}
+          throw error;
+        }
       } catch (error) {
         lastError = error && error.message ? error.message : String(error);
         throw error;
@@ -197,7 +280,7 @@ function createMysqlStorage(options = {}) {
       return revision;
     },
     async removeSnapshot() {
-      await pool.query("DELETE FROM scoreboard_state WHERE id = 'state'");
+      await pool.query("DELETE FROM scoreboard_state WHERE id = 'state' OR id LIKE 'chunk:%'");
       revision = 0;
     },
   };

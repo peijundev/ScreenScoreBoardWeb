@@ -258,6 +258,8 @@ export default function StorageDialog({ onClose }: Props): JSX.Element {
       storageKey="storageDialog"
       defaultWidth={900}
       defaultHeight={720}
+      minWidth={640}
+      minHeight={480}
       onClose={onClose}
     >
       <div className="storage-dialog">
@@ -310,7 +312,7 @@ export default function StorageDialog({ onClose }: Props): JSX.Element {
                   >
                     <span className="storage-backend-name">
                       {item.label}
-                      {item.recommended && <em>推荐</em>}
+                      {item.recommended && <em>{item.recommendedLabel || '推荐'}</em>}
                     </span>
                     <span className="storage-backend-desc">{item.description}</span>
                   </button>
@@ -324,17 +326,35 @@ export default function StorageDialog({ onClose }: Props): JSX.Element {
                 {backend.recommendedNote && (
                   <div className="storage-notice warn">{backend.recommendedNote}</div>
                 )}
-                {backend.kind === 'redis' && (
-                  <div className="storage-risk">
-                    Redis 作为权威存储必须开启 AOF（appendonly yes，appendfsync everysec 或 always），
-                    并设置 maxmemory-policy noeviction；否则重启或内存淘汰可能丢失状态。无法保证持久化时建议选择 PostgreSQL。
+                {(backend.pros.length > 0 || backend.cons.length > 0) && (
+                  <div className="storage-pros-cons">
+                    {backend.pros.length > 0 && (
+                      <div className="storage-pros">
+                        <strong>优点</strong>
+                        <ul>
+                          {backend.pros.map((item) => <li key={item}>{item}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                    {backend.cons.length > 0 && (
+                      <div className="storage-cons">
+                        <strong>缺点</strong>
+                        <ul>
+                          {backend.cons.map((item) => <li key={item}>{item}</li>)}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 )}
-                {backend.kind === 'mongodb' && (
-                  <div className="storage-risk">
-                    MongoDB 单文档上限 16MB；当项目与主题库接近上限时迁移会失败，请改用 PostgreSQL 等后端。
-                  </div>
+                {backend.warning && (
+                  <div className="storage-risk">{backend.warning}</div>
                 )}
+                {backend.maxSnapshotBytes ? (
+                  <div className="storage-risk">
+                    该后端单份状态快照上限约 {(backend.maxSnapshotBytes / (1024 * 1024)).toFixed(1)} MB；
+                    接近上限时保存与迁移会失败，请精简项目或改用 PostgreSQL 等后端。
+                  </div>
+                ) : null}
                 <div className="storage-fields">
                   {backend.fields.map(renderField)}
                 </div>
@@ -346,7 +366,7 @@ export default function StorageDialog({ onClose }: Props): JSX.Element {
                         checked={clearPassword}
                         onChange={(e) => setClearPassword(e.target.checked)}
                       />
-                      <span>清除已保存的密码</span>
+                      <span>清除已保存的密码或密钥</span>
                     </label>
                   )}
 

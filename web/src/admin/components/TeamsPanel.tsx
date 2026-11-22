@@ -10,10 +10,12 @@ export default function TeamsPanel({
   project,
   canScore,
   isAdmin,
+  onOpenBatch,
 }: {
   project: Project;
   canScore: boolean;
   isAdmin: boolean;
+  onOpenBatch: () => void;
 }): JSX.Element {
   const [query, setQuery] = useState('');
   const [name, setName] = useState('');
@@ -68,6 +70,15 @@ export default function TeamsPanel({
           />
         </div>
       )}
+
+      <div className="panel-subbar">
+        {isAdmin && project.settings.featureBatchAdd !== false && (
+          <button className="btn small" type="button" onClick={onOpenBatch}>
+            批量添加
+          </button>
+        )}
+        <span className="hint">{allTeams.length} 个团队</span>
+      </div>
 
       {isAdmin && (
         <form className="add-form" onSubmit={onCreate}>

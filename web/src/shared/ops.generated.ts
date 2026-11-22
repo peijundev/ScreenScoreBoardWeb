@@ -11,11 +11,13 @@ export type OpName =
   | 'removePerson'
   | 'movePerson'
   | 'addTeam'
+  | 'addTeamsBatch'
   | 'renameTeam'
   | 'updateTeam'
   | 'removeTeam'
   | 'moveTeam'
   | 'assignTeam'
+  | 'setTeamCaptain'
   | 'addScore'
   | 'setScore'
   | 'addTeamScore'
@@ -56,11 +58,13 @@ export const OP_NAMES: readonly OpName[] = [
   'removePerson',
   'movePerson',
   'addTeam',
+  'addTeamsBatch',
   'renameTeam',
   'updateTeam',
   'removeTeam',
   'moveTeam',
   'assignTeam',
+  'setTeamCaptain',
   'addScore',
   'setScore',
   'addTeamScore',

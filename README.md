@@ -1,6 +1,6 @@
 # 实时计分板
 
-显示端 + 管理端的实时计分板。后端为 Node 原生 http + WebSocket；前端为 React 19 + Vite + TypeScript（源码在 `web/`，构建产物在 `public/v2/`）。支持多项目（每个项目一个独立积分榜）、9 种可切换存储后端，以及三套设计语言、共六套管理端主题。
+显示端 + 管理端的实时计分板。后端为 Node 原生 http + WebSocket；前端为 React 19 + Vite + TypeScript（源码在 `web/`，构建产物在 `public/v2/`）。支持多项目（每个项目一个独立积分榜）、17 种可切换存储后端，以及三套设计语言、共八套管理端主题。
 
 > ## 版本 1.6.4 — 可切换存储后端与六套管理端主题
 >
@@ -139,7 +139,7 @@ npm run sdk:pack
 
 ## 存储后端
 
-支持 9 种后端，可在管理端「存储后端」中可视化选择、填写连接参数、测试连接、迁移数据并保存；也可以继续用环境变量 `STORAGE` 配置。默认 `json`。
+支持 17 种后端，可在管理端「存储后端」中可视化选择、填写连接参数、测试连接、迁移数据并保存；也可以继续用环境变量 `STORAGE` 配置。默认 `json`。SQLite 标记为「本地推荐」，Redis 标记为「效率推荐」并固定在选择菜单第四位；每种后端都会显示环境推荐标识、优点、缺点与生产警告。
 
 | STORAGE | 说明 | 相关环境变量 |
 |---|---|---|
@@ -152,6 +152,14 @@ npm run sdk:pack
 | `sqlserver` | 表 `dbo.scoreboard_state`，纯 JS `mssql` 驱动 | `MSSQL_URL` 或 `MSSQL_SERVER` / `MSSQL_PORT` / `MSSQL_USER` / `MSSQL_PASSWORD` / `MSSQL_DATABASE` |
 | `oracle` | 表 `scoreboard_state`，`oracledb` Thin 模式（无需 Instant Client） | `ORACLE_URL` 或 `ORACLE_CONNECT_STRING` / `ORACLE_USER` / `ORACLE_PASSWORD` |
 | `redis` | Hash 快照 + Lua CAS；支持分布式锁 | `REDIS_URL` 或 `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` |
+| `libsql` | SQLite 兼容的 `scoreboard_state` 表；支持 Turso Cloud、自托管 libSQL Server 与本地 `file:` | `LIBSQL_URL`、`LIBSQL_AUTH_TOKEN` |
+| `couchdb` | 单文档 `_id=state`，`_rev` + `revision` CAS；数据库不存在时自动创建 | `COUCHDB_URL`、`COUCHDB_DATABASE`、`COUCHDB_USER`、`COUCHDB_PASSWORD` |
+| `d1` | Cloudflare D1 边缘 SQL；表 `scoreboard_state`，通过 REST API 访问 | `CLOUDFLARE_ACCOUNT_ID`、`D1_DATABASE_ID`、`CLOUDFLARE_API_TOKEN`、`D1_ENDPOINT` |
+| `dynamodb` | AWS DynamoDB 单表单项；条件写 CAS；需预先建表（分区键 `id`，字符串） | `AWS_REGION`、`DYNAMODB_TABLE`、`DYNAMODB_ENDPOINT`、`AWS_ACCESS_KEY_ID`、`AWS_SECRET_ACCESS_KEY`、`AWS_SESSION_TOKEN` |
+| `firestore` | Google Firestore 单文档；事务内 CAS；默认数据库 `(default)` | `GOOGLE_CLOUD_PROJECT`、`FIRESTORE_DATABASE_ID`、`FIRESTORE_COLLECTION`、`GOOGLE_APPLICATION_CREDENTIALS` |
+| `s3` | S3 / MinIO 单对象快照；ETag 条件写；适合低频写入与备份 | `S3_BUCKET`、`S3_ENDPOINT`、`S3_REGION`、`S3_KEY_PREFIX`、`S3_FORCE_PATH_STYLE`、`AWS_ACCESS_KEY_ID`、`AWS_SECRET_ACCESS_KEY` |
+| `etcd` | etcd v3 KV；key version 做 CAS，仅 CAS 无 lease 锁 | `ETCD_ENDPOINT`、`ETCD_PREFIX`、`ETCD_USERNAME`、`ETCD_PASSWORD` |
+| `lmdb` | 嵌入式 KV；单机本地目录，写事务内 CAS；需要原生模块，无远程能力 | `LMDB_DIR`、`LMDB_MAP_SIZE_MB` |
 
 示例：
 
@@ -176,10 +184,14 @@ STORAGE=redis REDIS_URL=redis://localhost:6379/0 npm start
 > **Redis 作为权威存储**必须开启 AOF（`appendonly yes`，`appendfsync everysec` 或 `always`）并设置 `maxmemory-policy noeviction`，否则重启或内存淘汰可能丢失状态。无法保证持久化时建议选择 PostgreSQL。
 >
 > **MongoDB** 单文档上限 16MB；项目与主题库接近上限时迁移会明确失败，请改用关系型数据库。
+>
+> **CouchDB** 默认单文档上限约 8MB，系统按 7.5MB 预检；**Cloudflare D1** 单行约 2MB，系统按 1.9MB 预检；**DynamoDB** 单项 400KB，系统按 380KB 预检；**Firestore** 单文档 1MB，系统按 0.9MB 预检；**etcd** 默认请求上限 1.5MB，系统按 1.4MB 预检；**S3/MinIO** 每次保存全量重写对象，建议只用于低频写入或备份；**LMDB** 仅限单机本地目录，NFS 等网络文件系统不可靠；**libSQL/Turso** 只受迁移上限约束。
+>
+> **协议兼容服务**：MariaDB、TiDB、PlanetScale/Vitess 可通过 MySQL 后端连接；CockroachDB、YugabyteDB 通过 PostgreSQL 后端；Amazon DocumentDB 通过 MongoDB 后端；Upstash 等 Redis 协议服务通过 Redis 后端。CockroachDB、YugabyteDB、PlanetScale 等不支持会话锁的服务，请在「存储后端 → 跨主机锁」选择「禁用」，仅使用 revision CAS。
 
 数据库后端把整份状态作为一个 JSON 快照存入一行/一个文档，启动时自动建表；账号/会话仍在 `DATA_DIR/auth.json` / `sessions.json`，上传的头像与音效仍保存在本地 `data/avatars/`、`data/sounds/`。跨主机分布式锁只保证单写者，不提供多副本同时对外服务。
 
-详细字段、迁移与排错见 [docs/storage-backends.md](docs/storage-backends.md)。
+SQLite / PostgreSQL / MySQL / libSQL / D1 / Redis 还提供可选的分块存储、块级分片与块哈希校验（默认关闭），用于接近单条大小上限时。详细字段、迁移与排错见 [docs/storage-backends.md](docs/storage-backends.md)；后续可适配的候选后端（libSQL/Turso、CouchDB、DynamoDB、Firestore、D1、S3、etcd 等）与推荐顺序见 [docs/storage-backend-candidates.md](docs/storage-backend-candidates.md)。
 
 ## 后端运行配置
 
@@ -449,7 +461,7 @@ server/api/       REST v1：路由匹配、响应/错误、资源处理、OpenAP
 server/mcp/       MCP：JSON-RPC 协议、工具派生、HTTP 与 stdio 传输
 server/state.js   权威状态：多项目、applyOp 校验、防抖串行写盘、导入清洗
 server/runtime.js 运行时态：撤销栈、倒计时、广播快照（仅内存）
-server/storage.js 存储后端：json / sqlite / postgres / mysql
+server/storage.js 存储后端：json / sqlite / postgres / mysql / mongodb / redis / libsql / couchdb 等
 server/wss.js     WebSocket：op 分发、全量广播（含 runtime）、心跳
 server/security.js 共享 Origin 校验
 server/backup.js  自动备份

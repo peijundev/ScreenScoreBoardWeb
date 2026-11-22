@@ -4,7 +4,7 @@ const path = require('path');
 const { config } = require('./config');
 const { DATA_DIR } = require('./paths');
 const { canonicalKind } = require('./storage/registry');
-const { resolveStorageConfig } = require('./storage-config');
+const { resolveStorageConfig, maxSnapshotBytesFor } = require('./storage-config');
 const { createJsonStorage } = require('./storage/file');
 const { createTxtStorage } = require('./storage/txt');
 const { createSqliteStorage } = require('./storage/sqlite');
@@ -14,6 +14,14 @@ const { createMongoStorage } = require('./storage/mongodb');
 const { createSqlServerStorage } = require('./storage/sqlserver');
 const { createOracleStorage } = require('./storage/oracle');
 const { createRedisStorage } = require('./storage/redis');
+const { createLibsqlStorage } = require('./storage/libsql');
+const { createCouchdbStorage } = require('./storage/couchdb');
+const { createD1Storage } = require('./storage/d1');
+const { createDynamoStorage } = require('./storage/dynamodb');
+const { createFirestoreStorage } = require('./storage/firestore');
+const { createS3Storage } = require('./storage/s3');
+const { createEtcdStorage } = require('./storage/etcd');
+const { createLmdbStorage } = require('./storage/lmdb');
 const {
   StorageError,
   StorageConfigError,
@@ -26,6 +34,7 @@ const DEFAULT_FILES = {
   json: 'state.json',
   txt: 'state.txt',
   sqlite: 'scoreboard.db',
+  lmdb: 'lmdb',
 };
 
 /**
@@ -66,8 +75,8 @@ function createStorage(options = {}) {
       return createTxtStorage({ file: resolveFilePath('txt', options.file) });
     case 'sqlite':
       return createSqliteStorage({
+        ...options,
         file: resolveFilePath('sqlite', options.file),
-        busyTimeoutMs: options.busyTimeoutMs,
       });
     case 'postgres':
       return createPostgresStorage(options);
@@ -81,6 +90,25 @@ function createStorage(options = {}) {
       return createOracleStorage(options);
     case 'redis':
       return createRedisStorage(options);
+    case 'libsql':
+      return createLibsqlStorage(options);
+    case 'couchdb':
+      return createCouchdbStorage(options);
+    case 'd1':
+      return createD1Storage(options);
+    case 'dynamodb':
+      return createDynamoStorage(options);
+    case 'firestore':
+      return createFirestoreStorage(options);
+    case 's3':
+      return createS3Storage(options);
+    case 'etcd':
+      return createEtcdStorage(options);
+    case 'lmdb':
+      return createLmdbStorage({
+        file: resolveFilePath('lmdb', options.file),
+        mapSizeMb: options.mapSizeMb,
+      });
     default:
       throw new Error(`不支持的存储后端: ${kind}`);
   }
@@ -97,7 +125,10 @@ function createStorageFromConfig(storageConfig, meta = {}) {
   if (DEFAULT_FILES[kind]) {
     options.file = resolveFilePath(kind, options.file, meta.dataDir);
   }
-  return createStorage(options);
+  const storage = createStorage(options);
+  const limit = maxSnapshotBytesFor(kind);
+  if (limit > 0) storage.maxSnapshotBytes = limit;
+  return storage;
 }
 
 module.exports = {

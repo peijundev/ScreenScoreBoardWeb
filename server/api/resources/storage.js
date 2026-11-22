@@ -11,6 +11,8 @@ const {
   describeBackends,
   configFingerprint,
   redactUrlPassword,
+  maxSnapshotBytesFor,
+  secretFieldNames,
 } = require('../../storage-config');
 const { migrateStorage } = require('../../storage/migrate');
 const { withTimeout } = require('../../storage/common');
@@ -30,21 +32,32 @@ function actorOf(ctx) {
   return (ctx.auth && ctx.auth.username) || '';
 }
 
+/** @param {any} storageConfig */
+function secretValues(storageConfig) {
+  if (!storageConfig) return [];
+  const options = storageConfig.options || {};
+  return secretFieldNames(storageConfig.kind)
+    .map((name) => options[name])
+    .filter((value) => typeof value === 'string' && value.length > 0);
+}
+
+/** @param {string} text @param {any} storageConfig */
+function redactSecrets(text, storageConfig) {
+  let out = text;
+  for (const value of secretValues(storageConfig)) out = out.split(value).join('***');
+  return redactUrlPassword(out);
+}
+
 /** @param {any} error @param {any} storageConfig */
 function safeMessage(error, storageConfig) {
-  let message = error && error.message ? String(error.message) : '连接失败';
-  const password = storageConfig && storageConfig.options && storageConfig.options.password;
-  if (password) message = message.split(String(password)).join('***');
-  return redactUrlPassword(message);
+  const message = error && error.message ? String(error.message) : '连接失败';
+  return redactSecrets(message, storageConfig);
 }
 
 /** @param {string|null|undefined} text @param {any} storageConfig */
 function sanitizeText(text, storageConfig) {
   if (!text) return text;
-  let out = String(text);
-  const password = storageConfig && storageConfig.options && storageConfig.options.password;
-  if (password) out = out.split(String(password)).join('***');
-  return redactUrlPassword(out);
+  return redactSecrets(String(text), storageConfig);
 }
 
 /** @param {any} runtime @param {any} storageConfig */
@@ -194,8 +207,9 @@ async function migrate(ctx) {
     { source: 'storage.json', dataDir: DATA_DIR },
   );
   const target = mergeSecrets(normalized, previous, { clearPassword: body.clearPassword === true });
-  const maxBytes = target.kind === 'mongodb'
-    ? Math.min(config.storage.migrationMaxBytes, Math.floor(15.5 * 1024 * 1024))
+  const backendLimit = maxSnapshotBytesFor(target.kind);
+  const maxBytes = backendLimit > 0
+    ? Math.min(config.storage.migrationMaxBytes, backendLimit)
     : config.storage.migrationMaxBytes;
 
   migrationRunning = true;

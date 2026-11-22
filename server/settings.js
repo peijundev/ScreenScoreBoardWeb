@@ -116,6 +116,13 @@ const DEFAULT_SETTINGS = {
   bioOpacity: 1,          // 简介不透明度 0.2–1
   bioItalic: false,       // 简介斜体
 
+  // ---- 队长 ----
+  featureTeamCaptain: true, // 启用队长设置与卡片标签
+  teamCaptainLabel: '队长', // 卡片标签文字（1–8 字）
+  teamCaptainSizeMode: 'custom', // custom = 固定字号；auto = 跟随姓名大小
+  teamCaptainSize: 12,      // 标签字号 px（8–120）
+  teamCaptainColor: '',     // 队长突显色（姓名与标签）；'' = 跟随主题强调色
+
   // ---- 功能开关 ----
   featureAvatarEdit: true,
   featureSettingsResize: true,
@@ -465,6 +472,16 @@ const SETTINGS_VALIDATORS = {
     return Math.round(n * 100) / 100;
   },
   bioItalic: (v) => boolStrict(v, '简介斜体开关'),
+
+  // ---- 队长 ----
+  featureTeamCaptain: (v) => boolStrict(v, '队长开关'),
+  teamCaptainLabel: (v) => needString(v, '队长标签', 8),
+  teamCaptainSizeMode: (v) => {
+    if (v !== 'auto' && v !== 'custom') throw new OpError('队长字号模式须为 auto 或 custom');
+    return v;
+  },
+  teamCaptainSize: (v) => intRange(v, 8, 120, '队长标签字号须为 8–120'),
+  teamCaptainColor: (v) => hexOrEmpty(v, '队长标签颜色须为 #rrggbb 或留空'),
 
   // ---- 功能开关 ----
   featureAvatarEdit: (v) => boolStrict(v, '头像修改开关'),

@@ -8,7 +8,7 @@ data:
   PORT: "3000"
   DATA_DIR: "/data"
   TZ: "Asia/Shanghai"
-  # json / txt / sqlite / postgres / mysql / mongodb / sqlserver / oracle / redis
+  # json / txt / sqlite / postgres / mysql / mongodb / sqlserver / oracle / redis / libsql / couchdb / d1 / dynamodb / firestore / s3 / etcd / lmdb
   # 用外部数据库时把连接串放进 Secret；也可在管理端保存 /data/storage.json（优先于这里）
   STORAGE: "json"
   BACKUP_INTERVAL_MINUTES: "30"

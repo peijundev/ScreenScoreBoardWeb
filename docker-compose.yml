@@ -7,7 +7,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      # 存储后端：json（默认）/ txt / sqlite / postgres / mysql / mongodb / sqlserver / oracle / redis
+      # 存储后端：json（默认）/ txt / sqlite / postgres / mysql / mongodb / sqlserver / oracle / redis / libsql / couchdb / d1 / dynamodb / firestore / s3 / etcd / lmdb
       # 也可在管理端「存储后端」保存到 /data/storage.json；该文件优先于这里的环境变量
       STORAGE: ${STORAGE:-json}
       TZ: ${TZ:-Asia/Shanghai}

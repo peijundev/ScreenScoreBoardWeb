@@ -182,6 +182,32 @@ export const SETTINGS_GROUPS: Group[] = [
     ],
   },
   {
+    title: '队长',
+    tab: 'font',
+    fields: [
+      { t: 'check', k: 'featureTeamCaptain', label: '启用队长功能与卡片标签' },
+      { t: 'text', k: 'teamCaptainLabel', label: '标签文字', max: 8 },
+      {
+        t: 'select',
+        k: 'teamCaptainSizeMode',
+        label: '标签字号模式',
+        opts: [['custom', '固定字号'], ['auto', '跟随姓名大小']],
+      },
+      {
+        t: 'range',
+        k: 'teamCaptainSize',
+        label: '标签字号',
+        min: 8,
+        max: 120,
+        step: 1,
+        fmt: 'num',
+        unit: ' px',
+        disabled: (s) => s.teamCaptainSizeMode === 'auto',
+      },
+      { t: 'colorToggle', k: 'teamCaptainColor', label: '队长突显色（姓名与标签）' },
+    ],
+  },
+  {
     title: '简介',
     tab: 'font',
     fields: [

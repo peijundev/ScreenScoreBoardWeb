@@ -28,6 +28,7 @@ export interface Team {
   cardImage: string | null;
   layout: Layout | null;
   bio?: string;
+  captainId?: string | null;
   createdAt: number;
   order?: number;
 }

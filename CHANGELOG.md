@@ -8,6 +8,19 @@
 
 - **居中突显外观**：可单独设置突显卡片的字体、字号缩放、头像显示开关、头像大小与位置；默认均跟随普通卡片，不影响现有外观。
 - **管理端主题扩展**：macOS 深/浅改为 Big Sur 起的磨砂材质（半透明表面 + `backdrop-filter` 模糊、壁纸透出、窗口圆角与柔和投影），模糊半径与饱和度由 `--frost-blur` / `--frost-saturate` 控制；新增 Android Material 3 深/浅两套：baseline 配色、Roboto、胶囊按钮、28px 对话框圆角、filled 输入框、hover/pressed 状态层与从触点扩散的点击涟漪。涟漪可在主题选择器旁的「涟漪」面板开关，时长 120–1200ms、强度 5%–45% 可调，偏好保存在 localStorage。管理端主题共八套。
+- **存储后端新增 libSQL/Turso 与 CouchDB**：沿用原有「存储后端」对话框完成选择、测试连接、迁移/空库与 `storage.json` 持久化。libSQL 支持远程 `libsql://`/`https://` 与本地 `file:`；CouchDB 使用单文档 `_rev` + `revision` CAS，数据库不存在时自动创建。同步新增通用密钥字段脱敏与保留（`authToken` 等）、按后端快照上限（MongoDB 15.5MB、CouchDB 7.5MB）与运行中保存预检、PostgreSQL/MySQL「跨主机锁」可关闭（适配 CockroachDB、YugabyteDB、PlanetScale），以及 MariaDB/TiDB/DocumentDB/Upstash 等协议兼容别名。测试新增 CouchDB 本地 mock 与 libSQL 临时文件往返/CAS。
+- **存储后端新增 Cloudflare D1**：通过 Cloudflare REST API 访问，无需 SDK；表 `scoreboard_state` + revision CAS，按 1.9MB 预检快照；可用账户 ID、数据库 ID 与 API Token 在原有「存储后端」对话框中配置。测试新增 D1 本地 REST mock，覆盖往返、创建、旧 revision 冲突与删除。
+- **存储后端新增 AWS DynamoDB**：单表单项 + revision 条件写 CAS，按 380KB 预检快照；支持 IAM 角色、访问密钥、Session Token 与自定义 Endpoint（DynamoDB Local / LocalStack）。表需预先创建（分区键 `id`，字符串）。测试新增 DynamoDB JSON 协议 mock，覆盖往返、创建、旧 revision 冲突与删除。
+- **存储后端新增 Google Firestore**：单文档快照 + 事务内 revision CAS，按 0.9MB 预检快照；支持 ADC / Workload Identity、服务账号文件与自定义数据库 ID；可用 Firestore Emulator 本地验证。测试新增 Firestore 事务 mock，覆盖往返、创建、旧 revision 冲突与删除。
+- **存储后端新增 S3 / MinIO**：整份状态写入单个对象，使用 ETag 与 `If-Match` / `If-None-Match: *` 条件写；支持 AWS IAM 角色、访问密钥与自定义 Endpoint、Path-style。适合低频写入或备份，不作为高频主存。测试新增 S3 对象 mock，覆盖条件写、冲突与删除。
+- **存储后端新增 etcd**：通过 etcd v3 HTTP/JSON gateway 访问，无需驱动；使用 key 的 `version` 做事务比较，按 1.4MB 预检快照；支持用户名/密码认证。当前仅 CAS，不提供 lease 锁。测试新增 etcd HTTP mock，覆盖事务、认证、冲突与删除。
+- **存储后端新增 LMDB**：嵌入式 KV，数据保存在 `DATA_DIR` 内的本地目录；写事务内读取 revision 后条件写入，读前刷新读事务快照以避免跨实例旧视图。可按需调整 Map 大小。仅单机本地磁盘，NFS 等网络文件系统不可靠；与 SQLite 定位重叠，默认仍推荐 SQLite。
+- **存储后端选择菜单**：SQLite 标记为「本地推荐」，Redis 由「推荐」改为「效率推荐」并固定在选择菜单第四位；新增生产环境标识（生产/生态/边缘/自托管/Cloudflare/AWS/GCP/备份/K8s/嵌入式）；每种后端都显示优点、缺点与警告标语，卡片与详情区同步展示，硬编码提示改由后端元数据驱动。
+- **存储高级选项（分块 / 分片 / 块索引）**：SQLite、PostgreSQL、MySQL、libSQL、D1、Redis 新增可选分块存储（默认关闭），可调块大小（16–4096KB）、块级分片（1–16）与块哈希校验；manifest 记录块顺序、分片、长度与 SHA-256，仍由原有 revision CAS 保护。关闭分块后仍可读取旧数据并转回单条快照。项目级分片尚未实现。
+- **对话框窗口化**：所有 DialogShell 窗口支持同时打开多个、点击自动置顶、标题栏拖动、双击最大化/还原，以及从任意边缘与四角拖动缩放；窗口位置各自记忆，多窗口自动错开。存储后端与资源库窗口移除嵌套滚动，统一由内容区滚动。
+- **批量管理**：批量添加人员改为标准 DialogShell 弹窗，移除面板内嵌与自定义遮罩，可与其他窗口同时打开；新增批量添加团队，人员/团队均支持批内去重、跳过重名、单次 200 上限与 `featureBatchAdd` 开关校验。
+- **团队队长**：每个团队可设置一名队长，仅本团队成员可被设为队长；人员换队、移出团队或删除时自动清空。显示端人员卡片与团队卡片成员在姓名右侧显示队长标签，管理端人员行提供「队长 / 取消队长」按钮。
+- **队长标签设置**：新增 `featureTeamCaptain` 开关、`teamCaptainLabel` 文案（1–8 字）、`teamCaptainSizeMode` 字号模式（固定 / 跟随姓名大小）、`teamCaptainSize` 字号（8–120 px）、`teamCaptainColor` 突显色（同时作用于姓名与标签，留空跟随主题），并补齐设置界面、契约生成、服务端校验与重启持久化测试。
 
 ### 修复
 

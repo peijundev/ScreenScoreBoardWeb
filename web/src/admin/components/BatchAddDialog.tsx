@@ -4,6 +4,8 @@ import { projectOp } from '../../shared/store';
 import { toast } from '../../shared/ui';
 import DialogShell from './DialogShell';
 
+type BatchMode = 'people' | 'teams';
+
 function parseNames(text: string): { unique: string[]; dup: number } {
   const raw = text
     .split(/[\n\r,，、;；\t]+/)
@@ -21,11 +23,14 @@ function parseNames(text: string): { unique: string[]; dup: number } {
 
 export default function BatchAddDialog({
   project,
+  mode,
   onClose,
 }: {
   project: Project;
+  mode: BatchMode;
   onClose: () => void;
 }): JSX.Element {
+  const isPeople = mode === 'people';
   const [text, setText] = useState('');
   const [teamId, setTeamId] = useState('');
   const teams = useMemo(
@@ -35,19 +40,26 @@ export default function BatchAddDialog({
   const { unique, dup } = parseNames(text);
   const tooLong = unique.find((n) => Array.from(n).length > 20);
 
-  let preview = '将添加 ' + unique.length + ' 人';
+  let preview = '将添加 ' + unique.length + (isPeople ? ' 人' : ' 个团队');
   if (dup > 0) preview += '，批内重复 ' + dup + ' 个已合并';
-  if (tooLong) preview += '；存在超过 20 字的姓名：' + tooLong;
+  if (tooLong) {
+    preview += '；存在超过 20 字的' + (isPeople ? '姓名' : '团队名') + '：' + tooLong;
+  }
 
   async function submit(): Promise<void> {
     if (!unique.length) {
-      toast('请先输入姓名');
+      toast(isPeople ? '请先输入姓名' : '请先输入团队名');
       return;
     }
     try {
-      const res = await projectOp(project.id, 'addPeopleBatch', { names: unique, teamId: teamId || null });
+      const res = isPeople
+        ? await projectOp(project.id, 'addPeopleBatch', {
+            names: unique,
+            teamId: teamId || null,
+          })
+        : await projectOp(project.id, 'addTeamsBatch', { names: unique });
       const result = res as { added?: number; skipped?: string[] };
-      let msg = '已添加 ' + (result.added ?? 0) + ' 人';
+      let msg = '已添加 ' + (result.added ?? 0) + (isPeople ? ' 人' : ' 个团队');
       if (result.skipped?.length) msg += '，跳过重名 ' + result.skipped.length + ' 个';
       toast(msg);
       onClose();
@@ -57,46 +69,48 @@ export default function BatchAddDialog({
   }
 
   return (
-    <>
-      <div className="batch-add-backdrop" aria-hidden="true" onPointerDown={onClose} />
-      <DialogShell
-        title="批量添加人员"
-        storageKey="batch-add"
-        resizable={false}
-        defaultWidth={560}
-        defaultHeight={520}
-        onClose={onClose}
-      >
-      <label>
-        名单（换行 / 逗号 / 顿号 / 分号 / 制表符分隔）
-        <textarea
-          rows={8}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder={'张三\n李四\n王五'}
-        />
-      </label>
-      <label>
-        加入团队
-        <select value={teamId} onChange={(e) => setTeamId(e.target.value)}>
-          <option value="">无团队</option>
-          {teams.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <span className="hint">{preview}</span>
-      <div className="app-dialog-actions">
-        <button className="btn" type="button" onClick={onClose}>
-          取消
-        </button>
-        <button className="btn primary" type="button" onClick={() => void submit()}>
-          添加
-        </button>
+    <DialogShell
+      title={isPeople ? '批量添加人员' : '批量添加团队'}
+      storageKey={isPeople ? 'batch-add-people' : 'batch-add-teams'}
+      defaultWidth={560}
+      defaultHeight={520}
+      minWidth={420}
+      minHeight={400}
+      onClose={onClose}
+    >
+      <div className="batch-add-form">
+        <label>
+          名单（换行 / 逗号 / 顿号 / 分号 / 制表符分隔）
+          <textarea
+            rows={8}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder={isPeople ? '张三\n李四\n王五' : '红队\n蓝队\n绿队'}
+          />
+        </label>
+        {isPeople && (
+          <label>
+            加入团队
+            <select value={teamId} onChange={(e) => setTeamId(e.target.value)}>
+              <option value="">无团队</option>
+              {teams.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <span className="hint">{preview}</span>
+        <div className="app-dialog-actions">
+          <button className="btn" type="button" onClick={onClose}>
+            取消
+          </button>
+          <button className="btn primary" type="button" onClick={() => void submit()}>
+            添加
+          </button>
+        </div>
       </div>
-      </DialogShell>
-    </>
+    </DialogShell>
   );
 }

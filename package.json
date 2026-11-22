@@ -1,7 +1,7 @@
 {
   "name": "@peijundev/screenscoreboard",
   "version": "1.6.4",
-  "description": "实时计分板（React UI）：显示端 + 管理端，多项目，WebSocket 实时同步，可切换存储后端（JSON/SQLite/PostgreSQL/MySQL）",
+  "description": "实时计分板（React UI）：显示端 + 管理端，多项目，WebSocket 实时同步，17 种可切换存储后端",
   "license": "MIT",
   "author": {
     "name": "peijundev",
@@ -71,7 +71,12 @@
     "zustand": "^5.1.0"
   },
   "optionalDependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1175.0",
+    "@aws-sdk/client-s3": "^3.1175.0",
+    "@google-cloud/firestore": "^9.4.1",
+    "@libsql/client": "^0.18.0",
     "better-sqlite3": "^12.11.1",
+    "lmdb": "^3.5.11",
     "mongodb": "^7.9.1",
     "mssql": "^12.8.0",
     "mysql2": "^3.24.6",
@@ -80,6 +85,9 @@
     "redis": "^6.3.1"
   },
   "allowScripts": {
+    "@libsql/client@0.18.0": true,
+    "libsql@0.5.29": true,
+    "lmdb@3.5.11": true,
     "better-sqlite3@12.11.1": true,
     "electron@45.3.2": true,
     "electron-winstaller@5.4.0": true

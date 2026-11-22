@@ -4,20 +4,29 @@ import { avatarURL, uploadAvatar } from '../../shared/api';
 import { projectOp } from '../../shared/store';
 import { quickPresets, scoreClass, toast } from '../../shared/ui';
 import { useMediaQuery } from '../hooks/useMediaQuery';
-import BatchAddDialog from './BatchAddDialog';
 import { confirm, prompt } from './dialogs';
+
+function contrastText(hex: string): string {
+  const value = hex.replace('#', '');
+  if (value.length !== 6) return '#fff';
+  const r = parseInt(value.slice(0, 2), 16);
+  const g = parseInt(value.slice(2, 4), 16);
+  const b = parseInt(value.slice(4, 6), 16);
+  if (![r, g, b].every(Number.isFinite)) return '#fff';
+  return 0.299 * r + 0.587 * g + 0.114 * b > 160 ? '#111' : '#fff';
+}
 
 interface Props {
   project: Project;
   canScore: boolean;
   isAdmin: boolean;
+  onOpenBatch: () => void;
 }
 
-export default function PeoplePanel({ project, canScore, isAdmin }: Props): JSX.Element {
+export default function PeoplePanel({ project, canScore, isAdmin, onOpenBatch }: Props): JSX.Element {
   const [query, setQuery] = useState('');
   const [name, setName] = useState('');
   const [avatar, setAvatar] = useState<string | null>(null);
-  const [batchOpen, setBatchOpen] = useState(false);
   const avatarInput = useRef<HTMLInputElement>(null);
   const settings = project.settings;
   const presets = useMemo(() => quickPresets(settings), [settings]);
@@ -82,7 +91,7 @@ export default function PeoplePanel({ project, canScore, isAdmin }: Props): JSX.
       )}
       <div className="panel-subbar">
         {isAdmin && settings.featureBatchAdd !== false && (
-          <button className="btn small" type="button" onClick={() => setBatchOpen(true)}>
+          <button className="btn small" type="button" onClick={onOpenBatch}>
             批量添加
           </button>
         )}
@@ -168,11 +177,15 @@ export default function PeoplePanel({ project, canScore, isAdmin }: Props): JSX.
             mobile={mobile}
             canScore={canScore}
             isAdmin={isAdmin}
+            isCaptain={Boolean(p.teamId && project.teams[p.teamId]?.captainId === p.id)}
+            captainEnabled={settings.featureTeamCaptain !== false}
+            captainLabel={settings.teamCaptainLabel || '队长'}
+            captainColor={settings.teamCaptainColor || ''}
+            captainSizeMode={settings.teamCaptainSizeMode || 'custom'}
+            captainSize={Number(settings.teamCaptainSize) || 12}
           />
         ))}
       </div>
-
-      {batchOpen && <BatchAddDialog project={project} onClose={() => setBatchOpen(false)} />}
     </section>
   );
 }
@@ -191,6 +204,12 @@ interface RowProps {
   mobile: boolean;
   canScore: boolean;
   isAdmin: boolean;
+  isCaptain: boolean;
+  captainEnabled: boolean;
+  captainLabel: string;
+  captainColor: string;
+  captainSizeMode: string;
+  captainSize: number;
 }
 
 function PersonRowBase({
@@ -206,6 +225,12 @@ function PersonRowBase({
   mobile,
   canScore,
   isAdmin,
+  isCaptain,
+  captainEnabled,
+  captainLabel,
+  captainColor,
+  captainSizeMode,
+  captainSize,
 }: RowProps): JSX.Element {
   const [delta, setDelta] = useState('1');
 
@@ -317,8 +342,25 @@ function PersonRowBase({
         </>
       )}
 
-      <span className="p-name" title={person.name}>
+      <span
+        className="p-name"
+        title={person.name}
+        style={isCaptain && captainEnabled && captainColor ? { color: captainColor } : undefined}
+      >
         {person.name}
+        {isCaptain && captainEnabled && (
+          <span
+            className="captain-badge captain-badge-inline"
+            style={{
+              ...(captainColor
+                ? { background: captainColor, color: contrastText(captainColor) }
+                : {}),
+              ...(captainSizeMode === 'auto' ? { fontSize: 'inherit' } : { fontSize: captainSize }),
+            }}
+          >
+            {captainLabel}
+          </span>
+        )}
       </span>
       {isAdmin && (
         <>
@@ -333,6 +375,21 @@ function PersonRowBase({
           >
             简介
           </button>
+          {captainEnabled && person.teamId && (
+            <button
+              className={'btn small captain-btn' + (isCaptain ? ' primary' : '')}
+              type="button"
+              title={isCaptain ? '取消队长' : '设为队长（仅限本团队成员）'}
+              onClick={() => {
+                projectOp(projectId, 'setTeamCaptain', {
+                  teamId: person.teamId,
+                  personId: isCaptain ? null : person.id,
+                }).catch((err: Error) => toast(err.message));
+              }}
+            >
+              {isCaptain ? '取消队长' : '队长'}
+            </button>
+          )}
         </>
       )}
       <span className={'p-score ' + scoreClass(person.score)}>{person.score}</span>

@@ -3,7 +3,8 @@ import { authFetch } from './auth';
 
 export type StorageKind =
   | 'json' | 'txt' | 'sqlite' | 'postgres' | 'mysql'
-  | 'mongodb' | 'sqlserver' | 'oracle' | 'redis';
+  | 'mongodb' | 'sqlserver' | 'oracle' | 'redis'
+  | 'libsql' | 'couchdb' | 'd1' | 'dynamodb' | 'firestore' | 's3' | 'etcd' | 'lmdb';
 
 export type StorageFormValue = string | number | boolean;
 
@@ -31,8 +32,13 @@ export interface StorageBackendDescriptor {
   category: 'file' | 'database';
   description: string;
   recommended: boolean;
+  recommendedLabel?: string;
   recommendedNote: string;
+  pros: string[];
+  cons: string[];
+  warning: string;
   envKeys: string[];
+  maxSnapshotBytes?: number;
   fields: StorageFieldDescriptor[];
 }
 
@@ -41,6 +47,7 @@ export interface StorageConfigView {
   kind: StorageKind;
   options: Record<string, StorageFormValue>;
   hasPassword: boolean;
+  hasSecrets?: boolean;
   source: 'storage.json' | 'env' | 'default';
   updatedAt?: string;
   updatedBy?: string;

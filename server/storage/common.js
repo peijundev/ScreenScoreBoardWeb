@@ -178,6 +178,20 @@ function requireDriver(packageName, kind) {
   }
 }
 
+/**
+ * ESM-only 驱动的按需加载。
+ * @param {string} packageName
+ * @param {string} kind
+ * @returns {Promise<any>}
+ */
+async function importDriver(packageName, kind) {
+  try {
+    return await import(packageName);
+  } catch (_) {
+    throw new StorageDriverMissingError(kind, packageName);
+  }
+}
+
 module.exports = {
   StorageError,
   StorageConfigError,
@@ -185,6 +199,7 @@ module.exports = {
   StorageUnsupportedError,
   StorageDriverMissingError,
   requireDriver,
+  importDriver,
   sha256,
   canonicalJSON,
   withTimeout,

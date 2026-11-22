@@ -131,6 +131,29 @@ function itemScore(it: Item): number {
   return it.kind === 'person' && it.person ? it.person.score : it.members.reduce((s, m) => s + m.score, 0);
 }
 
+/** 队长标签字号：auto 跟随姓名大小，custom 使用固定 px。 */
+function captainFontSize(settings: Settings, inMember: boolean): string | number {
+  if (settings.teamCaptainSizeMode === 'auto') {
+    return inMember
+      ? 'calc((var(--name-size) - 4px) * var(--member-scale) * var(--font-scale, 1))'
+      : 'calc(var(--name-size) * var(--font-scale, 1))';
+  }
+  const size = Number(settings.teamCaptainSize) || 12;
+  return inMember ? Math.max(8, Math.round(size * 0.8)) : size;
+}
+
+/** 根据背景色亮度选择黑/白文字，保证队长标签可读。 */
+function contrastText(hex: string): string {
+  const value = hex.replace('#', '');
+  if (value.length !== 6) return '#fff';
+  const r = parseInt(value.slice(0, 2), 16);
+  const g = parseInt(value.slice(2, 4), 16);
+  const b = parseInt(value.slice(4, 6), 16);
+  if (![r, g, b].every(Number.isFinite)) return '#fff';
+  const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+  return luminance > 160 ? '#111' : '#fff';
+}
+
 function PersonCard({
   person,
   project,
@@ -153,6 +176,10 @@ function PersonCard({
   editable: boolean;
 }): JSX.Element {
   const fx = fxInfo(settings, delta);
+  const team = person.teamId ? project.teams[person.teamId] : null;
+  const isCaptain = Boolean(team && team.captainId === person.id);
+  const showCaptain = isCaptain && settings.featureTeamCaptain !== false;
+  const captainColor = showCaptain ? String(settings.teamCaptainColor || '') : '';
   const cls =
     'card person-card av-' +
     String(settings.avatarPosition ?? 'left') +
@@ -171,7 +198,25 @@ function PersonCard({
       {slotOr(theme, 'card', 'rank', ctx, rankHTML(rank))}
       {slotOr(theme, 'card', 'avatar', ctx, <img src={avatarURL(person)} alt="" />)}
       <div className="p-body">
-        {slotOr(theme, 'card', 'name', ctx, <div className="person-name">{person.name}</div>)}
+        <div
+          className="person-name-row"
+          style={captainColor ? { color: captainColor } : undefined}
+        >
+          {slotOr(theme, 'card', 'name', ctx, <div className="person-name">{person.name}</div>)}
+          {showCaptain && (
+            <span
+              className="captain-badge"
+              style={{
+                fontSize: captainFontSize(settings, false),
+                ...(captainColor
+                  ? { background: captainColor, color: contrastText(captainColor) }
+                  : {}),
+              }}
+            >
+              {settings.teamCaptainLabel || '队长'}
+            </span>
+          )}
+        </div>
         {settings.featureBio ? slotOr(theme, 'card', 'bio', ctx, person.bio ? (
           <div className="person-bio">{person.bio}</div>
         ) : null) : null}
@@ -307,6 +352,10 @@ function MemberChip({
   editable: boolean;
 }): JSX.Element {
   const fx = fxInfo(settings, delta);
+  const team = member.teamId ? project.teams[member.teamId] : null;
+  const isCaptain = Boolean(team && team.captainId === member.id);
+  const showCaptain = isCaptain && settings.featureTeamCaptain !== false;
+  const captainColor = showCaptain ? String(settings.teamCaptainColor || '') : '';
   const style: Record<string, string> = {};
   if (layout) {
     style.left = layout.x + '%';
@@ -327,7 +376,25 @@ function MemberChip({
     >
       {slotOr(theme, 'memberChip', 'avatar', ctx, <img src={avatarURL(member, 48)} alt="" />)}
       <div className="m-body">
-        {slotOr(theme, 'memberChip', 'name', ctx, <div className="member-name">{member.name}</div>)}
+        <div
+          className="member-name-row"
+          style={captainColor ? { color: captainColor } : undefined}
+        >
+          {slotOr(theme, 'memberChip', 'name', ctx, <div className="member-name">{member.name}</div>)}
+          {showCaptain && (
+            <span
+              className="captain-badge"
+              style={{
+                fontSize: captainFontSize(settings, true),
+                ...(captainColor
+                  ? { background: captainColor, color: contrastText(captainColor) }
+                  : {}),
+              }}
+            >
+              {settings.teamCaptainLabel || '队长'}
+            </span>
+          )}
+        </div>
         {settings.featureBio ? slotOr(theme, 'memberChip', 'bio', ctx, member.bio ? (
           <div className="member-bio">{member.bio}</div>
         ) : null) : null}
