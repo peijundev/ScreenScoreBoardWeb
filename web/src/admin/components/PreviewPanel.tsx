@@ -2,6 +2,11 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 
 import type { Project } from '../../shared/types';
 import { projectOp } from '../../shared/store';
 import { toast } from '../../shared/ui';
+import {
+  DISPLAY_RESOLUTION_LIMITS,
+  formatDisplayResolution,
+  parseDisplayResolution,
+} from '../../shared/displayResolution';
 import { DISPLAY_STYLES } from '../settings/schema';
 
 const RESOLUTIONS: Array<{ value: string; label: string }> = [
@@ -22,6 +27,23 @@ function readNumber(key: string, fallback: number): number {
   return Number.isFinite(raw) && raw > 0 ? raw : fallback;
 }
 
+/** 把设置值映射回下拉选项：预设命中预设项，其余自定义尺寸归入「自定义…」。 */
+function resolutionMode(value: unknown): string {
+  const parsed = parseDisplayResolution(value);
+  if (!parsed) return 'auto';
+  const formatted = formatDisplayResolution(parsed.w, parsed.h);
+  return RESOLUTIONS.some((item) => item.value === formatted) ? formatted : 'custom';
+}
+
+function clampSize(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+function readScale(value: unknown): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? clampSize(n, 0, 100) : 50;
+}
+
 export default function PreviewPanel({
   project,
   isAdmin,
@@ -34,9 +56,14 @@ export default function PreviewPanel({
   const stage = useRef<HTMLDivElement>(null);
   const [edit, setEdit] = useState(false);
   const [zoom, setZoom] = useState(() => readNumber('previewZoom', 1));
-  const [mode, setMode] = useState(() => localStorage.getItem('previewResolution') || 'auto');
-  const [customW, setCustomW] = useState(() => readNumber('previewCustomW', 1280));
-  const [customH, setCustomH] = useState(() => readNumber('previewCustomH', 720));
+  const [mode, setMode] = useState(() => resolutionMode(project.settings.displayResolution));
+  const [customW, setCustomW] = useState(
+    () => parseDisplayResolution(project.settings.displayResolution)?.w ?? readNumber('previewCustomW', 1280),
+  );
+  const [customH, setCustomH] = useState(
+    () => parseDisplayResolution(project.settings.displayResolution)?.h ?? readNumber('previewCustomH', 720),
+  );
+  const [resScale, setResScale] = useState(() => readScale(project.settings.displayResolutionScale));
   const [fit, setFit] = useState(1);
   const [panMode, setPanMode] = useState(false);
   const pan = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
@@ -50,22 +77,80 @@ export default function PreviewPanel({
   const size = useMemo(() => {
     if (mode === 'auto') return null;
     if (mode === 'custom') {
-      return { w: Math.min(15360, Math.max(320, customW)), h: Math.min(8640, Math.max(240, customH)) };
+      return {
+        w: clampSize(customW, DISPLAY_RESOLUTION_LIMITS.minW, DISPLAY_RESOLUTION_LIMITS.maxW),
+        h: clampSize(customH, DISPLAY_RESOLUTION_LIMITS.minH, DISPLAY_RESOLUTION_LIMITS.maxH),
+      };
     }
     const [w, h] = mode.split('x').map(Number);
     return { w, h };
   }, [mode, customW, customH]);
 
+  // 分辨率保存在项目设置里：预览与真正打开的显示端使用同一逻辑分辨率
+  const savedResolution = String(project.settings.displayResolution ?? 'auto');
+  useEffect(() => {
+    const parsed = parseDisplayResolution(savedResolution);
+    setMode(resolutionMode(savedResolution));
+    if (parsed) {
+      setCustomW(parsed.w);
+      setCustomH(parsed.h);
+    }
+  }, [project.id, savedResolution]);
+
+  useEffect(() => {
+    setResScale(readScale(project.settings.displayResolutionScale));
+  }, [project.id, project.settings.displayResolutionScale]);
+
   useEffect(() => {
     localStorage.setItem('previewZoom', String(zoom));
   }, [zoom]);
   useEffect(() => {
-    localStorage.setItem('previewResolution', mode);
-  }, [mode]);
-  useEffect(() => {
     localStorage.setItem('previewCustomW', String(customW));
     localStorage.setItem('previewCustomH', String(customH));
   }, [customW, customH]);
+
+  function saveResolution(value: string): void {
+    projectOp(project.id, 'updateSettings', { patch: { displayResolution: value } }).catch(
+      (err: Error) => toast(err.message),
+    );
+  }
+
+  function chooseResolution(value: string): void {
+    setMode(value);
+    if (value === 'auto') {
+      saveResolution('auto');
+      return;
+    }
+    if (value === 'custom') {
+      saveResolution(
+        formatDisplayResolution(
+          clampSize(customW, DISPLAY_RESOLUTION_LIMITS.minW, DISPLAY_RESOLUTION_LIMITS.maxW),
+          clampSize(customH, DISPLAY_RESOLUTION_LIMITS.minH, DISPLAY_RESOLUTION_LIMITS.maxH),
+        ),
+      );
+      return;
+    }
+    saveResolution(value);
+  }
+
+  function updateCustomSize(nextW: number, nextH: number): void {
+    setCustomW(nextW);
+    setCustomH(nextH);
+    saveResolution(
+      formatDisplayResolution(
+        clampSize(nextW, DISPLAY_RESOLUTION_LIMITS.minW, DISPLAY_RESOLUTION_LIMITS.maxW),
+        clampSize(nextH, DISPLAY_RESOLUTION_LIMITS.minH, DISPLAY_RESOLUTION_LIMITS.maxH),
+      ),
+    );
+  }
+
+  function updateResScale(next: number): void {
+    const value = clampSize(next, 0, 100);
+    setResScale(value);
+    projectOp(project.id, 'updateSettings', { patch: { displayResolutionScale: value } }).catch(
+      (err: Error) => toast(err.message),
+    );
+  }
 
   useEffect(() => {
     const el = wrap.current;
@@ -111,9 +196,9 @@ export default function PreviewPanel({
         <div className="preview-tools">
           <select
             className="preview-resolution"
-            title="预览画布分辨率"
+            title="显示端逻辑分辨率（预览与显示端共用）"
             value={mode}
-            onChange={(e) => setMode(e.target.value)}
+            onChange={(e) => chooseResolution(e.target.value)}
           >
             {RESOLUTIONS.map((r) => (
               <option key={r.value} value={r.value}>
@@ -125,22 +210,39 @@ export default function PreviewPanel({
             <span className="preview-custom-size">
               <input
                 type="number"
-                min={320}
-                max={15360}
+                min={DISPLAY_RESOLUTION_LIMITS.minW}
+                max={DISPLAY_RESOLUTION_LIMITS.maxW}
                 value={customW}
                 title="画布宽度 px"
-                onChange={(e) => setCustomW(Number(e.target.value))}
+                onChange={(e) => updateCustomSize(Number(e.target.value), customH)}
               />
               ×
               <input
                 type="number"
-                min={240}
-                max={8640}
+                min={DISPLAY_RESOLUTION_LIMITS.minH}
+                max={DISPLAY_RESOLUTION_LIMITS.maxH}
                 value={customH}
                 title="画布高度 px"
-                onChange={(e) => setCustomH(Number(e.target.value))}
+                onChange={(e) => updateCustomSize(customW, Number(e.target.value))}
               />
             </span>
+          )}
+          {mode !== 'auto' && (
+            <label
+              className="preview-res-scale"
+              title="内容随分辨率放大的强度：0% 保持 1080p 尺寸，100% 完全按分辨率铺开"
+            >
+              放大
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={5}
+                value={resScale}
+                onChange={(e) => updateResScale(Number(e.target.value))}
+              />
+              <span>{resScale}%</span>
+            </label>
           )}
           <button className="btn small" type="button" title="缩小预览" onClick={() => setZoom((z) => Math.max(0.25, z - 0.1))}>
             −
@@ -192,7 +294,7 @@ export default function PreviewPanel({
       </div>
       <p className="preview-hint">
         {isAdmin
-          ? '预览与显示端 1:1 复刻；勾选「编辑布局」后可拖动卡片、拉右下角调整大小；按住 Alt 或开启「平移」后拖动可移动画面。'
+          ? '预览与显示端 1:1 复刻；固定分辨率会写入项目设置，显示端按该逻辑分辨率渲染并等比缩放到窗口。勾选「编辑布局」后可拖动卡片、拉右下角调整大小；按住 Alt 或开启「平移」后拖动可移动画面。'
           : '当前为只读预览；布局与设置需要管理员权限。'}
       </p>
     </section>

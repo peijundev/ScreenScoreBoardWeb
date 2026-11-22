@@ -27,6 +27,7 @@ import ThemeScriptLayer from './theme/ThemeScriptLayer';
 import { Clock, Countdown, Marquee } from './components/Overlays';
 import { useInteractions } from './hooks/useInteractions';
 import { getAuthStatus } from '../shared/auth';
+import { displayContentScale, parseDisplayResolution } from '../shared/displayResolution';
 
 const params = new URLSearchParams(location.search);
 const projectParam = params.get('project');
@@ -96,6 +97,55 @@ export default function App(): JSX.Element {
     } as Settings;
   }, [baseSettings, previewTheme]);
   const [appliedTheme, setAppliedTheme] = useState<ThemeV2 | null>(null);
+
+  // 固定逻辑分辨率：把 body 当作画布，等比缩放到实际窗口。
+  // 4K 等设置因此在任意屏幕上都有实际效果——布局按该分辨率的视口渲染。
+  const resolution = useMemo(
+    () => parseDisplayResolution(settings?.displayResolution),
+    [settings?.displayResolution],
+  );
+  const resolutionScale = settings?.displayResolutionScale;
+
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    const body = document.body;
+    const vars = [
+      '--display-w', '--display-h', '--display-scale', '--display-ox', '--display-oy',
+      '--canvas-w', '--canvas-h', '--canvas-scale',
+    ];
+    if (!resolution) {
+      delete root.dataset.displayResolution;
+      delete body.dataset.displayResolution;
+      for (const name of vars) body.style.removeProperty(name);
+      return;
+    }
+    root.dataset.displayResolution = resolution.w + 'x' + resolution.h;
+    body.dataset.displayResolution = 'on';
+    // 内容按 1080p 基准排版，再按「放大强度」放大到目标画布：
+    // 强度越高，卡片/字号越贴近分辨率本身；默认 50% 兼顾铺开与字号。
+    const uiScale = displayContentScale(resolution.w, resolution.h, resolutionScale);
+    body.style.setProperty('--canvas-w', resolution.w / uiScale + 'px');
+    body.style.setProperty('--canvas-h', resolution.h / uiScale + 'px');
+    body.style.setProperty('--canvas-scale', String(uiScale));
+    const apply = (): void => {
+      const scale = Math.min(window.innerWidth / resolution.w, window.innerHeight / resolution.h);
+      const ox = (window.innerWidth - resolution.w * scale) / 2;
+      const oy = (window.innerHeight - resolution.h * scale) / 2;
+      body.style.setProperty('--display-w', resolution.w + 'px');
+      body.style.setProperty('--display-h', resolution.h + 'px');
+      body.style.setProperty('--display-scale', String(scale));
+      body.style.setProperty('--display-ox', ox + 'px');
+      body.style.setProperty('--display-oy', oy + 'px');
+    };
+    apply();
+    window.addEventListener('resize', apply);
+    return () => {
+      window.removeEventListener('resize', apply);
+      delete root.dataset.displayResolution;
+      delete body.dataset.displayResolution;
+      for (const name of vars) body.style.removeProperty(name);
+    };
+  }, [resolution, resolutionScale]);
 
   useEffect(() => {
     const id = project?.themeId || null;
@@ -534,7 +584,7 @@ export default function App(): JSX.Element {
   const showWelcome =
     viewParam === 'welcome' || (viewParam == null && effectiveView === 'welcome' && settings.featureWelcome);
 
-  return (
+  const content = (
     <>
       <ThemeCanvas
         theme={previewTheme ?? appliedTheme}
@@ -585,4 +635,7 @@ export default function App(): JSX.Element {
       <audio ref={audioRef} loop preload="auto" />
     </>
   );
+
+  // auto 时 display: contents，不产生额外盒子；固定分辨率时作为缩放画布的基准层
+  return <div className="display-canvas">{content}</div>;
 }

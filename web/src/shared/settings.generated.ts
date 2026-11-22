@@ -109,6 +109,7 @@ export interface SettingsFields {
   teamCaptainSizeMode: string;
   teamCaptainSize: number;
   teamCaptainColor: string;
+  teamMemberLayout: string;
   featureAvatarEdit: boolean;
   featureSettingsResize: boolean;
   featureBatchAdd: boolean;
@@ -151,6 +152,8 @@ export interface SettingsFields {
   countdownBlur: number;
   countdownTextColor: string;
   displayView: string;
+  displayResolution: string;
+  displayResolutionScale: number;
   leaderboardScope: string;
   leaderboardLimit: number;
   leaderboardScale: number;

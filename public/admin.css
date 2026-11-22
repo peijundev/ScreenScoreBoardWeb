@@ -397,6 +397,18 @@ body {
   padding: 2px 6px;
   font-size: 12px;
 }
+.preview-res-scale {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.preview-res-scale input { width: 76px; accent-color: var(--accent); }
+.preview-res-scale span {
+  min-width: 34px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
 /* 按住 Alt 平移预览（可超出窗口边界） */
 .preview-frame-wrap.pan-ready { cursor: grab; }
 .preview-frame-wrap.pan-ready iframe { pointer-events: none; }

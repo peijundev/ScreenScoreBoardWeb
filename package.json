@@ -53,12 +53,14 @@
     "test:auth": "node --test scripts/auth.test.mjs scripts/electron-mode.test.mjs scripts/electron-zoom.test.mjs",
     "test:storage": "node --test scripts/storage.test.mjs",
     "test:admin-theme": "node --test scripts/admin-theme.test.mjs",
+    "test:display-resolution": "node --test scripts/display-resolution.test.mjs",
+    "test:display-layout": "node --test scripts/display-layout.test.mjs",
     "sdk:build": "npm --prefix packages/sdk run build",
     "sdk:test": "npm --prefix packages/sdk test",
     "sdk:pack": "npm pack ./packages/sdk --dry-run",
     "auth:reset": "node bin/screenscoreboard-auth.js",
     "mcp:stdio": "node bin/screenscoreboard-mcp.js",
-    "test:all": "node --test scripts/theme-schema.test.mjs scripts/theme-script.test.mjs scripts/api-v1.test.mjs scripts/mcp.test.mjs scripts/mobile-ui.test.mjs scripts/auth.test.mjs scripts/electron-mode.test.mjs scripts/electron-zoom.test.mjs scripts/storage.test.mjs scripts/admin-theme.test.mjs"
+    "test:all": "node --test scripts/theme-schema.test.mjs scripts/theme-script.test.mjs scripts/api-v1.test.mjs scripts/mcp.test.mjs scripts/mobile-ui.test.mjs scripts/auth.test.mjs scripts/electron-mode.test.mjs scripts/electron-zoom.test.mjs scripts/storage.test.mjs scripts/admin-theme.test.mjs scripts/display-resolution.test.mjs scripts/display-layout.test.mjs"
   },
   "engines": {
     "node": ">=24"

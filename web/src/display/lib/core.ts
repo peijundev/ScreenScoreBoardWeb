@@ -154,6 +154,7 @@ export function applyAppearance(s: Settings): void {
   root.style.setProperty('--accent', s.accent);
   root.style.setProperty('--radius', s.cardRadius + 'px');
   root.style.setProperty('--member-scale', String(s.memberScale));
+  body.dataset.memberLayout = s.teamMemberLayout || 'auto';
 
   if (s.avatarSizeMode === 'manual') {
     root.style.setProperty('--person-avatar', s.avatarSize + 'px');

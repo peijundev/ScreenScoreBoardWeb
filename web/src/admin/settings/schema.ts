@@ -47,6 +47,17 @@ export const SETTINGS_GROUPS: Group[] = [
       { t: 'check', k: 'styleFreeConfig', label: '风格自由配置（覆盖风格的固定排版）' },
       { t: 'range', k: 'columns', label: '每行列数', min: 1, max: 8, step: 1, fmt: 'num' },
       {
+        t: 'range',
+        k: 'displayResolutionScale',
+        label: '逻辑分辨率放大强度（0=保持 1080p 尺寸）',
+        min: 0,
+        max: 100,
+        step: 5,
+        fmt: 'num',
+        unit: '%',
+        disabled: (s) => (s.displayResolution ?? 'auto') === 'auto',
+      },
+      {
         t: 'select',
         k: 'density',
         label: '卡片密度',
@@ -161,6 +172,16 @@ export const SETTINGS_GROUPS: Group[] = [
       },
       { t: 'range', k: 'cardRadius', label: '卡片圆角', min: 0, max: 32, step: 1, fmt: 'num', unit: ' px' },
       { t: 'range', k: 'memberScale', label: '成员卡片大小', min: 0.6, max: 2, step: 0.05, fmt: 'x', unit: ' 倍' },
+      {
+        t: 'select',
+        k: 'teamMemberLayout',
+        label: '成员卡片排列',
+        opts: [
+          ['auto', '自动（按宽度换行）'],
+          ['row', '横排（一行排开）'],
+          ['column', '竖排（每行一个）'],
+        ],
+      },
       {
         t: 'select',
         k: 'avatarPosition',

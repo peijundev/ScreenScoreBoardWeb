@@ -122,6 +122,7 @@ const DEFAULT_SETTINGS = {
   teamCaptainSizeMode: 'custom', // custom = 固定字号；auto = 跟随姓名大小
   teamCaptainSize: 12,      // 标签字号 px（8–120）
   teamCaptainColor: '',     // 队长突显色（姓名与标签）；'' = 跟随主题强调色
+  teamMemberLayout: 'auto', // 团队内成员卡片排列：auto（按宽度换行）| row（横排）| column（竖排）
 
   // ---- 功能开关 ----
   featureAvatarEdit: true,
@@ -168,6 +169,8 @@ const DEFAULT_SETTINGS = {
   countdownBlur: 12,          // 亚克力模糊 px（0–40）
   countdownTextColor: '',     // '' = 跟随主题
   displayView: 'cards',       // cards | leaderboard
+  displayResolution: 'auto',  // auto | WxH（如 3840x2160）：显示端按该逻辑分辨率渲染并等比缩放
+  displayResolutionScale: 50, // 内容随分辨率放大的强度 0–100（0=不放大，100=完全按分辨率放大）
   leaderboardScope: 'auto',   // auto | people | teams
   leaderboardLimit: 0,        // 0 = 全部
   leaderboardScale: 1,        // 0.8–1.6
@@ -482,6 +485,10 @@ const SETTINGS_VALIDATORS = {
   },
   teamCaptainSize: (v) => intRange(v, 8, 120, '队长标签字号须为 8–120'),
   teamCaptainColor: (v) => hexOrEmpty(v, '队长标签颜色须为 #rrggbb 或留空'),
+  teamMemberLayout: (v) =>
+    (['auto', 'row', 'column'].includes(v)
+      ? v
+      : (() => { throw new OpError('成员卡片排列须为 auto / row / column'); })()),
 
   // ---- 功能开关 ----
   featureAvatarEdit: (v) => boolStrict(v, '头像修改开关'),
@@ -555,6 +562,19 @@ const SETTINGS_VALIDATORS = {
     (['cards', 'leaderboard', 'welcome'].includes(v)
       ? v
       : (() => { throw new OpError('显示视图非法'); })()),
+  displayResolution: (v) => {
+    if (v === 'auto') return 'auto';
+    const match = typeof v === 'string' ? /^(\d{3,5})x(\d{3,5})$/.exec(v) : null;
+    if (!match) throw new OpError('显示分辨率须为 auto 或 WxH（如 3840x2160）');
+    const width = Number(match[1]);
+    const height = Number(match[2]);
+    if (width < 320 || width > 15360 || height < 240 || height > 8640) {
+      throw new OpError('显示分辨率须在 320–15360 × 240–8640 之间');
+    }
+    return width + 'x' + height;
+  },
+  displayResolutionScale: (v) =>
+    intRange(v, 0, 100, '显示分辨率放大强度须为 0–100'),
   leaderboardScope: (v) =>
     (['auto', 'people', 'teams'].includes(v) ? v : (() => { throw new OpError('排行榜范围非法'); })()),
   leaderboardLimit: (v) => intRange(v, 0, 200, '排行榜条数须为 0–200'),

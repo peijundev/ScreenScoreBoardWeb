@@ -446,6 +446,25 @@ async function main() {
   await adminOp('updateSettings', { patch: { teamCaptainColor: 'red' } })
     .catch((e) => assert(/队长标签颜色/.test(e.message), '非法队长标签颜色被拒绝'));
 
+  await adminOp('updateSettings', { patch: { displayResolution: '3840x2160' } });
+  s = await viewer.waitState((st) => P(st).settings.displayResolution === '3840x2160');
+  assert(true, '显示端逻辑分辨率同步');
+  await adminOp('updateSettings', { patch: { displayResolution: '4k' } })
+    .catch((e) => assert(/显示分辨率/.test(e.message), '非法显示分辨率被拒绝'));
+  await adminOp('updateSettings', { patch: { displayResolution: '100x100' } })
+    .catch((e) => assert(/显示分辨率/.test(e.message), '显示分辨率越界被拒绝'));
+  await adminOp('updateSettings', { patch: { displayResolutionScale: 70 } });
+  s = await viewer.waitState((st) => P(st).settings.displayResolutionScale === 70);
+  assert(true, '分辨率放大强度同步');
+  await adminOp('updateSettings', { patch: { displayResolutionScale: 101 } })
+    .catch((e) => assert(/放大强度/.test(e.message), '分辨率放大强度越界被拒绝'));
+
+  await adminOp('updateSettings', { patch: { teamMemberLayout: 'column' } });
+  s = await viewer.waitState((st) => P(st).settings.teamMemberLayout === 'column');
+  assert(true, '成员卡片排列同步');
+  await adminOp('updateSettings', { patch: { teamMemberLayout: 'grid' } })
+    .catch((e) => assert(/成员卡片排列/.test(e.message), '非法成员卡片排列被拒绝'));
+
   console.log('主题导入:');
   await adminOp('applyTheme', {
     baseStyle: 'ppt',
@@ -1373,6 +1392,9 @@ async function main() {
   assert(rp.settings.featureTeamCaptain === true && rp.settings.teamCaptainLabel === '领队' &&
     rp.settings.teamCaptainSizeMode === 'auto' && rp.settings.teamCaptainSize === 14 &&
     rp.settings.teamCaptainColor === '#ffcc00', '重启后队长标签设置恢复');
+  assert(rp.settings.displayResolution === '3840x2160' &&
+    rp.settings.displayResolutionScale === 70, '重启后显示端逻辑分辨率与放大强度恢复');
+  assert(rp.settings.teamMemberLayout === 'column', '重启后成员卡片排列恢复');
   assert(rp.people[pid].layout.x === 200 && rp.people[pid].layout.w === 200 &&
     rp.people[pid].memberLayout.w === 20, '重启后卡片布局恢复（含画布外坐标）');
   assert(rp.settings.cardStyle === 'neon' && rp.settings.columns === 5 && rp.settings.avatarSize === 96, '重启后外观设置恢复');
