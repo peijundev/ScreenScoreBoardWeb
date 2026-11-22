@@ -85,6 +85,12 @@ function toApiError(error) {
   if (error && error.name === 'StorageUnsupportedError') {
     return new ApiError(422, 'STORAGE_UNSUPPORTED', message, error.details);
   }
+  if (error && error.name === 'StorageDriverLoadError') {
+    return new ApiError(422, error.code || 'STORAGE_DRIVER_LOAD_FAILED', message, error.details);
+  }
+  if (error && error.name === 'StorageError') {
+    return new ApiError(422, error.code || 'STORAGE_ERROR', message, error.details);
+  }
   if (error instanceof OpError || (error && error.name === 'OpError')) {
     // 上限类错误语义上更接近 422，但仍保持稳定的 400 兼容旧客户端断言
     return new ApiError(400, 'INVALID_ARGUMENT', message);

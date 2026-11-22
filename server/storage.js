@@ -4,7 +4,11 @@ const path = require('path');
 const { config } = require('./config');
 const { DATA_DIR } = require('./paths');
 const { canonicalKind } = require('./storage/registry');
-const { resolveStorageConfig, maxSnapshotBytesFor } = require('./storage-config');
+const {
+  resolveStorageConfig,
+  maxSnapshotBytesFor,
+  connectionTarget,
+} = require('./storage-config');
 const { createJsonStorage } = require('./storage/file');
 const { createTxtStorage } = require('./storage/txt');
 const { createSqliteStorage } = require('./storage/sqlite');
@@ -28,6 +32,7 @@ const {
   StorageConflictError,
   StorageUnsupportedError,
   StorageDriverMissingError,
+  StorageDriverLoadError,
 } = require('./storage/common');
 
 const DEFAULT_FILES = {
@@ -55,6 +60,38 @@ const DEFAULT_FILES = {
 function resolveFilePath(kind, file, dataDir) {
   const raw = file || DEFAULT_FILES[kind];
   return path.isAbsolute(raw) ? raw : path.resolve(dataDir || DATA_DIR, raw);
+}
+
+/**
+ * 当前后端的落盘位置，供管理端「数据位置」展示。
+ * @param {any} storageConfig
+ * @param {string} [dataDir]
+ * @returns {{ type: 'file'|'remote', path: string, detail: string }}
+ */
+function describeStorageLocation(storageConfig, dataDir) {
+  const kind = canonicalKind(storageConfig && storageConfig.kind);
+  const options = (storageConfig && storageConfig.options) || {};
+  if (DEFAULT_FILES[kind]) {
+    return { type: 'file', path: resolveFilePath(kind, options.file, dataDir), detail: '' };
+  }
+  const target = connectionTarget(kind, options);
+  const parts = [];
+  const host = target.host ? target.host + (target.port ? ':' + target.port : '') : '';
+  if (host) parts.push(host);
+  if (target.instance) parts.push(target.instance);
+  if (target.server) parts.push(target.server);
+  if (target.database) parts.push(target.database);
+  if (target.endpoint) parts.push(target.endpoint);
+  if (target.bucket) parts.push(target.bucket);
+  if (target.projectId) parts.push(target.projectId);
+  if (target.databaseId) parts.push(target.databaseId);
+  if (target.table) parts.push(target.table);
+  if (target.prefix) parts.push(target.prefix);
+  return {
+    type: 'remote',
+    path: '',
+    detail: parts.length ? parts.join(' · ') : kind,
+  };
 }
 
 /**
@@ -135,9 +172,11 @@ function createStorageFromConfig(storageConfig, meta = {}) {
 module.exports = {
   createStorage,
   createStorageFromConfig,
+  describeStorageLocation,
   StorageError,
   StorageConfigError,
   StorageConflictError,
   StorageUnsupportedError,
   StorageDriverMissingError,
+  StorageDriverLoadError,
 };

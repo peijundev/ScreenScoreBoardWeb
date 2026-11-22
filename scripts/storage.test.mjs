@@ -233,6 +233,57 @@ test('createStorageFromConfig 解析 DATA_DIR 内路径', async () => {
   }
 });
 
+test('SQLite 优先使用内置 node:sqlite（Electron 无需重建原生模块）', async () => {
+  const dir = tempDir();
+  try {
+    const file = path.join(dir, 'driver.db');
+    const storage = createSqliteStorage({ file });
+    await storage.init();
+    assert.equal(storage.getDriver(), 'node:sqlite');
+    const health = await storage.health({ probe: true });
+    assert.equal(health.driver, 'node:sqlite');
+    await storage.save({ version: 2 });
+    assert.equal((await storage.load()).version, 2);
+    await storage.close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('数据位置描述：文件后端返回绝对路径，远端后端不泄露密码', () => {
+  const { describeStorageLocation } = require('../server/storage.js');
+  const dataDir = path.join(tmpdir(), 'sb-data-location');
+  const fileLocation = describeStorageLocation(
+    { kind: 'sqlite', options: { file: 'db/scoreboard.db' } },
+    dataDir,
+  );
+  assert.equal(fileLocation.type, 'file');
+  assert.equal(fileLocation.path, path.resolve(dataDir, 'db/scoreboard.db'));
+  assert.equal(fileLocation.detail, '');
+
+  const defaultLocation = describeStorageLocation({ kind: 'json', options: {} }, dataDir);
+  assert.equal(defaultLocation.path, path.resolve(dataDir, 'state.json'));
+
+  const remoteLocation = describeStorageLocation({
+    kind: 'postgres',
+    options: { host: 'db.example.com', port: 5432, database: 'scoreboard', password: 'secret-pass' },
+  }, dataDir);
+  assert.equal(remoteLocation.type, 'remote');
+  assert.match(remoteLocation.detail, /db\.example\.com:5432/);
+  assert.doesNotMatch(remoteLocation.detail, /secret-pass/);
+});
+
+test('驱动加载失败映射为 422 并保留可读消息', () => {
+  const { StorageDriverLoadError } = require('../server/storage/common.js');
+  const { toApiError } = require('../server/api/errors.js');
+  const apiError = toApiError(
+    new StorageDriverLoadError('SQLite', new Error('NODE_MODULE_VERSION 137 与 150 不匹配')),
+  );
+  assert.equal(apiError.status, 422);
+  assert.equal(apiError.code, 'STORAGE_DRIVER_LOAD_FAILED');
+  assert.match(apiError.message, /SQLite 存储驱动加载失败/);
+});
+
 test('SQLite 旧表自动加 revision 列并保留数据', async () => {
   const dir = tempDir();
   try {
@@ -338,8 +389,9 @@ test('SQLite 分块往返、CAS 与格式切换', async () => {
     await chunked.save(state, { expectedRevision: null });
     assert.equal((await chunked.load()).payload, payload);
 
-    const Database = require('better-sqlite3');
-    const db = new Database(file);
+    // 用与后端相同的 node:sqlite 检查，避免不同驱动同时打开同一 WAL 数据库时互相清理 -shm。
+    const { DatabaseSync } = require('node:sqlite');
+    const db = new DatabaseSync(file);
     assert.ok(
       db.prepare("SELECT COUNT(*) AS n FROM scoreboard_state WHERE id LIKE 'chunk:%'").get().n > 1,
       '生成多个块行',
@@ -358,7 +410,7 @@ test('SQLite 分块往返、CAS 与格式切换', async () => {
     await plain.save({ version: 3, marker: 'plain' }, { expectedRevision: plain.getRevision() });
     assert.equal((await plain.load()).marker, 'plain');
 
-    const db2 = new Database(file);
+    const db2 = new DatabaseSync(file);
     assert.equal(
       db2.prepare("SELECT COUNT(*) AS n FROM scoreboard_state WHERE id LIKE 'chunk:%'").get().n,
       0,

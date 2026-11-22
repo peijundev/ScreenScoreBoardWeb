@@ -26,6 +26,8 @@ const { DATA_DIR, AVATAR_DIR, SOUND_DIR } = require('./paths');
 
 /** @type {any} */
 let storage = null;
+/** 启动时实际生效的后端配置；用于管理端展示「当前数据位置」。 */
+let activeStorageConfig = /** @type {any} */ (null);
 let storageKind = 'uninitialized';
 let storageSource = 'default';
 let storageConfigHash = '';
@@ -356,6 +358,7 @@ async function init() {
     storageSource = resolved.source;
     storageConfigHash = configFingerprint(resolved.config);
     storage = createStorageFromConfig(resolved.config);
+    activeStorageConfig = resolved.config;
     storageKind = storage.kind;
 
     const st = config.storage;
@@ -398,6 +401,7 @@ async function init() {
     }
     if (localLocked) lock.release();
     storage = null;
+    activeStorageConfig = null;
     storageKind = 'uninitialized';
     throw error;
   }
@@ -1266,6 +1270,7 @@ module.exports = {
   getStorageKind,
   getStorageStatus,
   getStorageHealth,
+  getActiveStorageConfig() { return activeStorageConfig; },
   get storageKind() { return storageKind; },
   exportProjectData,
   sanitizeImportedProject,

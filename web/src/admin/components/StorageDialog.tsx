@@ -61,6 +61,50 @@ function formatTime(value: number | null | undefined): string {
   }
 }
 
+/** 局域网 HTTP 等非安全上下文没有 navigator.clipboard，退回 textarea 复制。 */
+async function writeClipboard(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // 继续尝试兼容路径
+  }
+  try {
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    const ok = document.execCommand('copy');
+    area.remove();
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+/** 只读路径行：完整路径可选中，旁边提供复制按钮。 */
+function LocationRow({ label, value }: { label: string; value: string }): JSX.Element {
+  const [copied, setCopied] = useState(false);
+  const copy = async (): Promise<void> => {
+    const ok = await writeClipboard(value);
+    setCopied(ok);
+    if (ok) setTimeout(() => setCopied(false), 1500);
+  };
+  return (
+    <div className="storage-location-row">
+      <span>{label}</span>
+      <code title={value}>{value}</code>
+      <button type="button" className="storage-copy" onClick={() => { void copy(); }}>
+        {copied ? '已复制' : '复制'}
+      </button>
+    </div>
+  );
+}
+
 export default function StorageDialog({ onClose }: Props): JSX.Element {
   const [status, setStatus] = useState<StorageStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -282,6 +326,17 @@ export default function StorageDialog({ onClose }: Props): JSX.Element {
                 <span>跨主机锁</span>
                 <strong>{status.runtime.lock?.supported ? '支持' : '不支持（仅 CAS）'}</strong>
               </div>
+              {status.location && (
+                <div className="storage-location">
+                  <LocationRow label="数据目录" value={status.location.dataDir} />
+                  <LocationRow
+                    label="数据位置"
+                    value={status.location.active.type === 'remote'
+                      ? `远端 · ${status.location.active.detail || status.location.active.path || status.active.kind}`
+                      : status.location.active.path || '—'}
+                  />
+                </div>
+              )}
               {status.restartRequired && (
                 <div className="storage-restart-banner">
                   配置已保存，重启服务后生效。迁移后到重启之间的写入不会同步到新后端，请尽快重启。
@@ -438,8 +493,8 @@ export default function StorageDialog({ onClose }: Props): JSX.Element {
             )}
 
             <p className="hint">
-              存储配置保存在 <code>DATA_DIR/storage.json</code>（仅管理员 API 可读），密码不会回传前端。
-              保存或迁移后需要重启服务才会生效；切换前请确认已备份 <code>DATA_DIR</code>。
+              存储配置保存在 <code>{status.location?.configFile || 'storage.json'}</code>（仅管理员 API 可读），密码不会回传前端。
+              保存或迁移后需要重启服务才会生效；切换前请确认已备份 <code>{status.location?.dataDir || 'DATA_DIR'}</code>。
             </p>
           </>
         )}

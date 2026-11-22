@@ -35,7 +35,7 @@ npm start          # prestart 会自动构建 React 前端，然后启动服务
 
 局域网内其他设备用本机 IP 访问同一地址即可。端口可用 `PORT=8080 npm start` 修改。
 
-Node 版本要求 **24+**（`package.json` 已声明 `engines.node: ">=24"`），项目用 `.nvmrc` 固定为 24。`npm run test:theme` 直接加载 `.ts` 源码，依赖 Node 24 的原生 TypeScript 类型剥离。如果切换了 Node 大版本，使用 SQLite 后端前需要重新编译原生模块：
+Node 版本要求 **24+**（`package.json` 已声明 `engines.node: ">=24"`），项目用 `.nvmrc` 固定为 24。`npm run test:theme` 直接加载 `.ts` 源码，依赖 Node 24 的原生 TypeScript 类型剥离。SQLite 后端优先使用 Node 24 / Electron 内置的 `node:sqlite`，无需编译原生模块；只有运行环境没有内置 `node:sqlite`、回退到 `better-sqlite3` 时，切换 Node 大版本后才需要重建：
 
 ```bash
 npm rebuild better-sqlite3
@@ -145,7 +145,7 @@ npm run sdk:pack
 |---|---|---|
 | `json`（默认） | 状态写入 `data/state.json`，原子写入 | `STATE_FILE`、`STATE_FILE_PRETTY` |
 | `txt` | 状态以缩进 JSON 写入 `data/state.txt`，便于人工查看 | `STATE_TXT_FILE` |
-| `sqlite` | 表 `scoreboard_state`（WAL 模式、revision CAS） | `SQLITE_FILE`、`SQLITE_BUSY_TIMEOUT_MS` |
+| `sqlite` | 表 `scoreboard_state`（WAL 模式、revision CAS）；优先使用内置 `node:sqlite`，Electron 无需重建原生模块 | `SQLITE_FILE`、`SQLITE_BUSY_TIMEOUT_MS` |
 | `postgres` | 表 `scoreboard_state`，启动自动建表；支持 advisory lock | `DATABASE_URL` 或标准 `PG*` 变量；`PG_CONNECT_TIMEOUT_MS` |
 | `mysql` | 表 `scoreboard_state`，启动自动建表；支持 `GET_LOCK` | `MYSQL_URL` 或 `MYSQL_HOST` / `MYSQL_PORT` / `MYSQL_USER` / `MYSQL_PASSWORD` / `MYSQL_DATABASE` |
 | `mongodb` | 集合 `scoreboard_state`，单文档快照；单文档上限 16MB | `MONGODB_URL` / `MONGO_URL`、`MONGODB_DB` |
@@ -433,7 +433,7 @@ npm run dist:mac       # dmg + zip（必须在 macOS 上执行）
 - Windows 产物在 Linux 上交叉打包需要 wine；macOS 产物必须在 macOS 上构建
 - 未配置代码签名证书，安装包未签名
 - 使用默认 Electron 图标，可自行放入 `build/icon.png` 等自行替换
-- Electron 内默认使用 JSON 存储；若要在 Electron 里使用 SQLite，需要针对 Electron 的 Node ABI 重新编译 `better-sqlite3`（`npx electron-rebuild better-sqlite3`）。Electron 45 内置 Node 24，但它的 ABI（150）与普通 Node 24 不同，本机 `npm rebuild` 的产物不能直接复用
+- Electron 内默认使用 JSON 存储，可直接切换到 SQLite：SQLite 后端优先使用 Electron 内置的 `node:sqlite`，不再依赖原生模块，打包后无需 `electron-rebuild`。只有运行环境缺少 `node:sqlite` 并回退到 `better-sqlite3` 时，才需要针对 Electron ABI 重建（Electron 45 的 ABI 为 150，与普通 Node 24 的 137 不同）
 
 ## 验证
 

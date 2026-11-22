@@ -8,7 +8,7 @@
 |---|---|---|---|---|---|
 | `json` | 文件 | 无 | `data/state.json` | 内容哈希 | 本地文件锁 |
 | `txt` | 文件 | 无 | `data/state.txt`（缩进 JSON） | 内容哈希 | 本地文件锁 |
-| `sqlite` | 文件 | `better-sqlite3`（原生） | `scoreboard_state` 表 | `revision` 列 | 本地文件锁 |
+| `sqlite` | 文件 | `node:sqlite`（Node/Electron 内置）；旧环境回退 `better-sqlite3` | `scoreboard_state` 表 | `revision` 列 | 本地文件锁 |
 | `postgres` | 数据库 | `pg`（纯 JS） | `scoreboard_state` 表 | `revision` 列 | `pg_advisory_lock` |
 | `mysql` | 数据库 | `mysql2`（纯 JS） | `scoreboard_state` 表 | `revision` 列 | `GET_LOCK` |
 | `mongodb` | 数据库 | `mongodb`（纯 JS） | `scoreboard_state` 文档 | `revision` 字段 | 不支持（仅 CAS） |
@@ -205,15 +205,17 @@ maxmemory-policy noeviction
 
 ## 驱动与打包
 
-- `better-sqlite3` 是原生模块：切换 Node 大版本后执行 `npm rebuild better-sqlite3`；Electron 中需 `npx electron-rebuild better-sqlite3`。
+- SQLite 优先使用 Node 24 / Electron 内置的 `node:sqlite`：与 Node/Electron 的 ABI 无关，打包后的 Electron 不需要 `electron-rebuild`，迁移与启动也不会再因原生模块版本不匹配返回 500。
+- 只有运行环境没有 `node:sqlite`（Node < 22.5 等）时才回退 `better-sqlite3`；此时切换 Node 大版本后执行 `npm rebuild better-sqlite3`，Electron 中需 `npx electron-rebuild better-sqlite3`。驱动加载失败会返回 422 与具体原因，而不是笼统的「服务器内部错误」。
 - `mongodb`、`mssql`、`redis` 为纯 JS。
 - `@libsql/client` 远程连接为纯 JS；本地 `file:` 依赖平台原生包（可选依赖）。
 - `lmdb` 是原生模块（N-API，提供平台预编译包）；切换 Node 大版本或 Electron 打包后按提示重建。
 - `oracledb` 使用 Thin 模式，不需要 Instant Client；包体积较大，Alpine 上若无预编译包可能跳过安装，不影响其他后端。
 - Alpine 镜像构建会现场编译 `better-sqlite3`（musl 无预编译包）。
 
-## 健康检查
+## 健康检查与数据位置
 
+- 管理端「存储后端」对话框的「当前运行中」会显示**数据目录**与**数据位置**：文件后端（JSON / TXT / SQLite / LMDB）显示绝对路径，远端后端显示不含密码的连接目标；均可一键复制。`GET /api/v1/storage` 的 `location` 字段提供同一信息。
 - 公共 `GET /api/health`：`storage`（后端类型）与 `storageOk`（无冲突），不泄露连接信息。
 - 管理员 `GET /api/v1/storage/health`：revision、延迟、最近写入、锁状态、冲突与警告；`?refresh=1` 强制探测，否则缓存 10 秒。
 
@@ -243,7 +245,7 @@ maxmemory-policy noeviction
 | etcd 认证失败 | 检查用户名/密码与 etcd 的 auth 是否启用 |
 | LMDB 驱动缺失或 ABI 错误 | `npm install lmdb`，必要时重建原生模块 |
 | LMDB 放在 NFS 上异常 | 改用本地磁盘；LMDB 不支持网络文件系统 |
-| SQLite ABI 错误 | `npm rebuild better-sqlite3`；Electron 用 `electron-rebuild` |
+| SQLite 驱动加载失败 | 优先确认 Node/Electron 内置 `node:sqlite` 可用；仅在回退 `better-sqlite3` 时执行 `npm rebuild better-sqlite3`（Electron 用 `electron-rebuild`） |
 | MySQL 报包过大 | 提高 `max_allowed_packet`，或改用 PostgreSQL |
 
 ## 测试

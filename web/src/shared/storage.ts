@@ -54,9 +54,22 @@ export interface StorageConfigView {
   configPath?: string;
 }
 
+export interface StorageLocation {
+  type: 'file' | 'remote';
+  path: string;
+  detail: string;
+}
+
+export interface StorageLocationInfo {
+  dataDir: string;
+  configFile: string;
+  active: StorageLocation;
+}
+
 export interface StorageHealth {
   ok: boolean;
   kind: string;
+  driver?: string;
   revision: unknown;
   latencyMs?: number;
   lastSaveAt?: number | null;
@@ -80,6 +93,7 @@ export interface StorageStatusResponse {
     lastSaveError?: string | null;
     conflict?: boolean;
   };
+  location: StorageLocationInfo;
   backends: StorageBackendDescriptor[];
   restartRequired: boolean;
   runtime: StorageHealth;

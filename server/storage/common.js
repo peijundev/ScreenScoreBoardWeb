@@ -165,6 +165,22 @@ class StorageDriverMissingError extends StorageError {
   }
 }
 
+class StorageDriverLoadError extends StorageError {
+  /**
+   * 驱动已找到但无法加载（ABI 不匹配、二进制损坏等），转为 422 而不是 500。
+   * @param {string} kind
+   * @param {any} cause
+   */
+  constructor(kind, cause) {
+    const detail = cause && cause.message ? String(cause.message) : String(cause);
+    super(`${kind} 存储驱动加载失败：${detail}`, {
+      code: 'STORAGE_DRIVER_LOAD_FAILED',
+      details: { kind },
+    });
+    this.name = 'StorageDriverLoadError';
+  }
+}
+
 /**
  * @param {string} packageName
  * @param {string} kind
@@ -198,6 +214,7 @@ module.exports = {
   StorageConflictError,
   StorageUnsupportedError,
   StorageDriverMissingError,
+  StorageDriverLoadError,
   requireDriver,
   importDriver,
   sha256,

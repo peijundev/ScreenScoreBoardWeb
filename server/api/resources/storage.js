@@ -1,7 +1,13 @@
 'use strict';
 // 管理端存储后端配置：只允许管理员访问，响应永不包含密码。
-const { state, flushSave, getStorageStatus, getStorageHealth } = require('../../state');
-const { createStorageFromConfig } = require('../../storage');
+const {
+  state,
+  flushSave,
+  getStorageStatus,
+  getStorageHealth,
+  getActiveStorageConfig,
+} = require('../../state');
+const { createStorageFromConfig, describeStorageLocation } = require('../../storage');
 const {
   resolveStorageConfig,
   normalizeStorageConfig,
@@ -82,6 +88,8 @@ async function getConfig(ctx) {
   const restartRequired = Boolean(
     status.configHash && status.configHash !== configFingerprint(resolved.config),
   );
+  // 「当前运行中」的位置以启动时实际生效的配置为准；配置刚保存、尚未重启时两者可能不同。
+  const activeConfig = getActiveStorageConfig() || resolved.config;
   return {
     data: {
       config: redactStorageConfig(resolved.config, {
@@ -95,6 +103,11 @@ async function getConfig(ctx) {
         lastSaveAt: status.lastSaveAt,
         lastSaveError: status.lastSaveError,
         conflict: status.conflict,
+      },
+      location: {
+        dataDir: DATA_DIR,
+        configFile: resolved.configPath,
+        active: describeStorageLocation(activeConfig, DATA_DIR),
       },
       backends: describeBackends(),
       restartRequired,

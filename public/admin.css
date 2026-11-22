@@ -1877,6 +1877,47 @@ select:focus-visible {
   font-size: 12px;
 }
 .storage-status-grid span { color: var(--text-dim); }
+.storage-location {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--card-border);
+  font-size: 12px;
+}
+.storage-location-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+.storage-location-row > span {
+  flex: 0 0 auto;
+  min-width: 56px;
+  color: var(--text-dim);
+}
+.storage-location-row code {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 1px 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  line-height: 1.5;
+  word-break: break-all;
+  user-select: text;
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+}
+.storage-copy {
+  flex: 0 0 auto;
+  padding: 1px 7px;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--btn-bg);
+  border: 1px solid var(--card-border);
+  cursor: pointer;
+}
+.storage-copy:hover { color: var(--text); border-color: var(--border-strong); }
 .storage-ok { color: #4caf50; }
 .storage-bad { color: var(--danger); }
 .storage-backend-grid {

@@ -1,8 +1,15 @@
 'use strict';
-// SQLite 后端：better-sqlite3，WAL + busy_timeout + revision CAS；可选分块快照。
+// SQLite 后端：优先使用 Node/Electron 内置 node:sqlite，旧环境回退 better-sqlite3。
+// WAL + busy_timeout + revision CAS；可选分块快照。内置驱动与 Node/Electron ABI 无关，
+// 打包后的 Electron 不再需要为 better-sqlite3 单独重新编译。
 const fs = require('fs');
 const path = require('path');
-const { requireDriver, StorageConflictError } = require('./common');
+const {
+  requireDriver,
+  StorageConflictError,
+  StorageDriverLoadError,
+  StorageError,
+} = require('./common');
 const {
   normalizeChunkOptions,
   createChunkPlan,
@@ -12,6 +19,82 @@ const {
   assembleChunks,
 } = require('./chunking');
 
+/** @returns {any|null} */
+function loadNodeSqlite() {
+  try {
+    const mod = require('node:sqlite');
+    return mod && typeof mod.DatabaseSync === 'function' ? mod : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/** 原生模块加载失败（ABI 不匹配、二进制缺失等）才转成可读的驱动错误。 */
+function isDriverLoadFailure(error) {
+  const message = error && error.message ? String(error.message) : String(error);
+  return /NODE_MODULE_VERSION|self-register|ERR_DLOPEN_FAILED|Cannot find module|was compiled against|dlopen/i
+    .test(message);
+}
+
+/**
+ * 打开数据库并抹平两个驱动的差异：
+ * - node:sqlite（Node 22.5+ / Electron 内置）：同步 API，事务需手工 BEGIN IMMEDIATE；
+ * - better-sqlite3：旧环境回退，提供原生 transaction()。
+ * @param {string} file
+ * @param {number} busyTimeoutMs
+ */
+function openDatabase(file, busyTimeoutMs) {
+  const nodeSqlite = loadNodeSqlite();
+  if (nodeSqlite) {
+    /** @type {any} */
+    let raw;
+    try {
+      raw = new nodeSqlite.DatabaseSync(file);
+    } catch (error) {
+      if (isDriverLoadFailure(error)) throw new StorageDriverLoadError('SQLite', error);
+      const message = error && error.message ? String(error.message) : String(error);
+      throw new StorageError(`无法打开 SQLite 数据库 ${file}：${message}`, {
+        code: 'STORAGE_OPEN_FAILED',
+      });
+    }
+    return {
+      driver: 'node:sqlite',
+      exec: (/** @type {string} */ sql) => raw.exec(sql),
+      prepare: (/** @type {string} */ sql) => raw.prepare(sql),
+      /** 与 better-sqlite3 的 transaction().immediate() 语义一致。 */
+      immediate: (/** @type {() => any} */ fn) => {
+        raw.exec('BEGIN IMMEDIATE');
+        try {
+          const result = fn();
+          raw.exec('COMMIT');
+          return result;
+        } catch (error) {
+          try { raw.exec('ROLLBACK'); } catch (_) {}
+          throw error;
+        }
+      },
+      close: () => raw.close(),
+    };
+  }
+
+  const Database = requireDriver('better-sqlite3', 'SQLite');
+  /** @type {any} */
+  let raw;
+  try {
+    raw = new Database(file);
+  } catch (error) {
+    if (isDriverLoadFailure(error)) throw new StorageDriverLoadError('SQLite', error);
+    throw error;
+  }
+  return {
+    driver: 'better-sqlite3',
+    exec: (/** @type {string} */ sql) => raw.exec(sql),
+    prepare: (/** @type {string} */ sql) => raw.prepare(sql),
+    immediate: (/** @type {() => any} */ fn) => raw.transaction(fn).immediate(),
+    close: () => raw.close(),
+  };
+}
+
 /**
  * @param {{ file: string, busyTimeoutMs?: number } & Record<string, any>} options
  */
@@ -19,6 +102,7 @@ function createSqliteStorage(options) {
   const { file, busyTimeoutMs = 5000 } = options;
   /** @type {any} */
   let db = null;
+  let driverName = 'unknown';
   let revision = 0;
   let lastSaveAt = 0;
   let lastError = /** @type {string|null} */ (null);
@@ -52,19 +136,17 @@ function createSqliteStorage(options) {
     const stmt = db.prepare(
       'INSERT OR REPLACE INTO scoreboard_state (id, data, revision, updated_at) VALUES (?, ?, 0, ?)',
     );
-    const tx = db.transaction(() => {
+    db.immediate(() => {
       for (let i = 0; i < ids.length; i += 1) stmt.run(ids[i], parts[i], now);
     });
-    tx();
   }
 
   function deleteChunkRows(ids) {
     if (!ids.length) return;
     const stmt = db.prepare('DELETE FROM scoreboard_state WHERE id = ?');
-    const tx = db.transaction(() => {
+    db.immediate(() => {
       for (const id of ids) stmt.run(id);
     });
-    tx();
   }
 
   /** 原有单行 CAS 写入；分块模式下写入的是 manifest。 */
@@ -73,8 +155,7 @@ function createSqliteStorage(options) {
     const expected = expectedRevision === undefined
       ? undefined
       : (expectedRevision === null ? 0 : Number(expectedRevision));
-    /** @type {any} */
-    const run = db.transaction(() => {
+    return db.immediate(() => {
       const row = db.prepare('SELECT revision FROM scoreboard_state WHERE id = ?').get('state');
       const current = row ? Number(row.revision) || 0 : 0;
       if (expected !== undefined && current !== expected) {
@@ -92,11 +173,11 @@ function createSqliteStorage(options) {
       ).run(json, next, now, 'state');
       return next;
     });
-    return run.immediate();
   }
 
   return {
     kind: 'sqlite',
+    /** @returns {string} */ getDriver() { return driverName; },
     capabilities: {
       cas: true,
       revision: 'integer',
@@ -106,10 +187,14 @@ function createSqliteStorage(options) {
     },
     async init() {
       fs.mkdirSync(path.dirname(file), { recursive: true });
-      const Database = requireDriver('better-sqlite3', 'SQLite');
-      db = new Database(file);
-      db.pragma('journal_mode = WAL');
-      db.pragma('busy_timeout = ' + (Number(busyTimeoutMs) || 5000));
+      db = openDatabase(file, Number(busyTimeoutMs) || 5000);
+      driverName = db.driver;
+      db.exec('PRAGMA busy_timeout = ' + (Number(busyTimeoutMs) || 5000));
+      // 已经是 WAL 时不再重复切换：切换需要写锁与 -shm 访问，多个连接并存时容易失败。
+      const journal = db.prepare('PRAGMA journal_mode').get();
+      if (!journal || String(journal.journal_mode || '').toLowerCase() !== 'wal') {
+        db.exec('PRAGMA journal_mode = WAL');
+      }
       db.exec(
         'CREATE TABLE IF NOT EXISTS scoreboard_state (' +
         'id TEXT PRIMARY KEY, data TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL)',
@@ -198,6 +283,7 @@ function createSqliteStorage(options) {
       return {
         ok,
         kind: 'sqlite',
+        driver: driverName,
         revision,
         latencyMs,
         lastSaveAt: lastSaveAt || null,
