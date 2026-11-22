@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type JSX } from 'react';
+import { createPortal } from 'react-dom';
 import type { Project } from '../../shared/types';
 import { listAssets, type Asset } from '../../shared/api';
 import { SOUND_PRESETS, playPresetSound, playSoundFile } from '../../shared/sound';
@@ -9,8 +10,11 @@ import { toast } from '../../shared/ui';
 export default function SoundQuickMenu({ project }: { project: Project }): JSX.Element {
   const sendOp = useAppStore((s) => s.sendOp);
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
   const [assets, setAssets] = useState<Asset[]>([]);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const popRef = useRef<HTMLDivElement | null>(null);
 
   const soundEnabled = Boolean(project.settings.soundEnabled);
   const customSound = String(project.settings.customSound || '');
@@ -27,19 +31,43 @@ export default function SoundQuickMenu({ project }: { project: Project }): JSX.E
 
   useEffect(() => {
     if (!open) return;
+    function closeNow(): void {
+      setOpen(false);
+      setPos(null);
+    }
     function onDown(e: PointerEvent): void {
-      if (!wrapRef.current || !wrapRef.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (wrapRef.current?.contains(target) || popRef.current?.contains(target)) return;
+      closeNow();
     }
     function onKey(e: KeyboardEvent): void {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === 'Escape') closeNow();
     }
     window.addEventListener('pointerdown', onDown);
     window.addEventListener('keydown', onKey);
+    window.addEventListener('resize', closeNow);
+    window.addEventListener('scroll', closeNow, true);
     return () => {
       window.removeEventListener('pointerdown', onDown);
       window.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', closeNow);
+      window.removeEventListener('scroll', closeNow, true);
     };
   }, [open]);
+
+  // 弹出层挂到 body：顶栏在 macOS 主题下带 backdrop-filter，会创建层叠上下文，
+  // 若留在顶栏内部，z-index 再高也会被后面的对话框整体盖住。
+  function toggle(): void {
+    if (open) {
+      setOpen(false);
+      setPos(null);
+      return;
+    }
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setPos({ top: rect.bottom + 6, right: Math.max(8, window.innerWidth - rect.right) });
+    setOpen(true);
+  }
 
   function patchSettings(patch: Record<string, unknown>): void {
     sendOp('updateSettings', { projectId: project.id, patch }).catch((err: Error) => toast(err.message));
@@ -59,15 +87,17 @@ export default function SoundQuickMenu({ project }: { project: Project }): JSX.E
   return (
     <div className="sound-quick" ref={wrapRef}>
       <button
+        ref={buttonRef}
         className="btn small"
         type="button"
         title={customSound ? '当前音效：' + customSound.split('/').pop() : '快捷切换记分音效'}
-        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        onClick={toggle}
       >
         音效 ▾
       </button>
-      {open && (
-        <div className="sound-quick-pop">
+      {open && pos && createPortal(
+        <div className="sound-quick-pop" ref={popRef} style={{ top: pos.top, right: pos.right }}>
           <label className="check">
             <input
               type="checkbox"
@@ -105,7 +135,8 @@ export default function SoundQuickMenu({ project }: { project: Project }): JSX.E
               ))}
             </div>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

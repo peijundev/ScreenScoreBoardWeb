@@ -764,14 +764,13 @@ body {
 .remote-plus { background: var(--positive); border-color: var(--positive); color: var(--on-positive, #fff); }
 .remote-minus { background: var(--danger); border-color: var(--danger); color: var(--on-danger, #fff); }
 
-/* 顶部音效快捷菜单 */
+/* 顶部音效快捷菜单：浮层挂到 body，避免被顶栏的 backdrop-filter 层叠上下文限制 */
 .sound-quick { position: relative; }
 .sound-quick-pop {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 1200;
+  position: fixed;
+  z-index: 1300;
   min-width: 210px;
+  max-width: calc(100vw - 16px);
   max-height: 62vh;
   overflow: auto;
   padding: 8px;
@@ -2057,30 +2056,30 @@ body[data-theme^="adwaita"] ::-webkit-scrollbar-thumb {
   min-height: var(--touch-target, 44px);
 }
 
-/* Android 涟漪设置：仅在选择 Android 主题时出现 */
-.android-ripple-panel > summary {
-  list-style: none;
-  cursor: pointer;
+/* 顶栏偏好面板：开关外观（始终显示）与 Android 涟漪（仅 Android 主题） */
+.topbar-popover-trigger {
   padding: 3px 8px;
   border: 1px solid var(--card-border);
+  border-radius: var(--radius, 0);
   background: var(--btn-bg);
   color: var(--text);
+  font: inherit;
   font-size: 12px;
+  cursor: pointer;
 }
-.android-ripple-panel > summary::-webkit-details-marker { display: none; }
-.android-ripple-panel[open] > summary {
+.topbar-popover-trigger[aria-expanded="true"],
+.topbar-popover-trigger.active {
   border-color: var(--accent);
   color: var(--accent);
 }
-.android-ripple-body {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 6px);
-  z-index: 1200;
+.topbar-popover {
+  position: fixed;
+  z-index: 1300;
   display: flex;
   flex-direction: column;
   gap: 8px;
   width: 220px;
+  max-width: calc(100vw - 16px);
   padding: 10px;
   background: var(--card);
   border: 1px solid var(--card-border);
@@ -2089,20 +2088,83 @@ body[data-theme^="adwaita"] ::-webkit-scrollbar-thumb {
   font-size: 12px;
   white-space: normal;
 }
-.android-ripple-check,
-.android-ripple-range {
+.admin-switch-check,
+.admin-switch-range {
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.android-ripple-check input { accent-color: var(--accent); }
-.android-ripple-range input { flex: 1; min-width: 0; accent-color: var(--accent); }
-.android-ripple-value {
+.admin-switch-check {
+  flex-direction: row-reverse;
+  justify-content: space-between;
+  white-space: nowrap;
+}
+.admin-switch-range { justify-content: space-between; }
+.admin-switch-check input { accent-color: var(--accent); }
+.admin-switch-range input { flex: 1; min-width: 0; accent-color: var(--accent); }
+.admin-switch-value {
   min-width: 46px;
   text-align: right;
   font-variant-numeric: tabular-nums;
   color: var(--text-dim);
 }
+
+/* ---- 苹果风格开关：把复选框渲染为开启/关闭滑条（可在顶栏「界面」面板关闭） ---- */
+html[data-admin-switch="on"] input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  flex: 0 0 auto;
+  width: var(--switch-w, 44px);
+  height: var(--switch-h, 25px);
+  min-width: var(--switch-w, 44px);
+  margin: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(120, 120, 128, 0.34);
+  cursor: pointer;
+  vertical-align: middle;
+  transition: background-color var(--switch-dur, 180ms) ease;
+}
+html[data-admin-switch="on"] input[type="checkbox"]::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: calc(var(--switch-h, 25px) - 4px);
+  height: calc(var(--switch-h, 25px) - 4px);
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.28), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
+  transition: transform var(--switch-dur, 180ms) cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+html[data-admin-switch="on"] input[type="checkbox"]:checked {
+  background: var(--accent);
+}
+html[data-admin-switch="on"] input[type="checkbox"]:checked::before {
+  transform: translateX(calc(var(--switch-w, 44px) - var(--switch-h, 25px)));
+}
+html[data-admin-switch="on"] input[type="checkbox"]:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+html[data-admin-switch="on"] input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* 设置项与预览快捷栏：文字在左、开关在右 */
+html[data-admin-switch="on"] .settings-form label.check,
+html[data-admin-switch="on"] .preview-quickbar > label.check {
+  flex-direction: row-reverse;
+  justify-content: space-between;
+}
+/* 存储对话框的复选框：settings-form 的全局 label 是竖排，这里恢复成横排 */
+html[data-admin-switch="on"] .settings-form label.storage-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
 
 /* ---- macOS 专属：Big Sur 磨砂材质、壁纸与系统字体（不影响其他主题） ---- */
 body[data-theme^="macos"] {

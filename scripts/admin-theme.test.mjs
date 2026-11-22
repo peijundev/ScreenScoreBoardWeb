@@ -25,7 +25,16 @@ defineGlobal('localStorage', {
   get length() { return memory.size; },
 });
 const body = { dataset: {} };
-defineGlobal('document', { body });
+const docEl = {
+  dataset: {},
+  style: {
+    vars: {},
+    setProperty(key, value) {
+      this.vars[key] = value;
+    },
+  },
+};
+defineGlobal('document', { body, documentElement: docEl });
 
 const {
   ADMIN_THEMES,
@@ -44,6 +53,17 @@ const {
   readAdminRipplePrefs,
   saveAdminRipplePrefs,
 } = await import('../web/src/shared/adminRipple.ts');
+
+const {
+  ADMIN_SWITCH_DEFAULTS,
+  ADMIN_SWITCH_LIMITS,
+  ADMIN_SWITCH_STORAGE_KEYS,
+  normalizeAdminSwitchPrefs,
+  readAdminSwitchPrefs,
+  saveAdminSwitchPrefs,
+  applyAdminSwitchPrefs,
+  switchHeightFor,
+} = await import('../web/src/shared/adminSwitch.ts');
 
 test('提供 Breeze / Adwaita / macOS / Android 各深/浅八套主题', () => {
   const ids = ADMIN_THEMES.map((item) => item.id);
@@ -122,7 +142,7 @@ test('CSS 包含八套主题与 macOS 磨砂 / Android M3 变量', () => {
   assert.match(css, /--state-hover:/);
   assert.match(css, /--elevation-2:/);
   assert.match(css, /border-bottom:\s*1px solid var\(--border-strong\)/);
-  assert.match(css, /\.android-ripple-body/);
+  assert.match(css, /\.topbar-popover/);
   // 其余主题变量未被破坏
   assert.match(css, /--accent:\s*#3584e4/);
   assert.match(css, /--accent:\s*#0a84ff/);
@@ -159,6 +179,80 @@ test('涟漪偏好持久化并可关闭', () => {
 
   memory.clear();
   assert.deepEqual(readAdminRipplePrefs(), ADMIN_RIPPLE_DEFAULTS);
+});
+
+test('苹果风格开关默认开启，尺寸与动画有边界', () => {
+  assert.deepEqual(ADMIN_SWITCH_DEFAULTS, { enabled: true, size: 44, durationMs: 180 });
+  assert.deepEqual(normalizeAdminSwitchPrefs(), ADMIN_SWITCH_DEFAULTS);
+  assert.equal(normalizeAdminSwitchPrefs({ size: 1 }).size, ADMIN_SWITCH_LIMITS.size.min);
+  assert.equal(normalizeAdminSwitchPrefs({ size: 999 }).size, ADMIN_SWITCH_LIMITS.size.max);
+  assert.equal(
+    normalizeAdminSwitchPrefs({ durationMs: 1 }).durationMs,
+    ADMIN_SWITCH_LIMITS.durationMs.min,
+  );
+  assert.equal(
+    normalizeAdminSwitchPrefs({ durationMs: 99999 }).durationMs,
+    ADMIN_SWITCH_LIMITS.durationMs.max,
+  );
+  assert.equal(normalizeAdminSwitchPrefs({ enabled: 'off' }).enabled, false);
+  assert.equal(normalizeAdminSwitchPrefs({ enabled: 'on' }).enabled, true);
+  assert.equal(normalizeAdminSwitchPrefs({ size: 'abc' }).size, ADMIN_SWITCH_DEFAULTS.size);
+  // 高度按比例推导，保持胶囊比例
+  assert.equal(switchHeightFor(44), 25);
+  assert.equal(switchHeightFor(ADMIN_SWITCH_LIMITS.size.min), 18);
+});
+
+test('开关偏好持久化、可关闭并应用到根元素', () => {
+  memory.clear();
+  const saved = saveAdminSwitchPrefs({ enabled: false, size: 52, durationMs: 320 });
+  assert.deepEqual(saved, { enabled: false, size: 52, durationMs: 320 });
+  assert.equal(memory.get(ADMIN_SWITCH_STORAGE_KEYS.enabled), 'off');
+  assert.deepEqual(readAdminSwitchPrefs(), saved);
+
+  // 越界值读取时收敛到边界
+  memory.set(ADMIN_SWITCH_STORAGE_KEYS.size, '999');
+  memory.set(ADMIN_SWITCH_STORAGE_KEYS.durationMs, '-5');
+  assert.equal(readAdminSwitchPrefs().size, ADMIN_SWITCH_LIMITS.size.max);
+  assert.equal(readAdminSwitchPrefs().durationMs, ADMIN_SWITCH_LIMITS.durationMs.min);
+
+  const applied = applyAdminSwitchPrefs({ enabled: true, size: 48, durationMs: 240 });
+  assert.deepEqual(applied, { enabled: true, size: 48, durationMs: 240 });
+  assert.equal(docEl.dataset.adminSwitch, 'on');
+  assert.equal(docEl.style.vars['--switch-w'], '48px');
+  assert.equal(docEl.style.vars['--switch-h'], '27px');
+  assert.equal(docEl.style.vars['--switch-dur'], '240ms');
+
+  applyAdminSwitchPrefs({ enabled: false, size: 48, durationMs: 240 });
+  assert.equal(docEl.dataset.adminSwitch, 'off');
+
+  memory.clear();
+  assert.deepEqual(readAdminSwitchPrefs(), ADMIN_SWITCH_DEFAULTS);
+});
+
+test('开关样式与入口挂载已生效', () => {
+  const css = readFileSync(path.join(root, 'public/admin.css'), 'utf8');
+  assert.match(css, /html\[data-admin-switch="on"\] input\[type="checkbox"\]/);
+  assert.match(css, /appearance:\s*none/);
+  assert.match(css, /--switch-w/);
+  assert.match(css, /--switch-dur/);
+  assert.match(css, /:checked::before\s*\{[^}]*translateX\(calc\(var\(--switch-w/);
+  assert.match(css, /\.topbar-popover-trigger/);
+  const picker = readFileSync(
+    path.join(root, 'web/src/admin/components/AdminThemePicker.tsx'),
+    'utf8',
+  );
+  assert.match(picker, /useAdminSwitch/);
+  assert.match(picker, /苹果风格开关/);
+  assert.match(picker, /TopbarPopover/);
+  // 顶栏在 macOS 主题下带 backdrop-filter，面板必须 portal 到 body 才不会被内容盖住
+  const popover = readFileSync(
+    path.join(root, 'web/src/admin/components/TopbarPopover.tsx'),
+    'utf8',
+  );
+  assert.match(popover, /createPortal/);
+  assert.match(popover, /document\.body/);
+  const main = readFileSync(path.join(root, 'web/src/admin/main.tsx'), 'utf8');
+  assert.match(main, /applyAdminSwitchPrefs\(readAdminSwitchPrefs\(\)\)/);
 });
 
 test('涟漪安装器已挂载到管理端入口', () => {

@@ -181,8 +181,6 @@ export default function PeoplePanel({ project, canScore, isAdmin, onOpenBatch }:
             captainEnabled={settings.featureTeamCaptain !== false}
             captainLabel={settings.teamCaptainLabel || '队长'}
             captainColor={settings.teamCaptainColor || ''}
-            captainSizeMode={settings.teamCaptainSizeMode || 'custom'}
-            captainSize={Number(settings.teamCaptainSize) || 12}
           />
         ))}
       </div>
@@ -208,8 +206,6 @@ interface RowProps {
   captainEnabled: boolean;
   captainLabel: string;
   captainColor: string;
-  captainSizeMode: string;
-  captainSize: number;
 }
 
 function PersonRowBase({
@@ -229,8 +225,6 @@ function PersonRowBase({
   captainEnabled,
   captainLabel,
   captainColor,
-  captainSizeMode,
-  captainSize,
 }: RowProps): JSX.Element {
   const [delta, setDelta] = useState('1');
 
@@ -351,12 +345,11 @@ function PersonRowBase({
         {isCaptain && captainEnabled && (
           <span
             className="captain-badge captain-badge-inline"
-            style={{
-              ...(captainColor
+            style={
+              captainColor
                 ? { background: captainColor, color: contrastText(captainColor) }
-                : {}),
-              ...(captainSizeMode === 'auto' ? { fontSize: 'inherit' } : { fontSize: captainSize }),
-            }}
+                : undefined
+            }
           >
             {captainLabel}
           </span>
