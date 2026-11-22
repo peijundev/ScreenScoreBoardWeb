@@ -2,14 +2,16 @@
 
 显示端 + 管理端的实时计分板。后端为 Node 原生 http + WebSocket；前端为 React 19 + Vite + TypeScript（源码在 `web/`，构建产物在 `public/v2/`）。支持多项目（每个项目一个独立积分榜）、17 种可切换存储后端，以及三套设计语言、共八套管理端主题。
 
-> ## 版本 1.6.6 — 17 种存储后端与八套管理端主题
+> ## 版本 1.6.7 — 存储修复与数据位置
 >
+> - **SQLite / Electron**：SQLite 优先使用 Node 24 / Electron 内置的 `node:sqlite`，修复 Electron 下切换或迁移 SQLite 报「服务器内部错误」；打包版无需 `electron-rebuild`
+> - **数据位置**：「存储后端」→「当前运行中」显示数据目录与实际数据位置，支持一键复制
 > - **存储后端（17 种）**：在 1.6.4 的 9 种基础上新增 libSQL/Turso、CouchDB、Cloudflare D1、AWS DynamoDB、Google Firestore、S3 / MinIO、etcd、LMDB；新增分块存储（块大小 / 分片 / SHA-256 校验）、按后端快照上限与运行中保存预检
 > - **管理端主题（8 套）**：新增 Android Material 3 深/浅；macOS 改为 Big Sur 起的磨砂材质；新增苹果风格开关与可调涟漪
 > - **显示端**：突显新增「原卡片按比例放大」与自动缩放，并支持数值直填；逻辑分辨率（HD / 4K / 8K）真正写入设置；构建后 30 秒自动载入新版本
 > - **交互**：对话框窗口化（多窗口、拖动、缩放、位置记忆）、批量添加团队、团队队长、成员卡片排列
 > - **修复**：移动端记分按钮跟随主题、音效菜单被设置窗口遮挡、管理端队长标签字号；补齐 LMDB `mapSizeMb` 类型声明，恢复 CI 与 Release 构建
-> - **延续 1.6.4**：可切换存储后端、六套初始管理端主题；**1.6.3**：最低 Node.js 24，升级后需 `npm install` 并用 Node 24 重建 `better-sqlite3`
+> - **延续 1.6.4**：可切换存储后端、六套初始管理端主题；**1.6.3**：最低 Node.js 24（SQLite 默认使用内置 `node:sqlite`）
 > - **延续 1.6.2**：Electron 启动页三模式（本地 / 远程管理 / 远程屏幕）；**1.6.1**：纯突显、官方 npm SDK、部署模式访问控制；**1.6.0**：完整多用户鉴权
 > - **1.4.0 已封存**：原技术栈（零构建、原生 DOM 前端）的最终版本，不再更新，历史说明见 [CHANGELOG.md](CHANGELOG.md)
 > - **1.5.0 起**：前端为 React 19 + Vite + TypeScript（源码 `web/`，构建产物 `public/v2/`）；后端仍为 Node 原生 http + WebSocket
