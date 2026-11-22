@@ -1,4 +1,4 @@
-/* 管理端样式：KDE Breeze 与 GNOME Adwaita 两套深/浅配色 */
+/* 管理端样式：Breeze / Adwaita / macOS 磨砂 / Android Material 3，各深/浅配色 */
 body[data-theme="dark"],
 body[data-theme="breeze-dark"] {
   --bg: #1b1e20;            /* 窗口背景 */
@@ -96,52 +96,130 @@ body[data-theme="adwaita-light"] {
   --on-danger: #ffffff;
 }
 
-/* macOS Aqua：系统蓝、较轻的边框、6px 控件圆角 */
+/* macOS Big Sur 起：半透明磨砂材质（vibrancy），壁纸透出、表面模糊
+ * 磨砂强度可调：--frost-blur / --frost-saturate，按需在 body 或 :root 覆盖
+ * --opaque-bg 用于预览等需要完全不透明的区域 */
 body[data-theme="macos-dark"] {
-  --bg: #1c1c1e;
-  --card: #2c2c2e;
-  --card-border: #3a3a3c;
+  --bg: #1c1c1e;                          /* 兜底纯色 */
+  --card: rgba(44, 44, 46, 0.72);         /* 磨砂面板 */
+  --card-border: rgba(255, 255, 255, 0.12);
   --text: #f5f5f7;
-  --text-dim: #98989d;
-  --input-bg: #1c1c1e;
-  --hover: #3a3a3c;
-  --row-alt: #252527;
+  --text-dim: #a1a1a6;
+  --input-bg: rgba(28, 28, 30, 0.86);
+  --hover: rgba(58, 58, 60, 0.68);
+  --row-alt: rgba(37, 37, 39, 0.60);
   --accent: #0a84ff;
   --accent-hover: #409cff;
   --accent-text: #ffffff;
   --danger: #ff453a;
   --positive: #30d158;
-  --panel-head: #2c2c2e;
-  --subcard: #323234;
-  --btn-bg: #3a3a3c;
-  --border-strong: #545458;
+  --panel-head: rgba(58, 58, 60, 0.55);
+  --subcard: rgba(50, 50, 52, 0.60);
+  --btn-bg: rgba(58, 58, 60, 0.70);
+  --border-strong: rgba(255, 255, 255, 0.26);
   --radius: 6px;
-  --radius-large: 10px;
+  --radius-large: 12px;
   --on-positive: #00300f;
   --on-danger: #ffffff;
+  --frost-blur: 18px;
+  --frost-saturate: 180%;
+  --frost-shadow: 0 12px 32px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --wallpaper:
+    radial-gradient(1100px 760px at 12% 8%, rgba(64, 86, 150, 0.85) 0%, transparent 62%),
+    radial-gradient(980px 720px at 88% 12%, rgba(132, 62, 112, 0.75) 0%, transparent 58%),
+    radial-gradient(1000px 900px at 55% 100%, rgba(32, 104, 118, 0.80) 0%, transparent 60%),
+    linear-gradient(160deg, #1a1a20 0%, #101014 100%);
+  --opaque-bg: #1c1c1e;
 }
 body[data-theme="macos-light"] {
   --bg: #ececec;
-  --card: #ffffff;
-  --card-border: #d6d6d6;
+  --card: rgba(255, 255, 255, 0.66);
+  --card-border: rgba(0, 0, 0, 0.10);
   --text: #1d1d1f;
   --text-dim: #6e6e73;
-  --input-bg: #ffffff;
-  --hover: #e5e5e5;
-  --row-alt: #f7f7f7;
+  --input-bg: rgba(255, 255, 255, 0.85);
+  --hover: rgba(255, 255, 255, 0.60);
+  --row-alt: rgba(247, 247, 247, 0.55);
   --accent: #007aff;
   --accent-hover: #0066d6;
   --accent-text: #ffffff;
   --danger: #ff3b30;
   --positive: #34c759;
-  --panel-head: #ededed;
-  --subcard: #f5f5f7;
-  --btn-bg: #f0f0f0;
-  --border-strong: #b0b0b0;
+  --panel-head: rgba(255, 255, 255, 0.50);
+  --subcard: rgba(245, 245, 247, 0.60);
+  --btn-bg: rgba(255, 255, 255, 0.72);
+  --border-strong: rgba(0, 0, 0, 0.22);
   --radius: 6px;
-  --radius-large: 10px;
+  --radius-large: 12px;
   --on-positive: #00300f;
   --on-danger: #ffffff;
+  --frost-blur: 20px;
+  --frost-saturate: 160%;
+  --frost-shadow: 0 12px 32px rgba(0, 0, 0, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.70);
+  --wallpaper:
+    radial-gradient(1100px 760px at 10% 6%, rgba(120, 168, 230, 0.75) 0%, transparent 60%),
+    radial-gradient(1000px 760px at 90% 10%, rgba(232, 154, 196, 0.60) 0%, transparent 58%),
+    radial-gradient(1000px 900px at 50% 100%, rgba(140, 212, 220, 0.55) 0%, transparent 60%),
+    linear-gradient(160deg, #f2f2f4 0%, #dfe1e6 100%);
+  --opaque-bg: #ffffff;
+}
+
+/* Android Material 3：baseline 配色、Roboto、胶囊按钮与大圆角对话框 */
+body[data-theme="android-dark"] {
+  --bg: #141218;
+  --card: #211f26;          /* surface-container */
+  --card-border: #49454f;   /* outline-variant */
+  --text: #e6e0e9;          /* on-surface */
+  --text-dim: #cac4d0;      /* on-surface-variant */
+  --input-bg: #2b2930;      /* surface-container-high */
+  --hover: #2b2930;
+  --row-alt: #1d1b20;
+  --accent: #d0bcff;        /* primary */
+  --accent-hover: #eaddff;
+  --accent-text: #381e72;   /* on-primary */
+  --danger: #f2b8b5;
+  --positive: #7fdb9c;
+  --panel-head: #2b2930;
+  --subcard: #2b2930;
+  --btn-bg: #36343b;        /* surface-container-highest */
+  --border-strong: #938f99; /* outline */
+  --radius: 12px;
+  --radius-large: 28px;
+  --on-positive: #00210f;
+  --on-danger: #601410;
+  --state-hover: rgba(230, 224, 233, 0.08);
+  --state-pressed: rgba(230, 224, 233, 0.12);
+  --elevation-1: 0 1px 2px rgba(0, 0, 0, 0.45), 0 1px 3px 1px rgba(0, 0, 0, 0.28);
+  --elevation-2: 0 4px 8px 3px rgba(0, 0, 0, 0.25), 0 1px 3px rgba(0, 0, 0, 0.40);
+  --elevated-bg: #2b2930;
+}
+body[data-theme="android-light"] {
+  --bg: #fef7ff;            /* surface */
+  --card: #f3edf7;          /* surface-container */
+  --card-border: #cac4d0;   /* outline-variant */
+  --text: #1d1b20;
+  --text-dim: #49454f;
+  --input-bg: #ffffff;
+  --hover: #ece6f0;
+  --row-alt: #f7f2fa;
+  --accent: #6750a4;
+  --accent-hover: #7f67be;
+  --accent-text: #ffffff;
+  --danger: #b3261e;
+  --positive: #146c2e;
+  --panel-head: #e8def8;    /* secondary-container */
+  --subcard: #f7f2fa;
+  --btn-bg: #e8def8;
+  --border-strong: #79747e; /* outline */
+  --radius: 12px;
+  --radius-large: 28px;
+  --on-positive: #ffffff;
+  --on-danger: #ffffff;
+  --state-hover: rgba(29, 27, 32, 0.08);
+  --state-pressed: rgba(29, 27, 32, 0.12);
+  --elevation-1: 0 1px 2px rgba(0, 0, 0, 0.10), 0 1px 3px 1px rgba(0, 0, 0, 0.07);
+  --elevation-2: 0 4px 8px 3px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.12);
+  --elevated-bg: #ece6f0;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1858,12 +1936,18 @@ body[data-theme^="adwaita"] ::-webkit-scrollbar-thumb {
 
 /* ---- 管理端主题选择器 ---- */
 .admin-theme-picker {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   font-size: 12px;
   color: var(--text-dim);
   white-space: nowrap;
+}
+.admin-theme-picker-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 .admin-theme-picker select {
   padding: 3px 6px;
@@ -1881,22 +1965,96 @@ body[data-theme^="adwaita"] ::-webkit-scrollbar-thumb {
   justify-content: space-between;
   margin: 4px 0;
 }
+.admin-theme-picker.mobile-wide .admin-theme-picker-label {
+  flex: 1;
+  justify-content: space-between;
+}
 .admin-theme-picker.mobile-wide select {
   flex: 1;
   min-height: var(--touch-target, 44px);
 }
 
-/* ---- macOS 专属：系统字体与 6px 控件圆角（不影响其他主题） ---- */
+/* Android 涟漪设置：仅在选择 Android 主题时出现 */
+.android-ripple-panel > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 3px 8px;
+  border: 1px solid var(--card-border);
+  background: var(--btn-bg);
+  color: var(--text);
+  font-size: 12px;
+}
+.android-ripple-panel > summary::-webkit-details-marker { display: none; }
+.android-ripple-panel[open] > summary {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.android-ripple-body {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 220px;
+  padding: 10px;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  box-shadow: var(--elevation-2, 0 8px 24px rgba(0, 0, 0, 0.28));
+  font-size: 12px;
+  white-space: normal;
+}
+.android-ripple-check,
+.android-ripple-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.android-ripple-check input { accent-color: var(--accent); }
+.android-ripple-range input { flex: 1; min-width: 0; accent-color: var(--accent); }
+.android-ripple-value {
+  min-width: 46px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+
+/* ---- macOS 专属：Big Sur 磨砂材质、壁纸与系统字体（不影响其他主题） ---- */
 body[data-theme^="macos"] {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue",
     "Noto Sans", "PingFang SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif;
+  background: var(--wallpaper);
+  background-attachment: fixed;
 }
+/* 半透明表面：背后壁纸被模糊，形成 vibrancy 材质 */
+body[data-theme^="macos"] .topbar,
+body[data-theme^="macos"] .mobile-topbar,
+body[data-theme^="macos"] .mobile-tabbar,
+body[data-theme^="macos"] .panel,
+body[data-theme^="macos"] .mobile-card,
+body[data-theme^="macos"] .settings-dialog,
+body[data-theme^="macos"] .toast,
+body[data-theme^="macos"] .admin-theme-picker select {
+  -webkit-backdrop-filter: blur(var(--frost-blur)) saturate(var(--frost-saturate));
+  backdrop-filter: blur(var(--frost-blur)) saturate(var(--frost-saturate));
+}
+body[data-theme^="macos"] .panel,
+body[data-theme^="macos"] .mobile-card,
+body[data-theme^="macos"] .settings-dialog {
+  border-radius: var(--radius-large);
+  box-shadow: var(--frost-shadow);
+}
+body[data-theme^="macos"] .panel { overflow: hidden; }
+body[data-theme^="macos"] .toast { border-radius: 999px; }
+/* 预览需要准确的颜色，不使用半透明底色 */
+body[data-theme^="macos"] .preview-frame-wrap { background: var(--opaque-bg); }
 body[data-theme^="macos"] .btn,
 body[data-theme^="macos"] .project-select,
 body[data-theme^="macos"] .app-dialog-input,
 body[data-theme^="macos"] .settings-tabs button,
 body[data-theme^="macos"] .set-group,
-body[data-theme^="macos"] .mobile-card,
 body[data-theme^="macos"] .account-access-card,
 body[data-theme^="macos"] .chip,
 body[data-theme^="macos"] .storage-status-card,
@@ -1904,14 +2062,132 @@ body[data-theme^="macos"] .storage-backend-card,
 body[data-theme^="macos"] .storage-notice,
 body[data-theme^="macos"] .storage-restart-banner,
 body[data-theme^="macos"] .storage-risk,
+body[data-theme^="macos"] .admin-theme-picker select,
 body[data-theme^="macos"] input:not([type="checkbox"]):not([type="radio"]),
 body[data-theme^="macos"] select,
 body[data-theme^="macos"] textarea {
   border-radius: var(--radius);
 }
-body[data-theme^="macos"] .settings-dialog {
+body[data-theme^="macos"] ::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+}
+
+/* ---- Android 专属：Roboto、M3 胶囊按钮与大圆角（不影响其他主题） ---- */
+body[data-theme^="android"] {
+  font-family: "Roboto", "Noto Sans", "Noto Sans CJK SC", "Source Han Sans SC",
+    "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+body[data-theme^="android"] .btn {
+  border-radius: 999px;
+  font-weight: 500;
+  letter-spacing: 0.1px;
+}
+body[data-theme^="android"] .panel,
+body[data-theme^="android"] .mobile-card,
+body[data-theme^="android"] .set-group,
+body[data-theme^="android"] .account-access-card,
+body[data-theme^="android"] .chip,
+body[data-theme^="android"] .storage-status-card,
+body[data-theme^="android"] .storage-backend-card,
+body[data-theme^="android"] .storage-notice,
+body[data-theme^="android"] .storage-restart-banner,
+body[data-theme^="android"] .storage-risk,
+body[data-theme^="android"] .admin-theme-picker select {
+  border-radius: var(--radius);
+}
+body[data-theme^="android"] .settings-dialog {
   border-radius: var(--radius-large);
 }
-body[data-theme^="macos"] ::-webkit-scrollbar-thumb {
+body[data-theme^="android"] .settings-tabs button:first-child {
+  border-radius: var(--radius) 0 0 var(--radius);
+}
+body[data-theme^="android"] .settings-tabs button:last-child {
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+body[data-theme^="android"] .settings-tabs button:only-child {
+  border-radius: var(--radius);
+}
+
+/* M3 filled 输入框：表面色 + 底部指示线，聚焦时 2px 主色 */
+body[data-theme^="android"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+body[data-theme^="android"] select,
+body[data-theme^="android"] textarea {
+  background: var(--input-bg);
+  border: 0;
+  border-bottom: 1px solid var(--border-strong);
+  border-radius: 4px 4px 0 0;
+}
+body[data-theme^="android"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):focus,
+body[data-theme^="android"] select:focus,
+body[data-theme^="android"] textarea:focus {
+  border-bottom: 2px solid var(--accent);
+  outline: none;
+}
+/* 顶栏选择器保持紧凑描边样式，不套 filled 输入框 */
+body[data-theme^="android"] .admin-theme-picker select {
+  background: var(--btn-bg);
+  border: 1px solid var(--card-border);
+}
+body[data-theme^="android"] input[type="checkbox"],
+body[data-theme^="android"] input[type="radio"],
+body[data-theme^="android"] input[type="range"] {
+  accent-color: var(--accent);
+}
+
+/* M3 状态层：hover 8%、pressed 12%（叠加在按钮自身底色上） */
+body[data-theme^="android"] .btn:hover:not(:disabled),
+body[data-theme^="android"] .mobile-tab:hover {
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
+}
+body[data-theme^="android"] .btn:active:not(:disabled),
+body[data-theme^="android"] .mobile-tab:active {
+  background-image: linear-gradient(var(--state-pressed), var(--state-pressed));
+}
+body[data-theme^="android"] .btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* M3 涟漪：从触点扩散，绘制在底色之上、文字之下 */
+body[data-theme^="android"] .ssb-ripple-host {
+  position: relative;
+  z-index: 0;
+  overflow: hidden;
+}
+body[data-theme^="android"] .ssb-ripple {
+  position: absolute;
+  width: var(--ripple-size, 120px);
+  height: var(--ripple-size, 120px);
+  margin-left: calc(var(--ripple-size, 120px) / -2);
+  margin-top: calc(var(--ripple-size, 120px) / -2);
+  border-radius: 50%;
+  background: currentColor;
+  opacity: var(--ripple-opacity, 0.14);
+  pointer-events: none;
+  z-index: -1;
+  transform: scale(0);
+  animation: ssb-ripple var(--ripple-duration, 450ms) cubic-bezier(0.2, 0, 0, 1) forwards;
+}
+@keyframes ssb-ripple {
+  to { transform: scale(1); opacity: 0; }
+}
+/* 系统要求减少动态效果时，涟漪只保留极短反馈 */
+@media (prefers-reduced-motion: reduce) {
+  body[data-theme^="android"] .ssb-ripple {
+    animation-duration: 1ms;
+  }
+}
+
+/* M3 elevation：卡片 level 1，对话框 level 2 */
+body[data-theme^="android"] .mobile-card {
+  border-color: transparent;
+  box-shadow: var(--elevation-1);
+}
+body[data-theme^="android"] .settings-dialog {
+  background: var(--elevated-bg, var(--card));
+  border-color: transparent;
+  box-shadow: var(--elevation-2);
+}
+body[data-theme^="android"] ::-webkit-scrollbar-thumb {
   border-radius: 999px;
 }

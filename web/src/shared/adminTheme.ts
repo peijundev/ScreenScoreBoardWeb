@@ -2,7 +2,8 @@
 export type AdminTheme =
   | 'breeze-dark' | 'breeze-light'
   | 'adwaita-dark' | 'adwaita-light'
-  | 'macos-dark' | 'macos-light';
+  | 'macos-dark' | 'macos-light'
+  | 'android-dark' | 'android-light';
 
 export interface AdminThemeOption {
   id: AdminTheme;
@@ -18,6 +19,8 @@ export const ADMIN_THEMES: AdminThemeOption[] = [
   { id: 'adwaita-light', label: 'Adwaita 浅色', group: 'Adwaita', dark: false },
   { id: 'macos-dark', label: 'macOS 深色', group: 'macOS', dark: true },
   { id: 'macos-light', label: 'macOS 浅色', group: 'macOS', dark: false },
+  { id: 'android-dark', label: 'Android 深色', group: 'Android Material 3', dark: true },
+  { id: 'android-light', label: 'Android 浅色', group: 'Android Material 3', dark: false },
 ];
 
 export const DEFAULT_ADMIN_THEME: AdminTheme = 'breeze-dark';
