@@ -22,6 +22,10 @@ export type OpName =
   | 'setScore'
   | 'addTeamScore'
   | 'triggerSpotlight'
+  | 'memberAction'
+  | 'buzzStart'
+  | 'buzzEnd'
+  | 'buzzPress'
   | 'resetScores'
   | 'undoScore'
   | 'undoTo'
@@ -69,6 +73,10 @@ export const OP_NAMES: readonly OpName[] = [
   'setScore',
   'addTeamScore',
   'triggerSpotlight',
+  'memberAction',
+  'buzzStart',
+  'buzzEnd',
+  'buzzPress',
   'resetScores',
   'undoScore',
   'undoTo',

@@ -57,7 +57,7 @@ const KINDS = Object.freeze([
 ]);
 
 function canonicalKind(raw) {
-  const kind = String(raw || 'json').toLowerCase();
+  const kind = String(raw || 'sqlite').toLowerCase();
   const canonical = ALIASES.get(kind);
   if (!canonical) {
     throw new Error(`不支持的存储后端: ${kind}（可选 ${KINDS.join(' / ')}）`);

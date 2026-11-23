@@ -77,6 +77,14 @@
     .status.error { color: var(--danger); }
     .status.ok { color: #27ae60; }
     .note { margin-top: 14px; color: var(--dim); font-size: 12px; line-height: 1.7; }
+    .local-auth-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 14px 0 6px;
+      cursor: pointer;
+    }
+    .local-auth-row input { width: auto; }
     code { background: var(--input); border: 1px solid var(--border); padding: 1px 4px; }
     @media (max-width: 640px) {
       .modes { grid-template-columns: 1fr; }
@@ -93,7 +101,7 @@
   <div class="modes">
     <button class="mode-btn" id="mode-local" type="button">
       <strong>本地模式</strong>
-      <span>内置服务端，仅本机，无需登录</span>
+      <span>内置服务端，可选登录并对局域网共享</span>
     </button>
     <button class="mode-btn" id="mode-remote-admin" type="button">
       <strong>远程管理</strong>
@@ -107,8 +115,17 @@
 
   <section class="panel" id="panel-local" hidden>
     <p class="lead" style="margin-bottom: 0">
-      使用内置服务端，数据保存在本机用户目录，管理端和显示端都无需登录。
+      使用内置服务端，数据保存在本机用户目录。默认仅本机且无需登录；
+      勾选下方选项后会启用登录并监听局域网，供其他设备访问。
     </p>
+    <label class="local-auth-row">
+      <input type="checkbox" id="local-auth" />
+      <span>启用登录（局域网共享）</span>
+    </label>
+    <div class="note" style="margin-top: 0">
+      首次启用后，请先在本窗口创建管理员；其他设备打开 <code>http://本机IP:端口/admin</code> 登录。
+      修改该开关后需要重启应用才能生效。
+    </div>
     <div class="buttons">
       <button class="primary" id="local-start" type="button">进入本地模式</button>
       <button class="ghost" id="local-quit" type="button">退出</button>
@@ -172,6 +189,7 @@
     const adminStatus = document.getElementById('admin-status');
     const displayStatus = document.getElementById('display-status');
     const localStart = document.getElementById('local-start');
+    const localAuthInput = document.getElementById('local-auth');
     const adminStart = document.getElementById('admin-start');
     const displayStart = document.getElementById('display-start');
 
@@ -216,6 +234,7 @@
       adminUrl.value = config.remoteUrl || '';
       adminUsername.value = config.username || '';
       displayUrl.value = config.displayUrl || '';
+      localAuthInput.checked = config.localAuth === true;
       setMode(config.mode);
     }).catch((error) => {
       setStatus(adminStatus, '读取配置失败：' + error.message, 'error');
@@ -226,13 +245,20 @@
       setBusy(true);
       setStatus(localStatus, '正在启动内置服务端…');
       try {
-        const result = await window.ssbLauncher.local();
+        const result = await window.ssbLauncher.local({ auth: localAuthInput.checked });
         if (!result.ok) {
           setStatus(localStatus, result.error || '启动失败', 'error');
           setBusy(false);
           return;
         }
-        setStatus(localStatus, '已启动，正在进入…', 'ok');
+        const lanUrls = Array.isArray(result.lanUrls) ? result.lanUrls : [];
+        setStatus(
+          localStatus,
+          lanUrls.length
+            ? '已启动，局域网管理端：' + lanUrls[0] + '/admin'
+            : '已启动，正在进入…',
+          'ok',
+        );
       } catch (error) {
         setStatus(localStatus, '启动失败：' + error.message, 'error');
         setBusy(false);

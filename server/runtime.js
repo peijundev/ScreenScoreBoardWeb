@@ -6,10 +6,12 @@ const undoStacks = new Map();   // projectId -> [{ label, entries, at }]
 const countdowns = new Map();   // projectId -> { state, durationMs, endsAt, remainingMs, endedAt, timer }
 const scoreLogs = new Map();    // projectId -> [{ at, label, delta }]
 const spotlightEvents = new Map(); // projectId -> [{ seq, targetType, targetId, at, durationMs? }]
+const buzzes = new Map();       // projectId -> { roundId, mode, phase, startedAt, endsAt, durationMs, winner, timer }
 
 const SCORE_LOG_LIMIT = 200;
 const SPOTLIGHT_EVENT_LIMIT = 20;
 let spotlightSeq = 0;
+let buzzSeq = 0;
 
 let broadcast = () => {};
 function setBroadcaster(fn) {
@@ -125,7 +127,7 @@ function armTimer(projectId, entry) {
   entry.timer = timer;
 }
 
-function startCountdown(projectId, durationMs, remainingMs) {
+function startCountdown(projectId, durationMs, remainingMs, options = {}) {
   const entry = countdowns.get(projectId);
   const total = remainingMs != null ? remainingMs : durationMs;
   const fresh = {
@@ -138,7 +140,8 @@ function startCountdown(projectId, durationMs, remainingMs) {
   };
   if (entry) stopTimer(entry);
   countdowns.set(projectId, fresh);
-  armTimer(projectId, fresh);
+  // 抢答模式自行在结束点清理倒计时，避免出现“时间到”红字闪烁
+  if (options.arm !== false) armTimer(projectId, fresh);
   return compactCountdown(fresh);
 }
 
@@ -187,8 +190,102 @@ function compactCountdown(entry) {
   };
 }
 
+// ---------- 抢答 ----------
+function stopBuzzTimer(entry) {
+  if (entry && entry.timer) {
+    clearTimeout(entry.timer);
+    entry.timer = null;
+  }
+}
+
+function armBuzzTimer(projectId, entry) {
+  stopBuzzTimer(entry);
+  const delay = Math.max(0, entry.endsAt - Date.now());
+  const timer = setTimeout(() => {
+    const current = buzzes.get(projectId);
+    if (!current || current !== entry) return;
+    current.phase = current.mode === 'prepare' ? 'open' : 'locked';
+    current.endsAt = 0;
+    current.timer = null;
+    // 抢答计时结束：关闭计时器，避免停留在“时间到”
+    resetCountdown(projectId);
+    notify();
+  }, delay);
+  if (typeof timer.unref === 'function') timer.unref();
+  entry.timer = timer;
+}
+
+function startBuzz(projectId, { mode = 'prepare', durationMs = 10000 } = {}) {
+  const previous = buzzes.get(projectId);
+  if (previous) stopBuzzTimer(previous);
+  const now = Date.now();
+  const entry = {
+    roundId: ++buzzSeq,
+    mode: mode === 'window' ? 'window' : 'prepare',
+    phase: mode === 'window' ? 'open' : 'prepare',
+    startedAt: now,
+    endsAt: now + durationMs,
+    durationMs,
+    winner: null,
+    timer: null,
+  };
+  buzzes.set(projectId, entry);
+  armBuzzTimer(projectId, entry);
+  return compactBuzz(entry);
+}
+
+function setBuzzWinner(projectId, winner) {
+  const entry = buzzes.get(projectId);
+  if (!entry) return null;
+  entry.winner = winner;
+  return compactBuzz(entry);
+}
+
+/** 抢到后立即锁定并关闭计时器（window 模式 + buzzStopTimerOnWin）。 */
+function lockBuzz(projectId) {
+  const entry = buzzes.get(projectId);
+  if (!entry) return null;
+  stopBuzzTimer(entry);
+  entry.phase = 'locked';
+  entry.endsAt = 0;
+  entry.timer = null;
+  resetCountdown(projectId);
+  return compactBuzz(entry);
+}
+
+/** 结束抢答：清除赢家与计时器；调用方负责广播。 */
+function endBuzz(projectId) {
+  const entry = buzzes.get(projectId);
+  if (!entry) {
+    resetCountdown(projectId);
+    return false;
+  }
+  stopBuzzTimer(entry);
+  buzzes.delete(projectId);
+  resetCountdown(projectId);
+  return true;
+}
+
+function getBuzz(projectId) {
+  const entry = buzzes.get(projectId);
+  return entry ? compactBuzz(entry) : null;
+}
+
+function compactBuzz(entry) {
+  return {
+    roundId: entry.roundId,
+    mode: entry.mode,
+    phase: entry.phase,
+    startedAt: entry.startedAt,
+    endsAt: entry.endsAt || 0,
+    durationMs: entry.durationMs,
+    winner: entry.winner || null,
+  };
+}
+
 // ---------- 项目清理 ----------
 function clearProjectRuntime(projectId) {
+  endBuzz(projectId);
   resetCountdown(projectId);
   clearUndo(projectId);
   scoreLogs.delete(projectId);
@@ -217,12 +314,17 @@ function getRuntimeSnapshot() {
   for (const [projectId, events] of spotlightEvents) {
     if (events.length) snapshotSpotlights[projectId] = events.slice();
   }
+  const snapshotBuzz = {};
+  for (const [projectId, entry] of buzzes) {
+    snapshotBuzz[projectId] = compactBuzz(entry);
+  }
   return {
     undoCounts,
     undoLabels: undoLabelsMap,
     scoreLogs: snapshotLogs,
     countdowns: snapshotCountdowns,
     spotlightEvents: snapshotSpotlights,
+    buzz: snapshotBuzz,
     serverNow: Date.now(),
   };
 }
@@ -244,6 +346,11 @@ module.exports = {
   resumeCountdown,
   resetCountdown,
   getCountdown,
+  startBuzz,
+  setBuzzWinner,
+  lockBuzz,
+  endBuzz,
+  getBuzz,
   clearProjectRuntime,
   getRuntimeSnapshot,
   setBroadcaster,

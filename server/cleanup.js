@@ -34,6 +34,11 @@ function collectReferences() {
     }
     if (project.settings.bgImage) refs.add(project.settings.bgImage);
     if (project.settings.customSound) refs.add(project.settings.customSound);
+    for (const menu of project.settings.memberMenus || []) {
+      for (const button of menu.buttons || []) {
+        if (button && button.image) refs.add(button.image);
+      }
+    }
   }
   return refs;
 }

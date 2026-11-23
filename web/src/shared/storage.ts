@@ -189,3 +189,41 @@ export async function migrateStorage(input: StorageMigrateInput): Promise<Storag
     body: JSON.stringify(input),
   }));
 }
+
+export type LibrarySection = 'projects' | 'themes' | 'themeDrafts';
+export type LibraryExportFormat = 'json' | 'sqlite' | 'txt' | 'native';
+export type LibraryImportFormat = 'auto' | 'json' | 'sqlite' | 'txt';
+
+export interface LibraryImportResult {
+  scope: LibrarySection[];
+  detectedFormat: string;
+  counts: {
+    projects: number | null;
+    themes: number | null;
+    themeDrafts: number | null;
+  };
+}
+
+export function storageLibraryExportUrl(
+  format: LibraryExportFormat,
+  scope: LibrarySection[],
+): string {
+  const params = new URLSearchParams({ format, scope: scope.join(',') });
+  return '/api/v1/storage/export?' + params.toString();
+}
+
+export async function importStorageLibrary(
+  file: File,
+  options: { format: LibraryImportFormat; scope: LibrarySection[] },
+): Promise<LibraryImportResult> {
+  const params = new URLSearchParams({
+    format: options.format,
+    scope: options.scope.join(','),
+  });
+  const res = await authFetch('/api/v1/storage/import?' + params.toString(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/octet-stream' },
+    body: file,
+  });
+  return readData<LibraryImportResult>(res);
+}

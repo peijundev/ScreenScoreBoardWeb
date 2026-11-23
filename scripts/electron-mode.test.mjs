@@ -19,6 +19,7 @@ test('Electron 模式配置、远程 URL、显示端 URL 与 Cookie 解析', () 
       remoteUrl: '',
       username: '',
       displayUrl: '',
+      localAuth: false,
     });
 
     assert.equal(mode.normalizeMode('remote'), 'remote-admin', '旧 remote 配置迁移为远程管理');
@@ -42,6 +43,7 @@ test('Electron 模式配置、远程 URL、显示端 URL 与 Cookie 解析', () 
     assert.equal(loaded.remoteUrl, 'https://score.example.com/');
     assert.equal(loaded.username, 'admin');
     assert.equal(loaded.displayUrl, '');
+    assert.equal(loaded.localAuth, false, '默认不启用本机登录');
 
     mode.saveConfig(dir, {
       mode: 'remote-display',
@@ -100,6 +102,22 @@ test('Electron 模式配置、远程 URL、显示端 URL 与 Cookie 解析', () 
 
     const local = mode.loadConfig(dir, { SCOREBOARD_MODE: 'local' });
     assert.equal(local.mode, 'local');
+
+    mode.saveConfig(dir, {
+      mode: 'local',
+      remoteUrl: '',
+      username: '',
+      displayUrl: '',
+      localAuth: true,
+    });
+    assert.equal(mode.loadConfig(dir, {}).localAuth, true, '本机登录开关持久化');
+    mode.saveConfig(dir, { mode: 'local', localAuth: false });
+    assert.equal(mode.loadConfig(dir, {}).localAuth, false, '本机登录开关可关闭');
+    assert.equal(
+      mode.loadConfig(dir, { SCOREBOARD_LOCAL_AUTH: '1' }).localAuth,
+      true,
+      'SCOREBOARD_LOCAL_AUTH 可覆盖本机登录开关',
+    );
 
     assert.equal(mode.normalizeRemoteUrl('https://score.example.com/'), 'https://score.example.com');
     assert.equal(
@@ -164,4 +182,16 @@ test('Electron 模式配置、远程 URL、显示端 URL 与 Cookie 解析', () 
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('Electron 本机模式接线：登录开关绑定局域网监听', () => {
+  const main = readFileSync(path.join(ROOT, 'electron/main.js'), 'utf8');
+  const launcher = readFileSync(path.join(ROOT, 'electron/launcher.html'), 'utf8');
+  assert.match(main, /host = useAuth \? '0\.0\.0\.0' : '127\.0\.0\.1'/);
+  assert.match(main, /auth: useAuth/);
+  assert.match(main, /lanBaseUrls/);
+  assert.match(main, /localAuth/);
+  assert.match(launcher, /启用登录（局域网共享）/);
+  assert.match(launcher, /localAuth/);
+  assert.match(launcher, /lanUrls/);
 });

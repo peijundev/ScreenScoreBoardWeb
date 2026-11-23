@@ -50,6 +50,9 @@
     "test:api": "node --test scripts/api-v1.test.mjs",
     "test:mcp": "node --test scripts/mcp.test.mjs",
     "test:mobile": "node --test scripts/mobile-ui.test.mjs",
+    "test:member": "node --test scripts/member-console.test.mjs",
+    "test:buzz": "node --test scripts/buzz-mode.test.mjs scripts/buzz-display.test.mjs",
+    "test:welcome": "node --test scripts/welcome-ui.test.mjs",
     "test:auth": "node --test scripts/auth.test.mjs scripts/electron-mode.test.mjs scripts/electron-zoom.test.mjs",
     "test:storage": "node --test scripts/storage.test.mjs",
     "test:admin-theme": "node --test scripts/admin-theme.test.mjs",
@@ -61,7 +64,7 @@
     "sdk:pack": "npm pack ./packages/sdk --dry-run",
     "auth:reset": "node bin/screenscoreboard-auth.js",
     "mcp:stdio": "node bin/screenscoreboard-mcp.js",
-    "test:all": "node --test scripts/theme-schema.test.mjs scripts/theme-script.test.mjs scripts/api-v1.test.mjs scripts/mcp.test.mjs scripts/mobile-ui.test.mjs scripts/auth.test.mjs scripts/electron-mode.test.mjs scripts/electron-zoom.test.mjs scripts/storage.test.mjs scripts/admin-theme.test.mjs scripts/display-resolution.test.mjs scripts/display-layout.test.mjs scripts/spotlight-scale.test.mjs"
+    "test:all": "node --test scripts/theme-schema.test.mjs scripts/theme-script.test.mjs scripts/api-v1.test.mjs scripts/mcp.test.mjs scripts/mobile-ui.test.mjs scripts/member-console.test.mjs scripts/buzz-mode.test.mjs scripts/buzz-display.test.mjs scripts/welcome-ui.test.mjs scripts/auth.test.mjs scripts/electron-mode.test.mjs scripts/electron-zoom.test.mjs scripts/storage.test.mjs scripts/admin-theme.test.mjs scripts/display-resolution.test.mjs scripts/display-layout.test.mjs scripts/spotlight-scale.test.mjs"
   },
   "engines": {
     "node": ">=24"

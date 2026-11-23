@@ -82,6 +82,8 @@ function publicUser(user) {
     username: user.username,
     displayName: user.displayName,
     role: user.role,
+    memberProjectId: user.memberProjectId || null,
+    memberPersonId: user.memberPersonId || null,
     disabled: Boolean(user.disabled),
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
@@ -131,6 +133,18 @@ function assertRole(role) {
   return role;
 }
 
+function normalizeMemberBinding(role, projectId, personId) {
+  if (role !== 'member') return { memberProjectId: null, memberPersonId: null };
+  const pid = typeof projectId === 'string' ? projectId.trim() : '';
+  const person = typeof personId === 'string' ? personId.trim() : '';
+  if (!pid || !person) {
+    const err = new Error('队员账号必须绑定项目与人员');
+    err.name = 'UserInputError';
+    throw err;
+  }
+  return { memberProjectId: pid, memberPersonId: person };
+}
+
 function validateUserRecord(user) {
   if (!user || typeof user !== 'object') return null;
   if (typeof user.id !== 'string' || !user.id) return null;
@@ -145,6 +159,8 @@ function validateUserRecord(user) {
     usernameKey,
     displayName: typeof user.displayName === 'string' ? user.displayName : username,
     role: user.role,
+    memberProjectId: typeof user.memberProjectId === 'string' ? user.memberProjectId : null,
+    memberPersonId: typeof user.memberPersonId === 'string' ? user.memberPersonId : null,
     passwordHash: user.passwordHash,
     disabled: Boolean(user.disabled),
     createdAt: typeof user.createdAt === 'string' ? user.createdAt : nowIso(),
@@ -416,7 +432,10 @@ async function authenticate(username, password) {
   return user;
 }
 
-function createUser({ username, passwordHash, role = 'viewer', displayName = '', disabled = false }) {
+function createUser({
+  username, passwordHash, role = 'viewer', displayName = '', disabled = false,
+  memberProjectId = null, memberPersonId = null,
+}) {
   const name = assertUsername(username);
   const key = name.toLowerCase();
   if (usersByName.has(key)) {
@@ -425,6 +444,7 @@ function createUser({ username, passwordHash, role = 'viewer', displayName = '',
     throw err;
   }
   assertRole(role);
+  const binding = normalizeMemberBinding(role, memberProjectId, memberPersonId);
   if (typeof passwordHash !== 'string' || !passwordHash) {
     const err = new Error('密码哈希无效');
     err.name = 'UserInputError';
@@ -437,6 +457,7 @@ function createUser({ username, passwordHash, role = 'viewer', displayName = '',
     usernameKey: key,
     displayName: String(displayName || name).trim().slice(0, 40) || name,
     role,
+    ...binding,
     passwordHash,
     disabled: Boolean(disabled),
     createdAt: now,
@@ -472,15 +493,36 @@ function updateUser(id, patch = {}, options = {}) {
   }
   const roleChanged = nextRole !== user.role;
   const disabledChanged = nextDisabled !== user.disabled;
+  const previousProjectId = user.memberProjectId || null;
+  const previousPersonId = user.memberPersonId || null;
+  const bindingTouched = patch.role !== undefined
+    || patch.memberProjectId !== undefined
+    || patch.memberPersonId !== undefined;
+  const nextProjectId = patch.memberProjectId !== undefined
+    ? patch.memberProjectId
+    : user.memberProjectId;
+  const nextPersonId = patch.memberPersonId !== undefined
+    ? patch.memberPersonId
+    : user.memberPersonId;
+  const binding = bindingTouched
+    ? normalizeMemberBinding(nextRole, nextProjectId, nextPersonId)
+    : {
+        memberProjectId: user.memberProjectId || null,
+        memberPersonId: user.memberPersonId || null,
+      };
   user.role = nextRole;
+  user.memberProjectId = binding.memberProjectId;
+  user.memberPersonId = binding.memberPersonId;
   user.disabled = nextDisabled;
+  const bindingChanged = user.memberProjectId !== previousProjectId
+    || user.memberPersonId !== previousPersonId;
   user.updatedAt = nowIso();
   saveAuthFile();
   if (disabledChanged && user.disabled) {
     revokeUserSessions(user.id);
     revokeUserTokens(user.id);
-  } else if (roleChanged) {
-    notifyRevoke({ userId: user.id, reason: 'role' });
+  } else if (roleChanged || bindingChanged) {
+    notifyRevoke({ userId: user.id, reason: roleChanged ? 'role' : 'binding' });
   }
   return user;
 }

@@ -23,11 +23,24 @@ function tempDir() {
   return mkdtempSync(path.join(tmpdir(), 'sb-storage-'));
 }
 
-test('默认配置为 JSON', () => {
+test('默认配置为 SQLite', () => {
   const dir = tempDir();
   try {
     const { config, source } = cfg.resolveStorageConfig({ env: {}, dataDir: dir });
     assert.equal(source, 'default');
+    assert.equal(config.kind, 'sqlite');
+    assert.equal(config.options.file, 'scoreboard.db');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('已有 state.json 且无 storage.json 时自动识别为 JSON', () => {
+  const dir = tempDir();
+  try {
+    writeFileSync(path.join(dir, 'state.json'), '{"version":2,"projects":{}}');
+    const { config, source } = cfg.resolveStorageConfig({ env: {}, dataDir: dir });
+    assert.equal(source, 'legacy');
     assert.equal(config.kind, 'json');
     assert.equal(config.options.file, 'state.json');
   } finally {
@@ -1495,4 +1508,16 @@ test('LMDB 本地目录往返与 CAS', { skip: !hasLmdb }, async () => {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('管理端存储对话框提供整库导出与导入', () => {
+  const src = readFileSync(
+    new URL('../web/src/admin/components/StorageDialog.tsx', import.meta.url),
+    'utf8',
+  );
+  assert.ok(src.includes('整库导出') && src.includes('整库导入'), '包含整库导出/导入区块');
+  assert.ok(src.includes('storageLibraryExportUrl'), '使用整库导出 URL');
+  assert.ok(src.includes('importStorageLibrary'), '调用整库导入 API');
+  assert.ok(src.includes('LIBRARY_SECTIONS'), '可选择导出/导入范围');
+  assert.ok(src.includes('当前后端原生文件'), '支持原生文件格式');
 });

@@ -255,7 +255,11 @@ test('MCP HTTP 与 stdio 工具一致且可调用', async (t) => {
   }
 
   const projects = await rest('/projects');
-  const projectId = projects.data[0].id;
+  if (!projects.data.length) {
+    await rest('/projects', { method: 'POST', body: JSON.stringify({ name: 'MCP 测试项目' }) });
+  }
+  const projectList = await rest('/projects');
+  const projectId = projectList.data[0].id;
   const added = await rpc('tools/call', {
     name: 'add_person', arguments: { projectId, name: 'AI 添加' },
   });

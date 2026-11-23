@@ -10,6 +10,7 @@ const DEFAULT_CONFIG = Object.freeze({
   remoteUrl: '',
   username: '',
   displayUrl: '',
+  localAuth: false,
 });
 
 /** 兼容旧配置：remote 等价于 remote-admin */
@@ -32,6 +33,7 @@ function readFileConfig(userDataDir) {
       remoteUrl: typeof parsed.remoteUrl === 'string' ? parsed.remoteUrl : '',
       username: typeof parsed.username === 'string' ? parsed.username : '',
       displayUrl: typeof parsed.displayUrl === 'string' ? parsed.displayUrl : '',
+      localAuth: parsed.localAuth === true,
     };
   } catch (_) {
     return { ...DEFAULT_CONFIG };
@@ -47,6 +49,10 @@ function loadConfig(userDataDir, env = process.env) {
   let remoteUrl = file.remoteUrl;
   let username = file.username;
   let displayUrl = file.displayUrl;
+  let localAuth = file.localAuth;
+  if (env.SCOREBOARD_LOCAL_AUTH != null && env.SCOREBOARD_LOCAL_AUTH !== '') {
+    localAuth = ['1', 'true', 'yes', 'on'].includes(String(env.SCOREBOARD_LOCAL_AUTH).toLowerCase());
+  }
   if (mode === 'remote-admin') {
     remoteUrl = env.SCOREBOARD_REMOTE_URL || env.SCOREBOARD_URL || file.remoteUrl || '';
     username = env.SCOREBOARD_USERNAME || file.username || '';
@@ -55,18 +61,20 @@ function loadConfig(userDataDir, env = process.env) {
   } else if (mode === 'remote-display') {
     displayUrl = env.SCOREBOARD_DISPLAY_URL || file.displayUrl || '';
   }
-  return { mode, remoteUrl, username, displayUrl };
+  return { mode, remoteUrl, username, displayUrl, localAuth };
 }
 
 function saveConfig(userDataDir, config) {
   fs.mkdirSync(userDataDir, { recursive: true });
   const file = configPath(userDataDir);
   const tmp = file + '.tmp';
+  const previous = readFileConfig(userDataDir);
   const value = {
     mode: normalizeMode(config.mode),
     remoteUrl: typeof config.remoteUrl === 'string' ? config.remoteUrl : '',
     username: typeof config.username === 'string' ? config.username : '',
     displayUrl: typeof config.displayUrl === 'string' ? config.displayUrl : '',
+    localAuth: config.localAuth === undefined ? previous.localAuth : config.localAuth === true,
   };
   fs.writeFileSync(tmp, JSON.stringify(value, null, 2), { mode: 0o600 });
   fs.renameSync(tmp, file);

@@ -6,6 +6,7 @@ import { toast } from '../../shared/ui';
 import { confirm, prompt } from './dialogs';
 import SoundQuickMenu from './SoundQuickMenu';
 import AdminThemePicker from './AdminThemePicker';
+import TopbarPopover from './TopbarPopover';
 
 interface Props {
   project: Project | null;
@@ -24,11 +25,13 @@ interface Props {
   onOpenStudio: () => void;
   onOpenAccount: () => void;
   onOpenStorage: () => void;
+  onOpenMemberMenu: () => void;
 }
 
 const roleLabel: Record<string, string> = {
   admin: '管理员',
   operator: '操作员',
+  member: '队员',
   viewer: '只读',
 };
 
@@ -55,6 +58,7 @@ export default function Toolbar({
   onOpenStudio,
   onOpenAccount,
   onOpenStorage,
+  onOpenMemberMenu,
 }: Props): JSX.Element {
   const sendOp = useAppStore((s) => s.sendOp);
   const logout = useAuthStore((s) => s.logout);
@@ -116,7 +120,8 @@ export default function Toolbar({
         className="project-select"
         value={project?.id ?? ''}
         onChange={(e) => onSelectProject(e.target.value)}
-        title="切换项目"
+        disabled={user?.role === 'member'}
+        title={user?.role === 'member' ? '队员账号跟随绑定项目' : '切换项目'}
       >
         {projects.length === 0 && <option value="">（无项目）</option>}
         {projects.map((p) => (
@@ -136,20 +141,44 @@ export default function Toolbar({
           <button className="btn small danger" type="button" onClick={() => { void deleteProject(); }} disabled={!project}>
             删除项目
           </button>
-          <button className="btn small" type="button" onClick={onOpenSettings} disabled={!project}>
-            排版设置
-          </button>
-          <button className="btn small" type="button" onClick={onOpenTheme} disabled={!project}>
-            主题编辑器
-          </button>
-          <button className="btn small" type="button" onClick={onOpenStudio} disabled={!project}>
-            主题工作室
-          </button>
+          <TopbarPopover
+            label="外观设置"
+            title="排版设置、主题编辑器与主题工作室"
+            closeOnSelect
+          >
+            <button
+              className="appearance-menu-item"
+              type="button"
+              disabled={!project}
+              onClick={onOpenSettings}
+            >
+              排版设置
+            </button>
+            <button
+              className="appearance-menu-item"
+              type="button"
+              disabled={!project}
+              onClick={onOpenTheme}
+            >
+              主题编辑器
+            </button>
+            <button
+              className="appearance-menu-item"
+              type="button"
+              disabled={!project}
+              onClick={onOpenStudio}
+            >
+              主题工作室
+            </button>
+          </TopbarPopover>
           <button className="btn small" type="button" onClick={onOpenFeatures} disabled={!project}>
             功能
           </button>
           <button className="btn small" type="button" onClick={onOpenAssets} disabled={!project}>
             资源库
+          </button>
+          <button className="btn small" type="button" onClick={onOpenMemberMenu} disabled={!project}>
+            人员菜单
           </button>
           <button className="btn small" type="button" onClick={onOpenStorage}>
             存储后端

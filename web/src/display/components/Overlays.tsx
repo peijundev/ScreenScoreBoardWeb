@@ -31,6 +31,10 @@ interface CountdownProps {
   settings: Settings;
   countdown: CountdownRuntime | null;
   offsetMs: number;
+  /** 抢答期间即使 featureCountdown 关闭也临时显示，并在归零时立即隐藏。 */
+  force?: boolean;
+  /** 倒计时结束后保留计时器并显示该提示（抢答准备阶段）。 */
+  prompt?: string;
 }
 
 function panelStyle(settings: Settings): CSSProperties {
@@ -45,17 +49,26 @@ function panelStyle(settings: Settings): CSSProperties {
   return style as CSSProperties;
 }
 
-export function Countdown({ settings, countdown, offsetMs }: CountdownProps): JSX.Element | null {
+export function Countdown({
+  settings,
+  countdown,
+  offsetMs,
+  force = false,
+  prompt,
+}: CountdownProps): JSX.Element | null {
   const now = useNow(250);
-  if (!settings.featureCountdown || !countdown) return null;
+  if (!countdown && !prompt) return null;
+  if (!force && !settings.featureCountdown) return null;
 
-  let remaining: number;
-  if (countdown.state === 'running') {
-    remaining = Math.max(0, (countdown.endsAt ?? 0) - (now + offsetMs)) / 1000;
-  } else {
-    remaining = (countdown.remainingMs ?? 0) / 1000;
-  }
-  const ended = countdown.state === 'ended' || remaining <= 0;
+  const running = countdown?.state === 'running';
+  const remaining = countdown
+    ? (running
+      ? Math.max(0, (countdown.endsAt ?? 0) - (now + offsetMs)) / 1000
+      : (countdown.remainingMs ?? 0) / 1000)
+    : 0;
+  const ended = Boolean(countdown) && (countdown?.state === 'ended' || remaining <= 0);
+  // 抢答计时结束立即隐藏「时间到」；若配置了开始提示则改为显示提示
+  if (!prompt && force && ended) return null;
   const mode = settings.countdownDisplayMode || 'corner';
 
   if (mode === 'corner') {
@@ -67,13 +80,14 @@ export function Countdown({ settings, countdown, offsetMs }: CountdownProps): JS
         className={
           'overlay-countdown clock-pos-' +
           settings.clockPosition +
-          (ended ? ' ended' : '') +
-          (both ? ' shifted' : '')
+          (ended && !prompt ? ' ended' : '') +
+          (both ? ' shifted' : '') +
+          (prompt ? ' is-buzz-start' : '')
         }
         data-bg-mode={String(settings.countdownBgMode || 'theme')}
         style={{ ...style, ['--cd-corner-size' as string]: manualSize > 0 ? manualSize + 'px' : '' }}
       >
-        {ended ? '时间到' : formatDuration(remaining)}
+        {prompt || (ended ? '时间到' : formatDuration(remaining))}
       </div>
     );
   }
@@ -84,9 +98,10 @@ export function Countdown({ settings, countdown, offsetMs }: CountdownProps): JS
   const cdHeight = canResize && Number(settings.countdownHeight) > 0 ? Number(settings.countdownHeight) : cdWidth;
   const manualSize = Number(settings.countdownFontSize) || 0;
   const timeSize = manualSize > 0 ? manualSize : Math.min(180, Math.max(30, Math.round(Math.min(cdWidth, cdHeight) * 0.22)));
-  const duration = Math.max(1, (countdown.durationMs || 1000) / 1000);
-  const progress = Math.max(0, Math.min(1, remaining / duration));
-  const text = ended ? '时间到' : formatDuration(remaining);
+  const duration = Math.max(1, ((countdown?.durationMs || 1000) / 1000));
+  const progress = prompt ? 1 : Math.max(0, Math.min(1, remaining / duration));
+  const text = prompt || (ended ? '时间到' : formatDuration(remaining));
+  const caption = prompt ? '第一个按下的队员获胜' : (ended ? '时间到' : '倒计时');
   const style: Record<string, string> = {
     '--cd-size': cdWidth + 'px',
     '--cd-height': cdHeight + 'px',
@@ -103,8 +118,9 @@ export function Countdown({ settings, countdown, offsetMs }: CountdownProps): JS
       className={
         'countdown-big ' +
         (mode === 'fullscreen' ? 'fullscreen-mode' : 'center-mode') +
-        (ended ? ' ended' : '') +
-        (settings.countdownShowProgress === false ? ' no-progress' : '') +
+        (ended && !prompt ? ' ended' : '') +
+        (prompt ? ' is-buzz-start' : '') +
+        (settings.countdownShowProgress === false || prompt ? ' no-progress' : '') +
         (settings.countdownShowBackdrop === false ? ' no-backdrop' : '')
       }
       data-shape={shape}
@@ -114,12 +130,14 @@ export function Countdown({ settings, countdown, offsetMs }: CountdownProps): JS
       style={{ ...(style as CSSProperties), ...panel }}
     >
       {settings.countdownTheme === 'ink' && <InkScene text={text} settings={settings} />}
-      {settings.countdownTheme === 'video' && <VideoScene countdown={countdown} remaining={remaining} ended={ended} />}
+      {settings.countdownTheme === 'video' && !prompt && countdown && (
+        <VideoScene countdown={countdown} remaining={remaining} ended={ended} />
+      )}
       <div className="countdown-stage">
         <div className="countdown-ring">
           <div className="countdown-time">{text}</div>
         </div>
-        <div className="countdown-caption">{ended ? '时间到' : '倒计时'}</div>
+        <div className="countdown-caption">{caption}</div>
       </div>
     </div>
   );

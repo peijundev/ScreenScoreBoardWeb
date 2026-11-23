@@ -1,13 +1,13 @@
 # 实时计分板
 
-显示端 + 管理端的实时计分板。后端为 Node 原生 http + WebSocket；前端为 React 19 + Vite + TypeScript（源码在 `web/`，构建产物在 `public/v2/`）。支持多项目（每个项目一个独立积分榜）、17 种可切换存储后端，以及三套设计语言、共八套管理端主题。
+显示端 + 管理端的实时计分板。后端为 Node 原生 http + WebSocket；前端为 React 19 + Vite + TypeScript（源码在 `web/`，构建产物在 `public/v2/`）。支持多项目（每个项目一个独立积分榜；没有项目时显示欢迎页）、17 种可切换存储后端，以及三套设计语言、共八套管理端主题（默认 macOS 浅色）。
 
 > ## 版本 1.6.7 — 存储修复与数据位置
 >
 > - **SQLite / Electron**：SQLite 优先使用 Node 24 / Electron 内置的 `node:sqlite`，修复 Electron 下切换或迁移 SQLite 报「服务器内部错误」；打包版无需 `electron-rebuild`
 > - **数据位置**：「存储后端」→「当前运行中」显示数据目录与实际数据位置，支持一键复制
 > - **存储后端（17 种）**：在 1.6.4 的 9 种基础上新增 libSQL/Turso、CouchDB、Cloudflare D1、AWS DynamoDB、Google Firestore、S3 / MinIO、etcd、LMDB；新增分块存储（块大小 / 分片 / SHA-256 校验）、按后端快照上限与运行中保存预检
-> - **管理端主题（8 套）**：新增 Android Material 3 深/浅；macOS 改为 Big Sur 起的磨砂材质；新增苹果风格开关与可调涟漪
+> - **管理端主题（8 套）**：默认 macOS 浅色；新增 Android Material 3 深/浅；macOS 改为 Big Sur 起的磨砂材质；新增苹果风格开关与可调涟漪
 > - **显示端**：突显新增「原卡片按比例放大」与自动缩放，并支持数值直填；逻辑分辨率（HD / 4K / 8K）真正写入设置；构建后 30 秒自动载入新版本
 > - **交互**：对话框窗口化（多窗口、拖动、缩放、位置记忆）、批量添加团队、团队队长、成员卡片排列
 > - **修复**：移动端记分按钮跟随主题、音效菜单被设置窗口遮挡、管理端队长标签字号；补齐 LMDB `mapSizeMb` 类型声明，恢复 CI 与 Release 构建
@@ -141,13 +141,13 @@ npm run sdk:pack
 
 ## 存储后端
 
-支持 17 种后端，可在管理端「存储后端」中可视化选择、填写连接参数、测试连接、迁移数据并保存；也可以继续用环境变量 `STORAGE` 配置。默认 `json`。SQLite 标记为「本地推荐」，Redis 标记为「效率推荐」并固定在选择菜单第四位；每种后端都会显示环境推荐标识、优点、缺点与生产警告。
+支持 17 种后端，可在管理端「存储后端」中可视化选择、填写连接参数、测试连接、迁移数据、整库导出/导入并保存；也可以继续用环境变量 `STORAGE` 配置。整库导出可选项目/主题/主题草稿范围与 JSON / SQLite / TXT / 当前后端原生文件格式，导入支持自动识别并替换所选范围。默认 `sqlite`；若数据目录里已有旧 `state.json` 且没有 `storage.json`/存储环境变量，会自动识别并继续使用 JSON，避免旧部署看起来丢数据。SQLite 标记为「本地推荐」，Redis 标记为「效率推荐」并固定在选择菜单第四位；每种后端都会显示环境推荐标识、优点、缺点与生产警告。
 
 | STORAGE | 说明 | 相关环境变量 |
 |---|---|---|
-| `json`（默认） | 状态写入 `data/state.json`，原子写入 | `STATE_FILE`、`STATE_FILE_PRETTY` |
+| `json` | 状态写入 `data/state.json`，原子写入 | `STATE_FILE`、`STATE_FILE_PRETTY` |
 | `txt` | 状态以缩进 JSON 写入 `data/state.txt`，便于人工查看 | `STATE_TXT_FILE` |
-| `sqlite` | 表 `scoreboard_state`（WAL 模式、revision CAS）；优先使用内置 `node:sqlite`，Electron 无需重建原生模块 | `SQLITE_FILE`、`SQLITE_BUSY_TIMEOUT_MS` |
+| `sqlite`（默认） | 表 `scoreboard_state`（WAL 模式、revision CAS）；优先使用内置 `node:sqlite`，Electron 无需重建原生模块 | `SQLITE_FILE`、`SQLITE_BUSY_TIMEOUT_MS` |
 | `postgres` | 表 `scoreboard_state`，启动自动建表；支持 advisory lock | `DATABASE_URL` 或标准 `PG*` 变量；`PG_CONNECT_TIMEOUT_MS` |
 | `mysql` | 表 `scoreboard_state`，启动自动建表；支持 `GET_LOCK` | `MYSQL_URL` 或 `MYSQL_HOST` / `MYSQL_PORT` / `MYSQL_USER` / `MYSQL_PASSWORD` / `MYSQL_DATABASE` |
 | `mongodb` | 集合 `scoreboard_state`，单文档快照；单文档上限 16MB | `MONGODB_URL` / `MONGO_URL`、`MONGODB_DB` |
@@ -181,7 +181,7 @@ STORAGE=redis REDIS_URL=redis://localhost:6379/0 npm start
 3. 选择「迁移现有数据」或「新后端从空库开始」；
 4. 保存后**重启服务**生效。
 
-存储配置独立保存在 `DATA_DIR/storage.json`，优先级高于存储相关环境变量，文件权限 `0600`；数据库密码不会通过 API 回传前端，也不会进入项目状态、广播、导出或备份。配置文件损坏时服务会拒绝启动（fail-closed），修复或移走该文件即可回退到环境变量/默认 JSON。
+存储配置独立保存在 `DATA_DIR/storage.json`，优先级高于存储相关环境变量，文件权限 `0600`；数据库密码不会通过 API 回传前端，也不会进入项目状态、广播、导出或备份。配置文件损坏时服务会拒绝启动（fail-closed），修复或移走该文件即可回退到环境变量/默认 SQLite（已有旧 `state.json` 时会自动识别为 JSON）。
 
 > **Redis 作为权威存储**必须开启 AOF（`appendonly yes`，`appendfsync everysec` 或 `always`）并设置 `maxmemory-policy noeviction`，否则重启或内存淘汰可能丢失状态。无法保证持久化时建议选择 PostgreSQL。
 >
@@ -382,7 +382,7 @@ npm run electron        # 开发模式启动 Electron（preelectron 会先构建
 
 启动后可以随时切换：
 
-- **管理端顶栏「切换模式」按钮**（手机端在「更多」里）：关闭当前管理/显示窗口，回到欢迎页重新选择模式；本地服务端会保留复用，不会丢数据。
+- **管理端顶栏「切换模式」按钮**（手机端在「更多」里）：关闭当前管理/显示窗口，回到欢迎页重新选择模式；本地服务端会保留复用，不会丢数据。Electron 本地模式可在启动器勾选「启用登录（局域网共享）」：内置服务端会监听 `0.0.0.0` 并启用账号鉴权，首次先在本机窗口创建管理员，局域网设备通过 `http://本机IP:端口/admin` 登录；修改开关需重启应用生效。
 - **服务器 → 退出到欢迎页（切换模式）…**（快捷键 `Ctrl/Cmd+Shift+M`）：同上；远程屏幕模式也使用这个菜单。
 - **服务器 → 重启应用…**：完全重启后再选择。
 - **服务器 → 重新连接 / 重新加载显示端**：管理模式重新加载管理端，屏幕模式重新加载显示端。
@@ -435,7 +435,7 @@ npm run dist:mac       # dmg + zip（必须在 macOS 上执行）
 - Windows 产物在 Linux 上交叉打包需要 wine；macOS 产物必须在 macOS 上构建
 - 未配置代码签名证书，安装包未签名
 - 使用默认 Electron 图标，可自行放入 `build/icon.png` 等自行替换
-- Electron 内默认使用 JSON 存储，可直接切换到 SQLite：SQLite 后端优先使用 Electron 内置的 `node:sqlite`，不再依赖原生模块，打包后无需 `electron-rebuild`。只有运行环境缺少 `node:sqlite` 并回退到 `better-sqlite3` 时，才需要针对 Electron ABI 重建（Electron 45 的 ABI 为 150，与普通 Node 24 的 137 不同）
+- Electron 内默认使用 SQLite 存储（旧 `state.json` 会自动识别为 JSON）：SQLite 后端优先使用 Electron 内置的 `node:sqlite`，不再依赖原生模块，打包后无需 `electron-rebuild`。只有运行环境缺少 `node:sqlite` 并回退到 `better-sqlite3` 时，才需要针对 Electron ABI 重建（Electron 45 的 ABI 为 150，与普通 Node 24 的 137 不同）
 
 ## 验证
 
@@ -456,8 +456,8 @@ npm run test:all     # 聚合 API / MCP / 主题 / 手机端 / 鉴权
 
 ## 数据
 
-- 默认存储在 `data/state.json`，也可切换到 SQLite / PostgreSQL / MySQL（见上）
-- 旧版单积分榜数据（`data/state.json` 里直接是 people/teams/settings）启动时自动迁移为「默认项目」
+- 默认存储在 `data/scoreboard.db`（SQLite），也可切换到 JSON / PostgreSQL / MySQL 等（见上）；已有旧 `data/state.json` 会继续按 JSON 使用，可在「存储后端」迁移
+- 旧版单积分榜数据（`data/state.json` 里直接是 people/teams/settings）启动时自动迁移为「默认项目」；该文件仍存在且未写 `storage.json` 时仍使用 JSON 后端
 - 上传的头像保存在 `data/avatars/`，上限 2MB，仅支持 png/jpeg/webp/gif
 - `DATA_DIR=/path/to/dir npm start` 可更换数据目录
 

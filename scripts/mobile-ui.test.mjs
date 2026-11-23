@@ -88,6 +88,102 @@ async function createOperator() {
   assert.equal(res.status, 200, '创建操作员失败');
 }
 
+/** 创建队员账号，并配置一个针对固定人员的加分按钮。 */
+async function createMemberWithMenu() {
+  const loginRes = await fetch(BASE + '/api/v1/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: 'admin', password: 'test-admin-pass' }),
+  });
+  assert.ok(loginRes.ok, '管理员登录失败');
+  const session = sessionFromResponse(loginRes);
+  const headers = {
+    'Content-Type': 'application/json',
+    Cookie: session.cookie,
+    'X-CSRF-Token': session.csrf,
+  };
+
+  const snapshot = await (await fetch(BASE + '/api/state')).json();
+  let projectId = Object.keys(snapshot.projects)[0];
+  if (!projectId) {
+    const projectRes = await fetch(BASE + '/api/v1/projects', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ name: '手机测试项目' }),
+    });
+    assert.equal(projectRes.status, 201, '创建手机测试项目失败');
+    projectId = (await projectRes.json()).data.projectId;
+  }
+  assert.ok(projectId, '缺少默认项目');
+  const personRes = await fetch(`${BASE}/api/v1/projects/${projectId}/people`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ name: '队员投票目标' }),
+  });
+  assert.equal(personRes.status, 201, '创建队员目标人员失败');
+  const person = (await personRes.json()).data;
+
+  const created = await fetch(BASE + '/api/v1/auth/users', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      username: 'mobile-member',
+      password: 'member-pass-1',
+      role: 'member',
+      memberProjectId: projectId,
+      memberPersonId: person.id,
+    }),
+  });
+  assert.equal(created.status, 200, '创建队员失败');
+  const member = (await created.json()).data.user;
+
+  const patchRes = await fetch(`${BASE}/api/v1/projects/${projectId}/settings`, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify({
+      patch: {
+        featureMemberConsole: true,
+        featureBuzzer: true,
+        featureCountdown: true,
+        countdownDurationSec: 30,
+        buzzTimerMode: 'window',
+        buzzDurationSec: 60,
+        buzzTarget: 'self',
+        buzzScoreDelta: 0,
+        buzzButtonMode: 'all',
+        buzzRunButtonAction: false,
+        buzzLoserHint: true,
+        buzzStopTimerOnWin: true,
+        memberMenus: [{
+          userId: member.id,
+          enabled: true,
+          columns: 1,
+          gap: 16,
+          fillMode: 'adaptive',
+          buttons: [{
+            id: 'vote-mobile',
+            label: '投票',
+            enabled: true,
+            action: 'score',
+            targetType: 'person',
+            targetId: person.id,
+            delta: 1,
+            durationMs: 0,
+            height: 120,
+            fontSize: 28,
+            radius: 16,
+            color: '#e8a33d',
+            textColor: '',
+            image: '',
+          }],
+        }],
+      },
+    }),
+  });
+  assert.equal(patchRes.status, 200, '配置人员菜单失败');
+  return { projectId, personId: person.id, memberId: member.id, admin: session };
+}
+
 const skipReason = !chromiumPath()
   ? '未找到 Chromium（设置 CHROME_PATH 或安装 chromium / google-chrome）'
   : !existsSync(path.join(ROOT, 'public/v2/admin.html'))
@@ -130,6 +226,7 @@ test('手机管理端：全屏对话框与主要流程', { skip: skipReason }, a
 
   assert.ok(await waitUrl(BASE + '/api/health'), '服务未启动');
   await createOperator();
+  const memberSetup = await createMemberWithMenu();
   const cdpPort = await waitCdpPort(profile);
   assert.ok(cdpPort, 'Chromium 未启动');
   assert.ok(await waitUrl(`http://127.0.0.1:${cdpPort}/json/version`), 'CDP 未就绪');
@@ -183,9 +280,34 @@ test('手机管理端：全屏对话框与主要流程', { skip: skipReason }, a
       scrollWidth: document.documentElement.scrollWidth,
       topbar: Boolean(document.querySelector('.mobile-topbar')),
       tabs: [...document.querySelectorAll('.mobile-tab')].map((b) => b.textContent.trim()),
+      adminTheme: document.body.dataset.theme || '',
     };
+    byText('预览')?.click();
+    await sleep(250);
+    out.buzzBar = Boolean(document.querySelector('.preview-buzz-bar'));
+    out.buzzStartButton = Boolean(document.querySelector('.preview-buzz-bar .btn.primary'));
+    out.countdownBar = Boolean(document.querySelector('.preview-countdown'));
+    const cdButton = (text) => [...document.querySelectorAll('.preview-countdown .cd-btns button')]
+      .find((b) => b.textContent.trim() === text);
+    cdButton('开始')?.click();
+    await sleep(900);
+    out.countdownRunning = document.querySelector('.preview-countdown .cd-status')?.textContent || '';
+    out.previewCountdown = Boolean(
+      document.getElementById('display-preview')?.contentDocument
+        ?.querySelector('.overlay-countdown, .countdown-big'),
+    );
+    cdButton('暂停')?.click();
+    await sleep(350);
+    out.countdownPaused = document.querySelector('.preview-countdown .cd-status')?.textContent || '';
+    cdButton('重置')?.click();
+    await sleep(500);
+    out.countdownReset = document.querySelector('.preview-countdown .cd-status')?.textContent || '';
+    out.previewCountdownAfterReset = Boolean(
+      document.getElementById('display-preview')?.contentDocument
+        ?.querySelector('.overlay-countdown, .countdown-big'),
+    );
     byText('人员')?.click();
-    await sleep(200);
+    await sleep(250);
     const form = document.querySelector('.add-form');
     const input = form?.querySelector('input[placeholder="姓名"]');
     if (input) {
@@ -213,13 +335,13 @@ test('手机管理端：全屏对话框与主要流程', { skip: skipReason }, a
     out.hiddenPanels = document.querySelectorAll('.mobile-panel.is-hidden').length;
     out.visiblePanels = [...document.querySelectorAll('.mobile-panel')]
       .filter((p) => getComputedStyle(p).display !== 'none').length;
-    byText('主题')?.click();
+    byText('外观')?.click();
     await sleep(200);
     byText('人员')?.click();
     await sleep(200);
     out.draftKept = input?.value === '未提交';
 
-    byText('主题')?.click();
+    byText('外观')?.click();
     await sleep(200);
     byText('主题工作室')?.click();
     await sleep(1200);
@@ -251,8 +373,46 @@ test('手机管理端：全屏对话框与主要流程', { skip: skipReason }, a
     await sleep(500);
     out.accountDialog = Boolean(document.querySelector('.account-dialog'));
     out.accountTabs = [...document.querySelectorAll('.account-tabs button')].map((b) => b.textContent.trim());
+    byText('用户管理')?.click();
+    await sleep(500);
+    out.memberBindingRow = Boolean(document.querySelector('.account-row .account-member-binding'));
+    const roleSelect = document.querySelector('.account-form select');
+    if (roleSelect) {
+      roleSelect.value = 'member';
+      roleSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      await sleep(250);
+    }
+    out.newMemberBinding = Boolean(document.querySelector('.account-member-binding-new'));
     byText('关闭')?.click();
     await sleep(200);
+    byText('更多')?.click();
+    await sleep(200);
+    byText('人员菜单')?.click();
+    for (let i = 0; i < 100 && !document.querySelector('.member-console.is-preview .member-action'); i++) await sleep(100);
+    out.memberMenuDialog = Boolean(document.querySelector('.member-menu-dialog'));
+    out.memberPreviewTabs = [...document.querySelectorAll('.member-console.is-preview .member-tab')]
+      .map((b) => b.textContent.trim());
+    out.memberPreviewButtons = document.querySelectorAll('.member-console.is-preview .member-action').length;
+    out.memberPreviewFill = Boolean(
+      document.querySelector('.member-console.is-preview .member-content.is-fill'),
+    );
+    out.fillScreenOption = [...document.querySelectorAll('label')]
+      .some((label) => label.textContent.includes('铺满屏幕'));
+    const heightInput = document.querySelector(
+      '.member-button-editor input[type="number"][min="56"]',
+    );
+    if (heightInput) {
+      setValue(heightInput, '200');
+      heightInput.blur();
+      await sleep(200);
+    }
+    out.heightManual = heightInput?.value;
+    [...document.querySelectorAll('.member-console.is-preview .member-tab')]
+      .find((b) => b.textContent.trim() === '更多')?.click();
+    await sleep(150);
+    out.memberPreviewMore = Boolean(document.querySelector('.member-console.is-preview .member-account'));
+    byText('关闭')?.click();
+    await sleep(300);
     byText('更多')?.click();
     await sleep(200);
     byText('退出登录')?.click();
@@ -271,8 +431,38 @@ test('手机管理端：全屏对话框与主要流程', { skip: skipReason }, a
     byText('更多')?.click();
     await sleep(200);
     out.opHasNewProject = Boolean(byText('新建项目'));
-    out.opHasDataTools = Boolean(byText('数据导入 / 导出 / 备份'));
+    out.opHasDataTools = Boolean(byText('功能开关与数据'));
     out.opHasLogout = Boolean(byText('退出登录'));
+
+    // 队员：只有「操作 / 更多」两栏，大按钮执行管理端配置的动作
+    byText('退出登录')?.click();
+    for (let i = 0; i < 100 && !document.querySelector('#login-username'); i++) await sleep(100);
+    const memUser = document.querySelector('#login-username');
+    const memPass = document.querySelector('#login-password');
+    if (memUser && memPass) {
+      setValue(memUser, 'mobile-member');
+      setValue(memPass, 'member-pass-1');
+      document.querySelector('.login-submit')?.click();
+    }
+    for (let i = 0; i < 100 && !document.querySelector('.member-console'); i++) await sleep(100);
+    out.memberTabs = [...document.querySelectorAll('.member-tab')].map((b) => b.textContent.trim());
+    out.memberButtons = document.querySelectorAll('.member-action').length;
+    out.memberScrollWidth = document.documentElement.scrollWidth;
+    out.memberFill = Boolean(document.querySelector('.member-content.is-fill'));
+    out.memberButtonHeight = Math.round(
+      document.querySelector('.member-action')?.getBoundingClientRect().height || 0,
+    );
+    out.memberContentHeight = Math.round(
+      document.querySelector('.member-content')?.getBoundingClientRect().height || 0,
+    );
+    document.querySelector('.member-action:not(.is-disabled)')?.click();
+    await sleep(700);
+    [...document.querySelectorAll('.member-tab')]
+      .find((b) => b.textContent.trim() === '更多')?.click();
+    await sleep(200);
+    out.memberMoreLogout = Boolean(byText('退出登录'));
+    out.memberMoreAccount = document.querySelector('.member-account')?.textContent || '';
+    out.memberThemePicker = Boolean(document.querySelector('.member-console .admin-theme-picker'));
     return out;
   })()`;
 
@@ -282,7 +472,16 @@ test('手机管理端：全屏对话框与主要流程', { skip: skipReason }, a
   assert.equal(out.width, 390);
   assert.ok(out.scrollWidth <= out.width + 1, '不应有横向溢出');
   assert.equal(out.topbar, true);
-  assert.deepEqual(out.tabs, ['预览', '人员', '团队', '主题', '更多']);
+  assert.deepEqual(out.tabs, ['预览', '人员', '团队', '外观', '更多']);
+  assert.equal(out.adminTheme, 'macos-light', '管理端默认主题为 macOS 浅色');
+  assert.equal(out.buzzBar, true, '显示端预览包含抢答控制条');
+  assert.equal(out.buzzStartButton, true, '显示端预览包含开始抢答按钮');
+  assert.equal(out.countdownBar, true, '显示端预览包含计时器控制条');
+  assert.ok(out.countdownRunning.includes('进行中'), '计时器开始后显示进行中与剩余时间');
+  assert.equal(out.previewCountdown, true, '计时器在显示端预览中实际显示');
+  assert.ok(out.countdownPaused.includes('已暂停'), '计时器可暂停');
+  assert.equal(out.countdownReset, '未开始', '计时器可重置');
+  assert.equal(out.previewCountdownAfterReset, false, '重置后预览中的计时器消失');
   assert.equal(out.personAdded, true);
   assert.equal(out.scoreChanged, true);
   assert.equal(out.rowOverflow, false);
@@ -296,10 +495,250 @@ test('手机管理端：全屏对话框与主要流程', { skip: skipReason }, a
   assert.equal(out.settingsMobile, true);
   assert.equal(out.accountDialog, true, '账号与安全对话框可打开');
   assert.deepEqual(out.accountTabs, ['访问控制', '用户管理', '会话', 'API 令牌', '修改密码']);
+  assert.equal(out.memberBindingRow, true, '用户管理显示队员绑定选择');
+  assert.equal(out.newMemberBinding, true, '新建队员时显示项目与人员绑定选择');
+  assert.equal(out.memberMenuDialog, true, '人员功能菜单对话框可打开');
+  assert.deepEqual(out.memberPreviewTabs, ['操作', '更多'], '人员菜单预览包含两个真实标签');
+  assert.equal(out.memberPreviewButtons, 1, '人员菜单预览渲染真实按钮');
+  assert.equal(out.memberPreviewFill, true, '人员菜单预览应用铺满模式');
+  assert.equal(out.fillScreenOption, true, '列数 1 且单按钮时显示铺满屏幕选项');
+  assert.equal(out.heightManual, '200', '按钮高度支持手动输入');
+  assert.equal(out.memberPreviewMore, true, '人员菜单预览可切到更多页');
   assert.deepEqual(out.opTabs, ['预览', '人员', '团队', '更多'], '操作员没有主题标签');
   assert.equal(out.opHasAddForm, false, '操作员不能新增人员');
   assert.equal(out.opHasRemote, true, '操作员保留遥控记分');
   assert.equal(out.opHasNewProject, false, '操作员不能新建项目');
   assert.equal(out.opHasDataTools, false, '操作员不能导入导出');
   assert.equal(out.opHasLogout, true, '操作员可退出登录');
+  assert.deepEqual(out.memberTabs, ['操作', '更多'], '队员只有两个标签');
+  assert.equal(out.memberButtons, 1, '队员看到管理端配置的大按钮');
+  assert.equal(out.memberFill, true, '列数 1 且单按钮时铺满模式生效');
+  assert.ok(
+    out.memberButtonHeight > out.memberContentHeight * 0.7,
+    '单按钮铺满可用区域',
+  );
+  assert.ok(out.memberScrollWidth <= out.width + 1, '队员界面不应有横向溢出');
+  assert.equal(out.memberMoreLogout, true, '队员更多页可退出登录');
+  assert.ok(out.memberMoreAccount.includes('mobile-member'), '队员更多页显示账号');
+  assert.equal(out.memberThemePicker, true, '队员更多页可以修改管理端主题');
+
+  // 抢答：管理员开始后队员端出现抢答横幅，第一个按下即锁定
+  async function adminPost(admin, pathname, body) {
+    const res = await fetch(BASE + '/api/v1' + pathname, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: admin.cookie,
+        'X-CSRF-Token': admin.csrf,
+      },
+      body: JSON.stringify(body ?? {}),
+    });
+    assert.equal(res.status, 200, '管理员请求失败：' + pathname);
+    return res.json();
+  }
+  await adminPost(
+    memberSetup.admin,
+    `/projects/${memberSetup.projectId}/buzz/start`,
+    {},
+  );
+  await new Promise((r) => setTimeout(r, 800));
+  const buzzExpr = `(async () => {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    [...document.querySelectorAll('.member-tab')].find((b) => b.textContent.trim() === '操作')?.click();
+    await sleep(300);
+    const banner1 = document.querySelector('.member-buzz-banner')?.textContent || '';
+    const buttons = [...document.querySelectorAll('.member-action')];
+    const enabled = buttons.filter((b) => !b.disabled).length;
+    buttons.find((b) => !b.disabled)?.click();
+    await sleep(900);
+    return {
+      banner1,
+      enabled,
+      banner2: document.querySelector('.member-buzz-banner')?.textContent || '',
+      disabledAfter: [...document.querySelectorAll('.member-action')].every((b) => b.disabled),
+    };
+  })()`;
+  const buzzRes = await send('Runtime.evaluate', {
+    expression: buzzExpr, awaitPromise: true, returnByValue: true,
+  });
+  const buzz = buzzRes.result.value;
+  if (!buzz) throw new Error('抢答界面表达式失败：' + JSON.stringify(buzzRes.exceptionDetails));
+  assert.ok(buzz.banner1.includes('抢答开始'), '队员端显示抢答开始横幅');
+  assert.equal(buzz.enabled, 1, '抢答期间可点击按钮可用');
+  assert.ok(buzz.banner2.includes('你抢到了'), '第一个按下的队员锁定成功');
+  assert.equal(buzz.disabledAfter, true, '抢答后所有按钮禁用');
+
+  await adminPost(
+    memberSetup.admin,
+    `/projects/${memberSetup.projectId}/buzz/end`,
+    {},
+  );
+  await new Promise((r) => setTimeout(r, 700));
+  const buzzEndRes = await send('Runtime.evaluate', {
+    expression: `(() => ({
+      banner: Boolean(document.querySelector('.member-buzz-banner')),
+      enabled: [...document.querySelectorAll('.member-action')].filter((b) => !b.disabled).length,
+    }))()`,
+    returnByValue: true,
+  });
+  const buzzEnd = buzzEndRes.result.value;
+  assert.equal(buzzEnd.banner, false, '结束抢答后横幅消失');
+  assert.equal(buzzEnd.enabled, 1, '结束抢答后按钮恢复可用');
+
+  // 平板宽度：自适应铺满仍按可用区域伸缩
+  await send('Emulation.setDeviceMetricsOverride', {
+    width: 1024, height: 768, deviceScaleFactor: 1, mobile: true,
+  });
+  await new Promise((r) => setTimeout(r, 400));
+  const tabletRes = await send('Runtime.evaluate', {
+    expression: `(() => ({
+      width: innerWidth,
+      fill: Boolean(document.querySelector('.member-content.is-fill')),
+      button: Math.round(document.querySelector('.member-action')?.getBoundingClientRect().height || 0),
+      content: Math.round(document.querySelector('.member-content')?.getBoundingClientRect().height || 0),
+      scrollWidth: document.documentElement.scrollWidth,
+    }))()`,
+    returnByValue: true,
+  });
+  const tablet = tabletRes.result.value;
+  assert.equal(tablet.width, 1024);
+  assert.equal(tablet.fill, true, '平板宽度下自适应铺满生效');
+  assert.ok(tablet.button > tablet.content * 0.7, '平板宽度下单按钮铺满可用区域');
+  assert.ok(tablet.scrollWidth <= tablet.width + 1, '平板宽度下无横向溢出');
+
+  // 桌面宽度：同一队员界面组件仍只有「操作 / 更多」两栏
+  await send('Emulation.setDeviceMetricsOverride', {
+    width: 1280, height: 800, deviceScaleFactor: 1, mobile: false,
+  });
+  await new Promise((r) => setTimeout(r, 300));
+  const desktopExpr = `(async () => {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const byText = (text) => [...document.querySelectorAll('button, a')].find((b) => b.textContent.trim() === text);
+    [...document.querySelectorAll('.member-tab')].find((b) => b.textContent.trim() === '操作')?.click();
+    await sleep(150);
+    const out = {
+      width: innerWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+      tabs: [...document.querySelectorAll('.member-tab')].map((b) => b.textContent.trim()),
+      buttons: document.querySelectorAll('.member-action').length,
+    };
+    [...document.querySelectorAll('.member-tab')].find((b) => b.textContent.trim() === '更多')?.click();
+    await sleep(150);
+    byText('退出登录')?.click();
+    for (let i = 0; i < 100 && !document.querySelector('#login-username'); i++) await sleep(100);
+    out.loggedOut = Boolean(document.querySelector('#login-username'));
+    return out;
+  })()`;
+  const desktopRes = await send('Runtime.evaluate', {
+    expression: desktopExpr, awaitPromise: true, returnByValue: true,
+  });
+  const desktop = desktopRes.result.value;
+  assert.equal(desktop.width, 1280);
+  assert.ok(desktop.scrollWidth <= desktop.width + 1, '桌面队员界面不应有横向溢出');
+  assert.deepEqual(desktop.tabs, ['操作', '更多'], '桌面队员同样只有两个标签');
+  assert.equal(desktop.buttons, 1, '桌面队员看到同一批按钮');
+  assert.equal(desktop.loggedOut, true, '队员可退出登录');
+
+  const afterMember = await (await fetch(BASE + '/api/state')).json();
+  assert.equal(
+    afterMember.projects[memberSetup.projectId].people[memberSetup.personId].score,
+    1,
+    '点击队员按钮应执行管理端配置的加分',
+  );
+
+  // 桌面宽度下的人员菜单窗口：默认大窗口、可拖动，中间编辑区不能被挤成一条
+  const dialogExpr = `(async () => {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const byText = (text) => [...document.querySelectorAll('button, a')].find((b) => b.textContent.trim() === text);
+    const setValue = (el, value) => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+      setter.call(el, value);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+    const loginUser = document.querySelector('#login-username');
+    const loginPass = document.querySelector('#login-password');
+    if (loginUser && loginPass) {
+      setValue(loginUser, 'admin');
+      setValue(loginPass, 'test-admin-pass');
+      document.querySelector('.login-submit')?.click();
+    }
+    for (let i = 0; i < 100 && !document.querySelector('.topbar'); i++) await sleep(100);
+    for (let i = 0; i < 100; i++) {
+      const menuButton = byText('人员菜单');
+      if (menuButton && !menuButton.disabled) {
+        menuButton.click();
+        break;
+      }
+      await sleep(100);
+    }
+    for (let i = 0; i < 100 && !document.querySelector('.member-menu-dialog'); i++) await sleep(100);
+    await sleep(400);
+    const dlg = document.querySelector('.settings-dialog');
+    if (!dlg) {
+      return {
+        width: innerWidth,
+        missingDialog: true,
+        debug: {
+          topbar: Boolean(document.querySelector('.topbar')),
+          menuButton: Boolean(byText('人员菜单')),
+          dialogs: document.querySelectorAll('.settings-dialog').length,
+          login: Boolean(document.querySelector('#login-username')),
+          text: document.body.innerText.slice(0, 400),
+        },
+      };
+    }
+    const rect = dlg.getBoundingClientRect();
+    const editor = document.querySelector('.member-menu-editor')?.getBoundingClientRect();
+    const header = dlg.querySelector('.dialog-header');
+    const beforeLeft = rect.left;
+    header.dispatchEvent(new PointerEvent('pointerdown', {
+      bubbles: true, pointerId: 1, clientX: rect.left + 200, clientY: rect.top + 16,
+    }));
+    window.dispatchEvent(new PointerEvent('pointermove', {
+      bubbles: true, pointerId: 1, clientX: rect.left + 280, clientY: rect.top + 56,
+    }));
+    await sleep(300);
+    window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 }));
+    await sleep(200);
+    const after = dlg.getBoundingClientRect();
+    const title = document.querySelector('.member-menu-editor-head h3');
+    const titleRect = title?.getBoundingClientRect();
+    const enableLabel = [...document.querySelectorAll('.member-menu-editor-head label')]
+      .find((label) => label.textContent.includes('启用该队员菜单'));
+    const enableRect = enableLabel?.getBoundingClientRect();
+    return {
+      width: innerWidth,
+      dialogWidth: Math.round(rect.width),
+      dialogLeft: Math.round(rect.left),
+      editorWidth: editor ? Math.round(editor.width) : 0,
+      mobileClass: dlg.classList.contains('dialog-mobile'),
+      dragDelta: Math.round(after.left - beforeLeft),
+      titleWidth: titleRect ? Math.round(titleRect.width) : 0,
+      titleHeight: titleRect ? Math.round(titleRect.height) : 0,
+      enableHeight: enableRect ? Math.round(enableRect.height) : 0,
+      hasDisplayPreview: Boolean(document.querySelector('.member-display-preview')),
+    };
+  })()`;
+  const dialogRes = await send('Runtime.evaluate', {
+    expression: dialogExpr, awaitPromise: true, returnByValue: true,
+  });
+  if (dialogRes.exceptionDetails) {
+    throw new Error('桌面人员菜单表达式异常：' + JSON.stringify(dialogRes.exceptionDetails));
+  }
+  const dialog = dialogRes.result.value;
+  if (dialog?.missingDialog) {
+    throw new Error('人员菜单未打开：' + JSON.stringify(dialog.debug));
+  }
+  if (!dialog || dialog.width === undefined) {
+    throw new Error('桌面人员菜单表达式失败：' + JSON.stringify(dialogRes.result));
+  }
+  assert.equal(dialog.width, 1280);
+  assert.ok(dialog.dialogWidth > 1000, '人员菜单默认使用大窗口');
+  assert.equal(dialog.mobileClass, false, '桌面宽度不使用手机全屏样式');
+  assert.ok(dialog.dialogLeft > 0, '人员菜单窗口不是全屏');
+  assert.ok(dialog.editorWidth > 350, '人员菜单中间编辑区宽度正常');
+  assert.ok(dialog.dragDelta > 40, '人员菜单窗口可拖动');
+  assert.ok(dialog.titleWidth > 80 && dialog.titleHeight < 40, '编辑区标题保持横向，不再竖排');
+  assert.ok(dialog.enableHeight < 40, '启用菜单标签不再竖排');
+  assert.equal(dialog.hasDisplayPreview, false, '人员菜单已移除内嵌大屏预览');
 });

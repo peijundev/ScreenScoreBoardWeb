@@ -66,6 +66,11 @@ function collectAssets(project) {
   }
   if (project.settings.bgImage) refs.add(project.settings.bgImage);
   if (project.settings.customSound) refs.add(project.settings.customSound);
+  for (const menu of project.settings.memberMenus || []) {
+    for (const button of menu.buttons || []) {
+      if (button && button.image) refs.add(button.image);
+    }
+  }
   const assets = {};
   const warnings = [];
   let total = 0;
@@ -125,6 +130,13 @@ function assetReferences(key) {
     if (settings.welcomeImage === key) refs.push(project.name + ' 欢迎图');
     if (settings.customSound === key) refs.push(project.name + ' 记分音效');
     if (settings.bgmFile === key) refs.push(project.name + ' 背景音乐');
+    for (const menu of settings.memberMenus || []) {
+      for (const button of menu.buttons || []) {
+        if (button && button.image === key) {
+          refs.push(project.name + ' / 人员按钮「' + (button.label || button.id) + '」背景图');
+        }
+      }
+    }
     for (const p of Object.values(project.people)) {
       if (p.avatar === key) refs.push(project.name + ' / ' + p.name + ' 头像');
       if (p.cardImage === key) refs.push(project.name + ' / ' + p.name + ' 卡片图');
@@ -145,6 +157,11 @@ function clearAssetReferences(key) {
     if (settings.welcomeImage === key) { settings.welcomeImage = ''; cleared += 1; }
     if (settings.customSound === key) { settings.customSound = ''; cleared += 1; }
     if (settings.bgmFile === key) { settings.bgmFile = ''; cleared += 1; }
+    for (const menu of settings.memberMenus || []) {
+      for (const button of menu.buttons || []) {
+        if (button && button.image === key) { button.image = ''; cleared += 1; }
+      }
+    }
     for (const p of Object.values(project.people)) {
       if (p.avatar === key) { p.avatar = null; cleared += 1; }
       if (p.cardImage === key) { p.cardImage = null; cleared += 1; }

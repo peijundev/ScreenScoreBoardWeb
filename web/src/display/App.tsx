@@ -8,12 +8,14 @@ import {
   applyAutoAvatarSizes,
   assignRanks,
   buildItems,
+  clearPersistentSpotlights,
   interruptSpotlights,
   playScoreSound,
   prefersReducedMotion,
   rollNumber,
   spawnConfetti,
   spawnHighlight,
+  spawnPersistentSpotlight,
   spawnSpotlight,
 } from './lib/core';
 import {
@@ -185,6 +187,7 @@ export default function App(): JSX.Element {
   const prevRanks = useRef<Record<string, number>>({});
   const prevProject = useRef<string | null>(null);
   const manualSpotlightSeen = useRef<{ projectId: string; seq: number } | null>(null);
+  const lockedSpotlightKey = useRef<string | null>(null);
   const prevRects = useRef(new Map<string, DOMRect>());
   const prevOrderKey = useRef('');
   const offsetMs = useMemo(
@@ -484,6 +487,43 @@ export default function App(): JSX.Element {
     }
   }, [connected, project, settings, runtime]);
 
+  // 抢答锁定突显：赢家一直停留在中央，直到结束抢答（buzz 运行态清除）
+  useEffect(() => {
+    const buzz = project ? runtime?.buzz?.[project.id] ?? null : null;
+    const winner = buzz?.winner ?? null;
+    if (!winner) {
+      if (lockedSpotlightKey.current) {
+        clearPersistentSpotlights();
+        lockedSpotlightKey.current = null;
+      }
+      return;
+    }
+    const key = `${buzz?.roundId}:${winner.targetType}:${winner.targetId}`;
+    if (lockedSpotlightKey.current === key) return;
+    clearPersistentSpotlights();
+    lockedSpotlightKey.current = key;
+    const board = boardRef.current;
+    if (!project || !settings || !board) return;
+    const els = spotlightElsFor(
+      board,
+      project,
+      winner.targetType,
+      winner.targetId,
+      winner.targetType === 'team' ? 'team' : 'person',
+    );
+    if (!els.length) {
+      lockedSpotlightKey.current = null;
+      return;
+    }
+    spawnPersistentSpotlight(els, settings);
+  }, [project, runtime, settings]);
+
+  // 卸载时清理锁定层，避免切换页面后残留
+  useEffect(() => () => {
+    clearPersistentSpotlights();
+    lockedSpotlightKey.current = null;
+  }, []);
+
   // 轮播
   const carouselActive =
     viewParam == null &&
@@ -571,7 +611,15 @@ export default function App(): JSX.Element {
     return () => resetSpotlightParallel();
   }, [project?.id]);
 
-  if (!project || !settings) {
+  if (!project) {
+    return (
+      <div className="display-empty">
+        <h1>ScreenScoreBoard</h1>
+        <p>尚未创建项目，请在管理端新建项目。</p>
+      </div>
+    );
+  }
+  if (!settings) {
     return <div className="empty-tip">连接中…</div>;
   }
 
@@ -583,6 +631,17 @@ export default function App(): JSX.Element {
     viewParam === 'leaderboard' || (viewParam == null && effectiveView === 'leaderboard' && settings.featureLeaderboard);
   const showWelcome =
     viewParam === 'welcome' || (viewParam == null && effectiveView === 'welcome' && settings.featureWelcome);
+  const buzzRuntime = project ? runtime?.buzz?.[project.id] ?? null : null;
+  const forceCountdown = Boolean(
+    buzzRuntime && (buzzRuntime.phase === 'prepare' || buzzRuntime.phase === 'open'),
+  );
+  const buzzStartPrompt = Boolean(
+    buzzRuntime
+      && buzzRuntime.mode === 'prepare'
+      && buzzRuntime.phase === 'open'
+      && !buzzRuntime.winner
+      && settings.buzzShowStartPrompt !== false,
+  );
 
   const content = (
     <>
@@ -630,6 +689,8 @@ export default function App(): JSX.Element {
         settings={settings}
         countdown={project ? (runtime?.countdowns?.[project.id] ?? null) : null}
         offsetMs={offsetMs}
+        force={forceCountdown || buzzStartPrompt}
+        prompt={buzzStartPrompt ? '开始抢答' : undefined}
       />
       <Marquee settings={settings} />
       <audio ref={audioRef} loop preload="auto" />

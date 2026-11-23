@@ -3,6 +3,7 @@
 const { app, BrowserWindow, Menu, shell, dialog, session, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const modeUtils = require('./mode');
 const { nextZoom, zoomCommand } = require('./zoom');
 
@@ -25,9 +26,24 @@ let remoteUrl = '';
 let remoteUsername = '';
 let remoteDisplayUrl = '';
 let embeddedServer = false;
+let embeddedServerAuth = false;
+let localAuth = false;
 
 function localBaseURL() {
   return 'http://127.0.0.1:' + serverPort;
+}
+
+/** 本机模式启用登录时，列出可供局域网设备访问的地址。 */
+function lanBaseUrls() {
+  if (!embeddedServerAuth || !serverPort) return [];
+  const urls = [];
+  for (const list of Object.values(os.networkInterfaces())) {
+    for (const item of list || []) {
+      if (item.family !== 'IPv4' || item.internal) continue;
+      urls.push('http://' + item.address + ':' + serverPort);
+    }
+  }
+  return urls;
 }
 
 function baseURL() {
@@ -314,6 +330,7 @@ async function loginRemote(config) {
       remoteUrl,
       username: remoteUsername,
       displayUrl: remoteDisplayUrl,
+      localAuth,
     });
   } catch (error) {
     console.warn('[electron] 保存远程管理模式配置失败：' + error.message);
@@ -333,15 +350,29 @@ async function startDisplayMode(config) {
       remoteUrl,
       username: remoteUsername,
       displayUrl: remoteDisplayUrl,
+      localAuth,
     });
   } catch (error) {
     console.warn('[electron] 保存远程屏幕模式配置失败：' + error.message);
   }
 }
 
-async function startLocalMode() {
-  // 从运行中返回欢迎页后本地服务端仍在运行，直接复用，避免同一进程重复启动
-  if (!embeddedServer) await startEmbeddedServer();
+async function startLocalMode(options = {}) {
+  const wantAuth = options.auth === true;
+  // 从运行中返回欢迎页后本地服务端仍在运行：鉴权/监听地址已固定，需要重启应用才能切换
+  if (embeddedServer && embeddedServerAuth !== wantAuth) {
+    localAuth = wantAuth;
+    try {
+      modeUtils.saveConfig(app.getPath('userData'), {
+        mode: 'local', remoteUrl, username: remoteUsername, displayUrl: remoteDisplayUrl,
+        localAuth,
+      });
+    } catch (_) {}
+    throw new Error('登录开关已改变，请退出并重新启动应用后生效');
+  }
+  let info = { port: serverPort, auth: embeddedServerAuth, lanUrls: lanBaseUrls() };
+  if (!embeddedServer) info = await startEmbeddedServer({ auth: wantAuth });
+  localAuth = wantAuth;
   mode = 'local';
   try {
     modeUtils.saveConfig(app.getPath('userData'), {
@@ -349,10 +380,12 @@ async function startLocalMode() {
       remoteUrl,
       username: remoteUsername,
       displayUrl: remoteDisplayUrl,
+      localAuth,
     });
   } catch (error) {
     console.warn('[electron] 保存本地模式配置失败：' + error.message);
   }
+  return { port: info.port, auth: info.auth, lanUrls: info.lanUrls || lanBaseUrls() };
 }
 
 function registerLauncherHandlers() {
@@ -366,15 +399,16 @@ function registerLauncherHandlers() {
     remoteUrl,
     username: remoteUsername,
     displayUrl: remoteDisplayUrl,
+    localAuth,
   }));
 
-  ipcMain.handle('ssb:launcher:local', async () => {
+  ipcMain.handle('ssb:launcher:local', async (_event, config) => {
     if (launching) return { ok: false, error: '正在启动，请稍候' };
     launching = true;
     try {
-      await startLocalMode();
+      const info = await startLocalMode({ auth: config && config.auth === true });
       scheduleFinish();
-      return { ok: true };
+      return { ok: true, ...info };
     } catch (error) {
       launching = false;
       return { ok: false, error: '启动失败：' + (error && error.message ? error.message : '') };
@@ -425,7 +459,7 @@ function registerLauncherHandlers() {
 }
 
 function modeLabel() {
-  if (mode === 'local') return '本地（内置服务端）';
+  if (mode === 'local') return embeddedServerAuth ? '本地（内置服务端，登录已启用）' : '本地（内置服务端）';
   if (mode === 'remote-display') return '远程屏幕';
   return '远程管理';
 }
@@ -543,6 +577,15 @@ function buildMenu() {
             ];
             if (!displayOnly) lines.push('管理端：' + baseURL() + '/admin');
             lines.push('显示端：' + displayURL(null));
+            if (embeddedServerAuth) {
+              const urls = lanBaseUrls();
+              if (urls.length) {
+                lines.push('局域网管理端：' + urls[0] + '/admin');
+                lines.push('局域网显示端：' + urls[0] + '/display');
+              } else {
+                lines.push('局域网共享已启用，但未找到可用的局域网 IPv4 地址');
+              }
+            }
             dialog.showMessageBox({
               type: 'info',
               title: '关于 ' + APP_NAME,
@@ -557,7 +600,7 @@ function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-async function startEmbeddedServer() {
+async function startEmbeddedServer(options = {}) {
   const dataDir = path.join(app.getPath('userData'), 'data');
   fs.mkdirSync(dataDir, { recursive: true });
   process.env.DATA_DIR = dataDir;
@@ -567,9 +610,13 @@ async function startEmbeddedServer() {
   delete process.env.TLS_PASSPHRASE;
 
   const { start } = require('../server/index');
-  const result = await start({ port: 0, host: '127.0.0.1', auth: false });
+  const useAuth = options.auth === true;
+  const host = useAuth ? '0.0.0.0' : '127.0.0.1';
+  const result = await start({ port: 0, host, auth: useAuth });
   serverPort = result.port;
   embeddedServer = true;
+  embeddedServerAuth = useAuth;
+  return { port: serverPort, auth: useAuth, lanUrls: useAuth ? lanBaseUrls() : [] };
 }
 
 const gotLock = app.requestSingleInstanceLock();
@@ -604,6 +651,7 @@ if (!gotLock) {
     remoteUrl = config.remoteUrl;
     remoteUsername = config.username;
     remoteDisplayUrl = config.displayUrl;
+    localAuth = config.localAuth;
     openLauncherWindow();
 
     app.on('activate', () => {

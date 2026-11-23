@@ -14,7 +14,10 @@ const {
   OpError, NotFoundError, FeatureDisabledError,
   needString, needAvatar, needBio, needScore, needLayout, intRange,
 } = require('./validation');
-const { DEFAULT_SETTINGS, THEME_SETTING_KEYS, SETTINGS_VALIDATORS } = require('./settings');
+const {
+  DEFAULT_SETTINGS, THEME_SETTING_KEYS, SETTINGS_VALIDATORS,
+  normalizeMemberMenuButton, normalizeMemberMenuConfig, MEMBER_MENU_ENTRY_LIMIT,
+} = require('./settings');
 const { currentActor } = require('./auth/context');
 const { assertCanOp } = require('./auth/policy');
 const {
@@ -106,7 +109,8 @@ function genId(prefix) {
 }
 
 function defaultSettings() {
-  return { ...DEFAULT_SETTINGS };
+  // 深拷贝：memberMenus 等数组/对象不能被多个项目共享引用
+  return structuredClone(DEFAULT_SETTINGS);
 }
 
 function defaultProject(name) {
@@ -195,9 +199,35 @@ function moveEntityByOrder(collection, entity, direction) {
   other.order = tmp;
 }
 
+/** 加载旧数据时宽容清洗人员菜单：损坏项丢弃，不阻断启动。 */
+function coerceMemberMenus(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const item of raw) {
+    if (out.length >= MEMBER_MENU_ENTRY_LIMIT) break;
+    try {
+      const menu = normalizeMemberMenuConfig(item);
+      if (seen.has(menu.userId)) continue;
+      seen.add(menu.userId);
+      out.push(menu);
+    } catch (_) {
+      // 忽略损坏菜单，保留其余可用配置
+    }
+  }
+  return out;
+}
+
 function normalizeProject(raw) {
   const p = raw && typeof raw === 'object' ? raw : {};
   const settings = { ...DEFAULT_SETTINGS, ...(p.settings || {}) };
+  // 队员控制台：按账号的菜单做宽容收敛，避免损坏的持久化数据进入广播
+  settings.featureMemberConsole = settings.featureMemberConsole !== false;
+  settings.memberMenus = coerceMemberMenus(settings.memberMenus);
+  // 移除早期版本的项目级共享菜单字段
+  delete settings.memberMenuColumns;
+  delete settings.memberMenuGap;
+  delete settings.memberMenuButtons;
   // 旧版本：毛玻璃开关 → 卡片样式
   if (p.settings && !p.settings.cardStyle) {
     settings.cardStyle = p.settings.glassEnabled ? 'glass' : 'solid';
@@ -318,10 +348,7 @@ function normalizeState(raw) {
     });
     out.projects[project.id] = project;
   }
-  if (!Object.keys(out.projects).length) {
-    const project = defaultProject('默认项目');
-    out.projects[project.id] = project;
-  }
+  // 允许零项目：管理端会显示欢迎页，由用户新建/导入项目
   out.themes = normalizeThemeMap(raw && raw.themes);
   if (raw && raw.themeDrafts && typeof raw.themeDrafts === 'object') {
     for (const [projectId, draft] of Object.entries(raw.themeDrafts)) {
@@ -586,6 +613,48 @@ function requireFeature(project, key) {
   if (!project.settings[key]) throw new FeatureDisabledError('该功能未开启');
 }
 
+// ---- 记分 / 突显内部实现：操作员 op、队员菜单 op、REST 共用同一语义 ----
+function applyPersonScore(project, person, delta) {
+  const before = person.score;
+  person.score = Math.max(-100000, Math.min(100000, before + delta));
+  if (person.score !== before) {
+    const label = `${person.name} ${delta > 0 ? '+' : ''}${delta}`;
+    runtime.pushUndo(project.id, label, [{ personId: person.id, before }]);
+    runtime.pushScoreLog(project.id, label, delta);
+  }
+  return { score: person.score };
+}
+
+function applyTeamScore(project, team, delta) {
+  requireFeature(project, 'featureTeamScore');
+  const members = Object.values(project.people).filter((p) => p.teamId === team.id);
+  if (!members.length) throw new OpError('团队暂无成员');
+  const entries = members.map((p) => {
+    const before = p.score;
+    p.score = Math.max(-100000, Math.min(100000, before + delta));
+    return { personId: p.id, before };
+  });
+  const label = `${team.name} 各 ${delta > 0 ? '+' : ''}${delta}`;
+  runtime.pushUndo(project.id, label, entries);
+  runtime.pushScoreLog(project.id, label, delta);
+  return { count: members.length };
+}
+
+function pushSpotlightEvent(project, targetType, targetId, durationMs) {
+  requireFeature(project, 'featureSpotlightTrigger');
+  if (targetType !== 'person' && targetType !== 'team') {
+    throw new OpError('突显目标类型须为 person 或 team');
+  }
+  if (targetType === 'person') needPerson(project, targetId);
+  else needTeam(project, targetId);
+  let normalized;
+  if (durationMs !== undefined && durationMs !== null) {
+    normalized = intRange(durationMs, 0, 10000, '突显时长须为 0–10000 ms（0=跟随主题）');
+    if (normalized === 0) normalized = undefined;
+  }
+  return runtime.pushSpotlight(project.id, { targetType, targetId, durationMs: normalized });
+}
+
 function needTheme(themeId) {
   if (typeof themeId !== 'string' || !themeId) throw new NotFoundError('缺少主题 ID');
   const theme = state.themes[themeId];
@@ -636,7 +705,6 @@ function applyOp(op, payload, actor = currentActor()) {
     }
     case OPS.deleteProject: {
       needProject(payload.projectId);
-      if (Object.keys(state.projects).length <= 1) throw new OpError('至少保留一个项目');
       delete state.projects[payload.projectId];
       delete state.themeDrafts[payload.projectId];
       runtime.clearProjectRuntime(payload.projectId);
@@ -930,14 +998,7 @@ function applyOp(op, payload, actor = currentActor()) {
     case OPS.addScore: {
       const p = needPerson(project, payload.personId);
       const delta = needScore(payload.delta, '分数');
-      const before = p.score;
-      p.score = Math.max(-100000, Math.min(100000, before + delta));
-      if (p.score !== before) {
-        const label = `${p.name} ${delta > 0 ? '+' : ''}${delta}`;
-        runtime.pushUndo(project.id, label, [{ personId: p.id, before }]);
-        runtime.pushScoreLog(project.id, label, delta);
-      }
-      return { score: p.score };
+      return applyPersonScore(project, p, delta);
     }
     case OPS.setScore: {
       const p = needPerson(project, payload.personId);
@@ -951,36 +1012,200 @@ function applyOp(op, payload, actor = currentActor()) {
       return { score: p.score };
     }
     case OPS.addTeamScore: {
-      requireFeature(project, 'featureTeamScore');
       const team = needTeam(project, payload.teamId);
       const delta = needScore(payload.delta, '分数');
-      const members = Object.values(project.people).filter((p) => p.teamId === team.id);
-      if (!members.length) throw new OpError('团队暂无成员');
-      const entries = members.map((p) => {
-        const before = p.score;
-        p.score = Math.max(-100000, Math.min(100000, before + delta));
-        return { personId: p.id, before };
-      });
-      const label = `${team.name} 各 ${delta > 0 ? '+' : ''}${delta}`;
-      runtime.pushUndo(project.id, label, entries);
-      runtime.pushScoreLog(project.id, label, delta);
-      return { count: members.length };
+      return applyTeamScore(project, team, delta);
     }
     case OPS.triggerSpotlight: {
-      requireFeature(project, 'featureSpotlightTrigger');
       const targetType = payload.targetType;
-      if (targetType !== 'person' && targetType !== 'team') {
-        throw new OpError('突显目标类型须为 person 或 team');
-      }
       const targetId = needString(payload.targetId, '突显目标', 64);
-      if (targetType === 'person') needPerson(project, targetId);
-      else needTeam(project, targetId);
-      let durationMs;
-      if (payload.durationMs !== undefined && payload.durationMs !== null) {
-        durationMs = intRange(payload.durationMs, 0, 10000, '突显时长须为 0–10000 ms（0=跟随主题）');
-        if (durationMs === 0) durationMs = undefined;
+      return pushSpotlightEvent(project, targetType, targetId, payload.durationMs);
+    }
+    case OPS.memberAction: {
+      requireFeature(project, 'featureMemberConsole');
+      if (runtime.getBuzz(project.id)) {
+        throw new OpError('抢答进行中，请使用抢答按钮');
       }
-      return runtime.pushSpotlight(project.id, { targetType, targetId, durationMs });
+      const userId = actor && actor.userId;
+      if (!userId) throw new OpError('该操作仅限已绑定人员的队员账号');
+      if (actor.role === 'member' && actor.memberProjectId !== project.id) {
+        throw new OpError('该账号未绑定当前项目');
+      }
+      const menus = Array.isArray(project.settings.memberMenus)
+        ? project.settings.memberMenus
+        : [];
+      const rawMenu = menus.find((item) => item && item.userId === userId);
+      if (!rawMenu) throw new OpError('管理员尚未为该账号配置人员菜单');
+      let menu;
+      try {
+        menu = normalizeMemberMenuConfig(rawMenu);
+      } catch (_) {
+        throw new OpError('人员菜单配置非法，请让管理员重新保存');
+      }
+      if (!menu.enabled) throw new OpError('该账号的人员菜单已停用');
+      const buttonId = needString(payload.buttonId, '按钮 ID', 40);
+      const raw = menu.buttons.find((item) => item && item.id === buttonId);
+      if (!raw) throw new OpError('按钮不存在或已被删除');
+      let button;
+      try {
+        button = normalizeMemberMenuButton(raw);
+      } catch (_) {
+        throw new OpError('按钮配置非法，请让管理员重新保存人员菜单');
+      }
+      if (!button.enabled) throw new OpError('按钮已停用');
+      if (button.action === 'score') {
+        if (button.targetType === 'person') {
+          const person = needPerson(project, button.targetId);
+          const result = applyPersonScore(project, person, button.delta);
+          return {
+            action: button.action,
+            targetType: button.targetType,
+            targetId: button.targetId,
+            delta: button.delta,
+            ...result,
+          };
+        }
+        const team = needTeam(project, button.targetId);
+        const result = applyTeamScore(project, team, button.delta);
+        return {
+          action: button.action,
+          targetType: button.targetType,
+          targetId: button.targetId,
+          delta: button.delta,
+          ...result,
+        };
+      }
+      const event = pushSpotlightEvent(
+        project, button.targetType, button.targetId, button.durationMs,
+      );
+      return {
+        action: button.action,
+        targetType: button.targetType,
+        targetId: button.targetId,
+        seq: event && event.seq,
+      };
+    }
+    case OPS.buzzStart: {
+      requireFeature(project, 'featureBuzzer');
+      requireFeature(project, 'featureMemberConsole');
+      if (runtime.getBuzz(project.id)) throw new OpError('本轮抢答已开始');
+      const mode = project.settings.buzzTimerMode === 'window' ? 'window' : 'prepare';
+      const durationSec = intRange(
+        project.settings.buzzDurationSec, 1, 3600, '抢答倒计时时长须为 1–3600 秒',
+      );
+      const durationMs = durationSec * 1000;
+      // arm:false：由抢答计时器在结束点统一清空，避免“时间到”红字
+      runtime.startCountdown(project.id, durationMs, undefined, { arm: false });
+      return runtime.startBuzz(project.id, { mode, durationMs });
+    }
+    case OPS.buzzEnd: {
+      // 不要求 featureBuzzer：管理员关闭开关后也要能清理进行中的轮次
+      return { ended: runtime.endBuzz(project.id) };
+    }
+    case OPS.buzzPress: {
+      requireFeature(project, 'featureBuzzer');
+      const buzz = runtime.getBuzz(project.id);
+      if (!buzz) return { won: false, reason: 'inactive' };
+      if (buzz.winner) return { won: false, reason: 'taken', winner: buzz.winner };
+      // 计时已到但定时器回调尚未执行时，按结束时间判定，避免边界漏判
+      let phase = buzz.phase;
+      if (buzz.endsAt && Date.now() >= buzz.endsAt) {
+        phase = buzz.mode === 'prepare' ? 'open' : 'locked';
+      }
+      if (phase !== 'open') return { won: false, reason: phase };
+      const userId = actor && actor.userId;
+      if (!userId) throw new OpError('该操作仅限已绑定人员的队员账号');
+      if (actor.role === 'member' && actor.memberProjectId !== project.id) {
+        throw new OpError('该账号未绑定当前项目');
+      }
+      const person = actor.memberPersonId ? project.people[actor.memberPersonId] : null;
+      if (!person) return { won: false, reason: 'binding-missing' };
+      const menus = Array.isArray(project.settings.memberMenus)
+        ? project.settings.memberMenus
+        : [];
+      const rawMenu = menus.find((item) => item && item.userId === userId);
+      if (!rawMenu) return { won: false, reason: 'no-menu' };
+      let menu;
+      try {
+        menu = normalizeMemberMenuConfig(rawMenu);
+      } catch (_) {
+        return { won: false, reason: 'no-menu' };
+      }
+      if (!menu.enabled) return { won: false, reason: 'no-menu' };
+      const buttonId = needString(payload.buttonId, '按钮 ID', 40);
+      const raw = menu.buttons.find((item) => item && item.id === buttonId);
+      if (!raw) return { won: false, reason: 'no-button' };
+      let button;
+      try {
+        button = normalizeMemberMenuButton(raw);
+      } catch (_) {
+        return { won: false, reason: 'no-button' };
+      }
+      if (!button.enabled) return { won: false, reason: 'button-disabled' };
+      if (project.settings.buzzButtonMode === 'marked' && button.buzz !== true) {
+        return { won: false, reason: 'not-buzz-button' };
+      }
+
+      let targetType = 'person';
+      let targetId = person.id;
+      let targetName = person.name;
+      let team = null;
+      if (
+        project.settings.buzzTarget === 'team'
+        && person.teamId
+        && project.teams[person.teamId]
+      ) {
+        team = project.teams[person.teamId];
+        targetType = 'team';
+        targetId = team.id;
+        targetName = team.name;
+      }
+      const winner = {
+        userId,
+        username: actor.username || '',
+        personId: person.id,
+        personName: person.name,
+        teamId: team ? team.id : null,
+        teamName: team ? team.name : '',
+        targetType,
+        targetId,
+        targetName,
+        buttonId: button.id,
+        at: Date.now(),
+      };
+      runtime.setBuzzWinner(project.id, winner);
+
+      let warning = '';
+      const buzzDelta = Number(project.settings.buzzScoreDelta) || 0;
+      if (buzzDelta > 0) {
+        try {
+          if (targetType === 'team') applyTeamScore(project, team, buzzDelta);
+          else applyPersonScore(project, person, buzzDelta);
+        } catch (error) {
+          warning = error.message;
+        }
+      }
+      if (project.settings.buzzRunButtonAction) {
+        if (button.action === 'score') {
+          try {
+            if (button.targetType === 'person') {
+              const target = needPerson(project, button.targetId);
+              applyPersonScore(project, target, button.delta);
+            } else {
+              const target = needTeam(project, button.targetId);
+              applyTeamScore(project, target, button.delta);
+            }
+          } catch (error) {
+            warning = warning || error.message;
+          }
+        } else {
+          warning = warning || '按钮为突显动作，已由锁定突显覆盖';
+        }
+      }
+      if (buzz.mode === 'window' && project.settings.buzzStopTimerOnWin !== false) {
+        runtime.lockBuzz(project.id);
+      }
+      return { won: true, winner, warning: warning || undefined };
     }
     case OPS.resetScores: {
       requireFeature(project, 'featureResetScores');
@@ -1138,6 +1363,8 @@ function applyOp(op, payload, actor = currentActor()) {
       Object.assign(project.settings, next);
       // 关闭倒计时开关时立即清掉运行态，避免后台计时器继续跑
       if (validated.featureCountdown === false) runtime.resetCountdown(project.id);
+      // 关闭抢答总开关时立即结束当前轮次并清掉计时器
+      if (validated.featureBuzzer === false) runtime.endBuzz(project.id);
       return {};
     }
     default:
@@ -1161,6 +1388,13 @@ function walkAssetRefs(project, mapper) {
   }
   project.settings.bgImage = mapper(project.settings.bgImage);
   project.settings.customSound = mapper(project.settings.customSound);
+  for (const menu of project.settings.memberMenus || []) {
+    for (const button of menu.buttons || []) {
+      if (button && typeof button.image === 'string' && button.image) {
+        button.image = mapper(button.image);
+      }
+    }
+  }
 }
 
 function sanitizeImportedProject(raw) {
@@ -1251,6 +1485,79 @@ function sanitizeImportedProject(raw) {
   return project;
 }
 
+// ---------- 整库导出 / 导入 ----------
+const LIBRARY_SECTIONS = Object.freeze(['projects', 'themes', 'themeDrafts']);
+
+/** 从当前状态取选定范围的整库快照（不做深拷贝，调用方负责序列化）。 */
+function exportLibraryState(scope = LIBRARY_SECTIONS) {
+  const out = { version: state.version };
+  if (scope.includes('projects')) out.projects = state.projects;
+  if (scope.includes('themes')) out.themes = state.themes;
+  if (scope.includes('themeDrafts')) out.themeDrafts = state.themeDrafts;
+  return out;
+}
+
+/** 校验并清洗整库导入数据；只返回请求的范围，任何一节非法都不会修改现有状态。 */
+function sanitizeLibraryImport(raw, scope = LIBRARY_SECTIONS) {
+  const source = raw && raw.state && typeof raw.state === 'object' ? raw.state : raw;
+  if (!source || typeof source !== 'object' || Array.isArray(source)) {
+    throw new OpError('导入文件格式非法');
+  }
+  const out = {};
+  if (scope.includes('projects')) {
+    const rawProjects = source.projects;
+    if (!rawProjects || typeof rawProjects !== 'object' || Array.isArray(rawProjects)) {
+      throw new OpError('导入文件不包含项目数据');
+    }
+    const entries = Object.entries(rawProjects);
+    if (!entries.length) throw new OpError('导入文件不包含项目数据');
+    if (entries.length > 50) throw new OpError('导入项目数量超出上限（50）');
+    const projects = {};
+    for (const [id, item] of entries) {
+      if (!item || typeof item !== 'object') continue;
+      const projectId = typeof item.id === 'string' && item.id ? item.id : id;
+      try {
+        const project = normalizeProject({ ...item, id: projectId });
+        projects[project.id] = project;
+      } catch (error) {
+        logger.warn('忽略非法导入项目', { id, error: error.message });
+      }
+    }
+    if (!Object.keys(projects).length) throw new OpError('导入文件不包含可用项目');
+    out.projects = projects;
+  }
+  if (scope.includes('themes')) {
+    if (!source.themes || typeof source.themes !== 'object') {
+      throw new OpError('导入文件不包含主题数据');
+    }
+    const themes = normalizeThemeMap(source.themes);
+    if (Object.keys(themes).length > LIMITS.libraryCount) {
+      throw new OpError('导入主题数量超出上限（' + LIMITS.libraryCount + '）');
+    }
+    out.themes = themes;
+  }
+  if (scope.includes('themeDrafts')) {
+    const rawDrafts = source.themeDrafts && typeof source.themeDrafts === 'object'
+      ? source.themeDrafts
+      : {};
+    const projectIds = new Set(
+      out.projects ? Object.keys(out.projects) : Object.keys(state.projects),
+    );
+    const drafts = {};
+    for (const [projectId, draft] of Object.entries(rawDrafts)) {
+      if (!projectIds.has(projectId) || !draft || typeof draft !== 'object') continue;
+      try {
+        drafts[projectId] = normalizeDraft(draft, projectId);
+      } catch (error) {
+        logger.warn('忽略非法主题草稿', { projectId, error: error.message });
+      }
+      if (Object.keys(drafts).length >= 100) break;
+    }
+    out.themeDrafts = drafts;
+  }
+  return out;
+}
+
 module.exports = {
   state,
   DEFAULT_SETTINGS,
@@ -1274,6 +1581,9 @@ module.exports = {
   get storageKind() { return storageKind; },
   exportProjectData,
   sanitizeImportedProject,
+  LIBRARY_SECTIONS,
+  exportLibraryState,
+  sanitizeLibraryImport,
   walkAssetRefs,
   publicState,
   getTheme,

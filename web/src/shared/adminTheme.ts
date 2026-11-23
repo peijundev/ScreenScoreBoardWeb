@@ -23,7 +23,7 @@ export const ADMIN_THEMES: AdminThemeOption[] = [
   { id: 'android-light', label: 'Android 浅色', group: 'Android Material 3', dark: false },
 ];
 
-export const DEFAULT_ADMIN_THEME: AdminTheme = 'breeze-dark';
+export const DEFAULT_ADMIN_THEME: AdminTheme = 'macos-light';
 export const ADMIN_THEME_STORAGE_KEY = 'admin-theme';
 
 const VALID_THEMES = new Set<string>(ADMIN_THEMES.map((item) => item.id));

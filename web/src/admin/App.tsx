@@ -12,6 +12,9 @@ import AccountDialog from './components/AccountDialog';
 import StorageDialog from './components/StorageDialog';
 import BatchAddDialog from './components/BatchAddDialog';
 import MobileNav, { type MobileTab } from './components/MobileNav';
+import MemberConsole from './components/MemberConsole';
+import MemberMenuDialog from './components/MemberMenuDialog';
+import WelcomeScreen from './components/WelcomeScreen';
 import { DialogHost } from './components/dialogs';
 import Toasts from './components/Toasts';
 import { useMediaQuery } from './hooks/useMediaQuery';
@@ -20,7 +23,7 @@ import { useAuthStore } from '../shared/auth';
 
 type DialogKind =
   | 'settings' | 'features' | 'assets' | 'theme' | 'studio' | 'account' | 'storage'
-  | 'batchPeople' | 'batchTeams';
+  | 'batchPeople' | 'batchTeams' | 'memberMenu';
 
 export default function App(): JSX.Element {
   const snapshot = useAppStore((s) => s.snapshot);
@@ -31,6 +34,7 @@ export default function App(): JSX.Element {
   const openAccess = authStatus?.openAccess === true;
   const role = user?.role ?? 'viewer';
   const isAdmin = role === 'admin';
+  const isMember = role === 'member';
   const canScore = role === 'admin' || role === 'operator';
   const projects = useMemo(() => projectsOf(snapshot), [snapshot]);
   const [dialogs, setDialogs] = useState<DialogKind[]>([]);
@@ -38,9 +42,14 @@ export default function App(): JSX.Element {
     () => new URLSearchParams(location.search).get('project'),
   );
   const [mobileTab, setMobileTab] = useState<MobileTab>('people');
-  const project = projectOf(snapshot, projectId);
+  const boundProject = isMember && user?.memberProjectId
+    ? (snapshot?.projects[user.memberProjectId] ?? null)
+    : null;
+  // 队员账号跟着绑定项目走，不允许回退到其它项目
+  const project = isMember ? boundProject : projectOf(snapshot, projectId);
   const isSmall = useMediaQuery('(max-width: 860px)');
   const mobile = isSmall && project?.settings.featureMobileAdmin !== false;
+  const memberMode = isMember && (project ? project.settings.featureMemberConsole !== false : true);
 
   function openDialog(kind: DialogKind): void {
     setDialogs((prev) => {
@@ -76,7 +85,7 @@ export default function App(): JSX.Element {
 
   return (
     <>
-      {!mobile && (
+      {!mobile && !memberMode && projects.length > 0 && (
         <Toolbar
           project={project}
           projects={projects}
@@ -94,11 +103,33 @@ export default function App(): JSX.Element {
           onOpenStudio={() => openDialog('studio')}
           onOpenAccount={() => openDialog('account')}
           onOpenStorage={() => openDialog('storage')}
+          onOpenMemberMenu={() => openDialog('memberMenu')}
         />
       )}
       <Toasts />
 
-      {!project ? (
+      {!snapshot ? (
+        <p style={{ padding: 20, color: 'var(--text-dim)' }}>正在连接服务器…</p>
+      ) : memberMode ? (
+        <MemberConsole
+          project={project}
+          connected={connected}
+          user={user}
+          authEnabled={authEnabled}
+          openAccess={openAccess}
+        />
+      ) : projects.length === 0 ? (
+        <WelcomeScreen
+          projects={projects}
+          user={user}
+          authEnabled={authEnabled}
+          openAccess={openAccess}
+          isAdmin={isAdmin}
+          onSelectProject={setProjectId}
+          onOpenAccount={() => openDialog('account')}
+          onOpenStorage={() => openDialog('storage')}
+        />
+      ) : !project ? (
         <p style={{ padding: 20, color: 'var(--text-dim)' }}>正在连接服务器…</p>
       ) : mobile ? (
         <>
@@ -121,6 +152,7 @@ export default function App(): JSX.Element {
             onOpenStudio={() => openDialog('studio')}
             onOpenAccount={() => openDialog('account')}
             onOpenStorage={() => openDialog('storage')}
+            onOpenMemberMenu={() => openDialog('memberMenu')}
           />
           {/* 三个面板常驻挂载、仅隐藏，避免切 tab 丢失输入与预览状态 */}
           <div className={'mobile-panel' + (mobileTab === 'preview' ? '' : ' is-hidden')}>
@@ -195,6 +227,9 @@ export default function App(): JSX.Element {
       )}
       {isAdmin && dialogs.includes('storage') && (
         <StorageDialog onClose={() => closeDialog('storage')} />
+      )}
+      {project && isAdmin && dialogs.includes('memberMenu') && (
+        <MemberMenuDialog project={project} onClose={() => closeDialog('memberMenu')} />
       )}
       <DialogHost />
     </>

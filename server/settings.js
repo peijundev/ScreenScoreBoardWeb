@@ -191,6 +191,15 @@ const DEFAULT_SETTINGS = {
   bgmVolume: 0.3,             // 背景音乐音量 0–1
   bgmLoop: true,              // 背景音乐循环
   featureBuzzer: false,       // 抢答模式
+  buzzTimerMode: 'prepare',   // prepare（准备倒计时后开放）| window（倒计时期间抢答）
+  buzzDurationSec: 10,        // 抢答倒计时时长秒（1–3600）
+  buzzTarget: 'self',         // 抢答赢家突显目标：self（本人）| team（所属团队）
+  buzzScoreDelta: 0,          // 抢到后加分（0=只突显，0–10000）
+  buzzButtonMode: 'all',      // 抢答按钮范围：all（全部启用按钮）| marked（仅参与抢答按钮）
+  buzzRunButtonAction: false, // 抢到后执行按钮原本的加分动作
+  buzzLoserHint: true,        // 非赢家提示已被抢答
+  buzzStopTimerOnWin: true,   // window 模式抢到后立即关闭计时器
+  buzzShowStartPrompt: true,  // prepare 倒计时结束后，计时器显示「开始抢答」直到有人抢到
   featureTeamPk: false,       // 团队 PK
   featureCarousel: false,     // 轮播多屏
   carouselViews: ['cards', 'leaderboard', 'welcome'], // 轮播视图顺序
@@ -213,6 +222,10 @@ const DEFAULT_SETTINGS = {
   welcomeBgColor: '',         // 欢迎幕布纯色画板底色（图空时用）
   featureMobileAdmin: true,   // 管理端移动布局（关闭后手机也走桌面布局，作为回滚保险）
   adminTouchTargetSize: 44,   // 管理端最小触控目标边长 px（40–64）
+
+  // ---- 队员控制台 / 人员功能菜单 ----
+  featureMemberConsole: true, // 队员登录后使用「操作 / 更多」两栏控制台
+  memberMenus: [],            // 按队员账号逐个配置的按钮菜单（结构见 normalizeMemberMenuConfig）
 };
 
 
@@ -244,6 +257,89 @@ const THEME_SETTING_KEYS = new Set([
   // 排行榜 / 跑马灯 / 欢迎幕布
   'leaderboardScale', 'marqueeFontSize', 'marqueeColor', 'marqueeBgColor', 'welcomeBgColor',
 ]);
+
+// ---- 人员功能菜单按钮 ----
+const MEMBER_MENU_LIMIT = 24;
+const MEMBER_MENU_ENTRY_LIMIT = 200;
+const MEMBER_BUTTON_ID_RE = /^[A-Za-z0-9_-]+$/;
+
+function normalizeMemberMenuButtons(raw) {
+  if (!Array.isArray(raw)) throw new OpError('人员菜单按钮须为数组');
+  if (raw.length > MEMBER_MENU_LIMIT) {
+    throw new OpError(`人员菜单按钮最多 ${MEMBER_MENU_LIMIT} 个`);
+  }
+  const seen = new Set();
+  return raw.map((item) => {
+    const button = normalizeMemberMenuButton(item);
+    if (seen.has(button.id)) throw new OpError('人员菜单按钮 id 重复');
+    seen.add(button.id);
+    return button;
+  });
+}
+
+/** 严格校验并清洗单个按钮；未知字段丢弃。执行 op 时也用它复核持久化内容。 */
+function normalizeMemberMenuButton(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new OpError('人员菜单按钮须为对象');
+  }
+  const id = String(raw.id == null ? '' : raw.id).trim();
+  if (!MEMBER_BUTTON_ID_RE.test(id) || id.length > 40) {
+    throw new OpError('人员菜单按钮 id 非法');
+  }
+  const label = needString(raw.label, '按钮文字', 16);
+  const action = raw.action;
+  if (action !== 'score' && action !== 'spotlight') {
+    throw new OpError('人员菜单按钮动作非法');
+  }
+  const targetType = raw.targetType;
+  if (targetType !== 'person' && targetType !== 'team') {
+    throw new OpError('人员菜单按钮目标类型非法');
+  }
+  const targetId = needString(raw.targetId, '按钮目标', 64);
+  let delta = 0;
+  if (action === 'score') {
+    delta = Number(raw.delta);
+    if (!Number.isInteger(delta) || delta === 0 || Math.abs(delta) > 10000) {
+      throw new OpError('人员菜单按钮分值须为 ±10000 内非 0 整数');
+    }
+  }
+  const durationMs = raw.durationMs == null
+    ? 0
+    : intRange(raw.durationMs, 0, 10000, '按钮突显时长须为 0–10000 ms');
+  const height = intRange(raw.height, 56, 240, '按钮高度须为 56–240 px');
+  const fontSize = intRange(raw.fontSize, 14, 96, '按钮字号须为 14–96 px');
+  const radius = intRange(raw.radius, 0, 48, '按钮圆角须为 0–48 px');
+  if (typeof raw.color !== 'string' || !HEX_COLOR.test(raw.color)) {
+    throw new OpError('按钮颜色须为 #rrggbb');
+  }
+  const color = raw.color;
+  const textColor = hexOrEmpty(raw.textColor, '按钮文字颜色须为 #rrggbb 或留空');
+  const image = raw.image === '' || raw.image == null ? '' : needAvatar(raw.image);
+  const enabled = raw.enabled === undefined ? true : boolStrict(raw.enabled, '按钮启用开关');
+  const buzz = raw.buzz === undefined ? true : boolStrict(raw.buzz, '按钮抢答开关');
+  return {
+    id, label, enabled, buzz, action, targetType, targetId, delta, durationMs,
+    height, fontSize, radius, color, textColor, image,
+  };
+}
+
+/** 单个队员的菜单配置：账号 ID + 布局 + 按钮列表。 */
+function normalizeMemberMenuConfig(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new OpError('人员菜单配置须为对象');
+  }
+  const userId = needString(raw.userId, '人员菜单账号', 64);
+  const enabled = raw.enabled === undefined ? true : boolStrict(raw.enabled, '人员菜单启用开关');
+  const columns = raw.columns === undefined ? 2 : intRange(raw.columns, 1, 4, '人员菜单列数须为 1–4');
+  const gap = raw.gap === undefined ? 16 : intRange(raw.gap, 0, 48, '人员菜单间距须为 0–48 px');
+  const fillMode = raw.fillMode === undefined
+    ? (raw.fillScreen === true ? 'adaptive' : 'none')
+    : (['none', 'adaptive'].includes(raw.fillMode)
+      ? raw.fillMode
+      : (() => { throw new OpError('人员菜单铺满模式非法'); })());
+  const buttons = raw.buttons === undefined ? [] : normalizeMemberMenuButtons(raw.buttons);
+  return { userId, enabled, columns, gap, fillMode, buttons };
+}
 
 const SETTINGS_VALIDATORS = {
   title: (v) => needString(v, '标题', 30),
@@ -623,6 +719,24 @@ const SETTINGS_VALIDATORS = {
   },
   bgmLoop: (v) => boolStrict(v, '背景音乐循环开关'),
   featureBuzzer: (v) => boolStrict(v, '抢答模式开关'),
+  buzzTimerMode: (v) =>
+    (['prepare', 'window'].includes(v)
+      ? v
+      : (() => { throw new OpError('抢答计时器模式非法'); })()),
+  buzzDurationSec: (v) => intRange(v, 1, 3600, '抢答倒计时时长须为 1–3600 秒'),
+  buzzTarget: (v) =>
+    (['self', 'team'].includes(v)
+      ? v
+      : (() => { throw new OpError('抢答突显目标非法'); })()),
+  buzzScoreDelta: (v) => intRange(v, 0, 10000, '抢答加分须为 0–10000 的整数'),
+  buzzButtonMode: (v) =>
+    (['all', 'marked'].includes(v)
+      ? v
+      : (() => { throw new OpError('抢答按钮范围非法'); })()),
+  buzzRunButtonAction: (v) => boolStrict(v, '抢答执行按钮动作开关'),
+  buzzLoserHint: (v) => boolStrict(v, '输家提示开关'),
+  buzzStopTimerOnWin: (v) => boolStrict(v, '抢到即关闭计时器开关'),
+  buzzShowStartPrompt: (v) => boolStrict(v, '抢答开始提示开关'),
   featureTeamPk: (v) => boolStrict(v, '团队 PK 开关'),
   featureCarousel: (v) => boolStrict(v, '轮播开关'),
   carouselViews: (v) => {
@@ -662,7 +776,27 @@ const SETTINGS_VALIDATORS = {
   welcomeBgColor: (v) => hexOrEmpty(v, '欢迎幕布底色须为 #rrggbb 或留空'),
   featureMobileAdmin: (v) => boolStrict(v, '管理端移动布局开关'),
   adminTouchTargetSize: (v) => intRange(v, 40, 64, '触控目标尺寸须为 40–64'),
+
+  // ---- 队员控制台 / 人员功能菜单 ----
+  featureMemberConsole: (v) => boolStrict(v, '队员控制台开关'),
+  memberMenus: (v) => {
+    if (!Array.isArray(v)) throw new OpError('人员菜单须为数组');
+    if (v.length > MEMBER_MENU_ENTRY_LIMIT) {
+      throw new OpError(`人员菜单最多 ${MEMBER_MENU_ENTRY_LIMIT} 个队员`);
+    }
+    const seen = new Set();
+    return v.map((item) => {
+      const menu = normalizeMemberMenuConfig(item);
+      if (seen.has(menu.userId)) throw new OpError('人员菜单账号重复');
+      seen.add(menu.userId);
+      return menu;
+    });
+  },
 };
 
 
-module.exports = { DEFAULT_SETTINGS, THEME_SETTING_KEYS, SETTINGS_VALIDATORS };
+module.exports = {
+  DEFAULT_SETTINGS, THEME_SETTING_KEYS, SETTINGS_VALIDATORS,
+  normalizeMemberMenuButton, normalizeMemberMenuButtons, normalizeMemberMenuConfig,
+  MEMBER_MENU_LIMIT, MEMBER_MENU_ENTRY_LIMIT,
+};

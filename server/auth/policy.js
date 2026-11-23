@@ -2,9 +2,14 @@
 // 角色与权限的单一来源：op、REST v1 路由、旧版 /api/* 路由
 const { UnauthorizedError, ForbiddenError } = require('../validation');
 
-const ROLES = Object.freeze(['viewer', 'operator', 'admin']);
-const ROLE_RANK = Object.freeze({ viewer: 10, operator: 20, admin: 30 });
-const ROLE_LABELS = Object.freeze({ admin: '管理员', operator: '操作员', viewer: '只读' });
+const ROLES = Object.freeze(['viewer', 'member', 'operator', 'admin']);
+const ROLE_RANK = Object.freeze({ viewer: 10, member: 15, operator: 20, admin: 30 });
+const ROLE_LABELS = Object.freeze({
+  admin: '管理员',
+  operator: '操作员',
+  member: '队员',
+  viewer: '只读',
+});
 
 const { OPS } = require('../ops');
 
@@ -18,10 +23,17 @@ const OPERATOR_OPS = new Set([
   'undoTo',
 ]);
 
+// 队员只能执行管理端「人员功能菜单」里配置好的按钮；动作与目标由服务端解析
+const MEMBER_OPS = new Set(['memberAction', 'buzzPress']);
+
+function opMinRole(op) {
+  if (MEMBER_OPS.has(op)) return 'member';
+  if (OPERATOR_OPS.has(op)) return 'operator';
+  return 'admin';
+}
+
 const OP_MIN_ROLE = Object.freeze(
-  Object.fromEntries(
-    Object.keys(OPS).map((op) => [op, OPERATOR_OPS.has(op) ? 'operator' : 'admin']),
-  ),
+  Object.fromEntries(Object.keys(OPS).map((op) => [op, opMinRole(op)])),
 );
 
 function isRole(value) {
@@ -112,6 +124,7 @@ module.exports = {
   ROLE_RANK,
   ROLE_LABELS,
   OPERATOR_OPS,
+  MEMBER_OPS,
   OP_MIN_ROLE,
   isRole,
   roleRank,

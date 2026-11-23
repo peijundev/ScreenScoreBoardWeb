@@ -73,7 +73,7 @@ test('提供 Breeze / Adwaita / macOS / Android 各深/浅八套主题', () => {
     'macos-dark', 'macos-light',
     'android-dark', 'android-light',
   ]);
-  assert.equal(DEFAULT_ADMIN_THEME, 'breeze-dark');
+  assert.equal(DEFAULT_ADMIN_THEME, 'macos-light');
   assert.equal(new Set(ADMIN_THEMES.map((item) => item.group)).size, 4);
 });
 
@@ -82,9 +82,9 @@ test('旧值 dark/light 映射到 Breeze，未知值回退默认', () => {
   assert.equal(normalizeAdminTheme('light'), 'breeze-light');
   assert.equal(normalizeAdminTheme('adwaita-dark'), 'adwaita-dark');
   assert.equal(normalizeAdminTheme('android-dark'), 'android-dark');
-  assert.equal(normalizeAdminTheme('unknown'), 'breeze-dark');
-  assert.equal(normalizeAdminTheme(null), 'breeze-dark');
-  assert.equal(normalizeAdminTheme(undefined), 'breeze-dark');
+  assert.equal(normalizeAdminTheme('unknown'), 'macos-light');
+  assert.equal(normalizeAdminTheme(null), 'macos-light');
+  assert.equal(normalizeAdminTheme(undefined), 'macos-light');
 });
 
 test('读取并持久化主题', () => {
@@ -96,10 +96,10 @@ test('读取并持久化主题', () => {
   assert.equal(readAdminTheme(), 'breeze-dark');
 
   memory.set(ADMIN_THEME_STORAGE_KEY, 'not-a-theme');
-  assert.equal(readAdminTheme(), 'breeze-dark');
+  assert.equal(readAdminTheme(), 'macos-light');
 
   memory.clear();
-  assert.equal(readAdminTheme(), 'breeze-dark');
+  assert.equal(readAdminTheme(), 'macos-light');
 });
 
 test('应用主题写入 body 与 localStorage', () => {
@@ -273,4 +273,6 @@ test('管理端入口包含首屏主题初始化脚本', () => {
   assert.match(html, /android-dark/);
   assert.match(html, /android-light/);
   assert.match(html, /document\.body\.dataset\.theme/);
+  assert.match(html, /data-theme="macos-light"/);
+  assert.match(html, /macos-light/);
 });

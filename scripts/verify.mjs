@@ -12,6 +12,7 @@ import WebSocket from 'ws';
 
 const require = createRequire(import.meta.url);
 const { KINDS } = require('../server/storage/registry.js');
+const { createSqliteStorage } = require('../server/storage/sqlite.js');
 
 const PORT = 3456;
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -113,6 +114,7 @@ async function waitServer(options = {}) {
 }
 
 async function stopServer(proc) {
+  if (!proc || proc.exitCode !== null) return;
   proc.kill('SIGTERM');
   await new Promise((r) => proc.once('exit', r));
 }
@@ -212,9 +214,17 @@ async function main() {
       'GET / 重定向后可访问',
     );
   }
-  const st0 = await getState();
-  const projectId = Object.keys(st0.projects || {})[0];
-  assert(Boolean(projectId), '默认创建一个项目');
+  let st0 = await getState();
+  assert(Object.keys(st0.projects || {}).length === 0, '空库启动不自动创建项目');
+  const createProjectRes = await authFetch('/api/v1/projects', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: '默认项目' }),
+  });
+  const createProjectPayload = await createProjectRes.json();
+  const projectId = createProjectPayload.data.projectId;
+  assert(Boolean(projectId), '管理员可新建项目');
+  st0 = await getState();
   assert(st0.projects[projectId].settings.title === '计分板', '项目默认设置正确');
   assert(st0.projects[projectId].settings.displayStyle === 'guofeng', '默认显示风格为古风雅集');
   r = await fetch(BASE + '/../etc/passwd');
@@ -553,8 +563,9 @@ async function main() {
   });
 
   await new Promise((r) => setTimeout(r, 250));
-  const rawState = readFileSync(path.join(DATA_DIR, 'state.json'), 'utf8');
-  assert(!rawState.includes('\n  '), 'JSON 存盘默认使用 compact 格式');
+  const defaultHealth = await (await fetch(BASE + '/api/health')).json();
+  assert(defaultHealth.storage === 'sqlite', '默认存储后端为 SQLite');
+  assert(existsSync(path.join(DATA_DIR, 'scoreboard.db')), '默认落盘为 scoreboard.db');
 
   await adminOp('updateSettings', { patch: { columns: 6, theme: 'light', title: '决赛计分板' } });
   s = await viewer.waitState((st) => P(st).settings.columns === 6);
@@ -788,6 +799,129 @@ async function main() {
     .catch((e) => assert(/触控目标/.test(e.message), '触控目标尺寸上限被拒绝'));
   await adminOp('updateSettings', { patch: { featureMobileAdmin: 'yes' } })
     .catch((e) => assert(/布尔/.test(e.message), '非法管理端移动布局开关被拒绝'));
+
+  // ---- 队员控制台 / 人员功能菜单（按账号逐个配置） ----
+  const memberButton = (overrides = {}) => ({
+    id: 'vote-1', label: '投票', enabled: true, action: 'score',
+    targetType: 'person', targetId: pid, delta: 1, durationMs: 0,
+    height: 120, fontSize: 28, radius: 16, color: '#e8a33d', textColor: '', image: '',
+    ...overrides,
+  });
+  const memberMenu = (buttons, overrides = {}) => ({
+    userId: verifyMember.id,
+    enabled: true,
+    columns: 3,
+    gap: 24,
+    buttons,
+    ...overrides,
+  });
+  const memberCreate = await authFetch('/api/v1/auth/users', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: 'verify-member',
+      password: 'member-pass-1',
+      role: 'member',
+      memberProjectId: projectId,
+      memberPersonId: pid,
+    }),
+  });
+  const verifyMember = (await memberCreate.json()).data.user;
+  assert(memberCreate.ok && verifyMember.role === 'member' &&
+    verifyMember.memberProjectId === projectId && verifyMember.memberPersonId === pid,
+  '创建绑定项目与人员的队员账号');
+  await adminOp('updateSettings', {
+    patch: {
+      featureMemberConsole: true,
+      memberMenus: [memberMenu([
+        memberButton(),
+        memberButton({ id: 'show-1', label: '突显', action: 'spotlight', durationMs: 1500, delta: 0 }),
+      ])],
+      featureBuzzer: true,
+      buzzTimerMode: 'window',
+      buzzDurationSec: 5,
+      buzzTarget: 'team',
+      buzzScoreDelta: 1,
+      buzzButtonMode: 'marked',
+      buzzRunButtonAction: true,
+      buzzLoserHint: false,
+      buzzStopTimerOnWin: true,
+    },
+  });
+  s = await viewer.waitState((st) => (P(st).settings.memberMenus || []).length === 1);
+  assert(P(s).settings.memberMenus[0].userId === verifyMember.id &&
+    P(s).settings.memberMenus[0].columns === 3 &&
+    P(s).settings.memberMenus[0].gap === 24 &&
+    P(s).settings.memberMenus[0].buttons.length === 2 &&
+    P(s).settings.memberMenus[0].buttons[1].action === 'spotlight',
+  '人员菜单按账号配置并同步');
+  assert(P(s).settings.featureBuzzer === true &&
+    P(s).settings.buzzTimerMode === 'window' &&
+    P(s).settings.buzzDurationSec === 5 &&
+    P(s).settings.buzzTarget === 'team' &&
+    P(s).settings.buzzScoreDelta === 1 &&
+    P(s).settings.buzzButtonMode === 'marked' &&
+    P(s).settings.buzzRunButtonAction === true &&
+    P(s).settings.buzzLoserHint === false &&
+    P(s).settings.buzzStopTimerOnWin === true,
+  '抢答设置同步');
+  await adminOp('updateSettings', { patch: { buzzTimerMode: 'later' } })
+    .catch((e) => assert(/计时器模式/.test(e.message), '非法抢答计时器模式被拒绝'));
+  await adminOp('updateSettings', { patch: { buzzDurationSec: 0 } })
+    .catch((e) => assert(/倒计时时长/.test(e.message), '抢答倒计时下限被拒绝'));
+  await adminOp('updateSettings', { patch: { buzzDurationSec: 3601 } })
+    .catch((e) => assert(/倒计时时长/.test(e.message), '抢答倒计时上限被拒绝'));
+  await adminOp('updateSettings', { patch: { buzzTarget: 'other' } })
+    .catch((e) => assert(/突显目标/.test(e.message), '非法抢答突显目标被拒绝'));
+  await adminOp('updateSettings', { patch: { buzzScoreDelta: -1 } })
+    .catch((e) => assert(/加分/.test(e.message), '非法抢答加分被拒绝'));
+  await adminOp('updateSettings', { patch: { buzzButtonMode: 'some' } })
+    .catch((e) => assert(/按钮范围/.test(e.message), '非法抢答按钮范围被拒绝'));
+  await adminOp('updateSettings', { patch: { memberMenus: 'x' } })
+    .catch((e) => assert(/数组/.test(e.message), '非法人员菜单类型被拒绝'));
+  await adminOp('updateSettings', { patch: { memberMenus: [memberMenu([], { columns: 0 })] } })
+    .catch((e) => assert(/列数/.test(e.message), '非法人员菜单列数被拒绝'));
+  await adminOp('updateSettings', { patch: { memberMenus: [memberMenu([], { gap: 49 })] } })
+    .catch((e) => assert(/间距/.test(e.message), '非法人员菜单间距被拒绝'));
+  await adminOp('updateSettings', {
+    patch: { memberMenus: [memberMenu([]), memberMenu([])] },
+  }).catch((e) => assert(/重复/.test(e.message), '重复的队员菜单账号被拒绝'));
+  await adminOp('updateSettings', {
+    patch: { memberMenus: [memberMenu([memberButton({ delta: 0 })])] },
+  }).catch((e) => assert(/分值/.test(e.message), '人员菜单 0 分值被拒绝'));
+  await adminOp('updateSettings', {
+    patch: { memberMenus: [memberMenu([memberButton({ color: 'red' })])] },
+  }).catch((e) => assert(/颜色/.test(e.message), '非法人员菜单按钮颜色被拒绝'));
+  await adminOp('updateSettings', {
+    patch: {
+      featureMemberConsole: true,
+      memberMenus: [memberMenu([
+        memberButton(),
+        memberButton({ id: 'show-1', label: '突显', action: 'spotlight', durationMs: 1500, delta: 0 }),
+      ])],
+      featureBuzzer: true,
+      buzzTimerMode: 'window',
+      buzzDurationSec: 5,
+      buzzTarget: 'team',
+      buzzScoreDelta: 1,
+      buzzButtonMode: 'marked',
+      buzzRunButtonAction: true,
+      buzzLoserHint: false,
+      buzzStopTimerOnWin: true,
+    },
+  });
+
+  console.log('抢答运行态:');
+  const buzzStarted = await adminOp('buzzStart');
+  assert(buzzStarted.result?.mode === 'window' && buzzStarted.result?.phase === 'open',
+    '抢答可开始（window 模式）');
+  let buzzRuntime = await viewer.waitRuntime((r) => r.buzz?.[projectId]);
+  assert(buzzRuntime.buzz[projectId].phase === 'open' &&
+    buzzRuntime.countdowns[projectId]?.state === 'running',
+  '抢答启动联动倒计时（即使 featureCountdown 关闭）');
+  await adminOp('buzzEnd');
+  buzzRuntime = await viewer.waitRuntime((r) => !r.buzz?.[projectId]);
+  assert(!buzzRuntime.countdowns[projectId], '结束抢答清空计时器');
   await adminOp('updateSettings', { patch: { customSound: '../../etc/passwd' } }).catch((e) => {
     assert(/音效文件路径/.test(e.message), '非法音效路径被拒绝');
   });
@@ -1343,6 +1477,30 @@ async function main() {
     !existsSync(libImagePath) && P(libState).people[pid].avatar === null,
     '强制删除图片并移除头像引用');
   await adminOp('setAvatar', { kind: 'person', id: pid, avatar: up.path });
+
+  // 人员菜单按钮背景图纳入资源引用：删除前需强制，并清空按钮图片
+  r = await authFetch('/api/avatar', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: PNG });
+  const menuImg = await r.json();
+  await adminOp('updateSettings', {
+    patch: { memberMenus: [memberMenu([memberButton({ image: menuImg.path })])] },
+  });
+  delRes = await authFetch('/api/v1/assets/avatars/' + menuImg.path.split('/')[1], { method: 'DELETE' });
+  assert(delRes.status === 422, '被人员菜单引用的图片不可删除');
+  delRes = await authFetch('/api/v1/assets/avatars/' + menuImg.path.split('/')[1] + '?force=1', { method: 'DELETE' });
+  const menuDelData = await delRes.json().catch(() => ({}));
+  libState = await getState();
+  assert(delRes.ok && menuDelData.data?.cleared >= 1 &&
+    P(libState).settings.memberMenus[0].buttons[0].image === '',
+  '强制删除图片并清空人员菜单引用');
+  await adminOp('updateSettings', {
+    patch: {
+      memberMenus: [memberMenu([
+        memberButton(),
+        memberButton({ id: 'show-1', label: '突显', action: 'spotlight', durationMs: 1500, delta: 0 }),
+      ])],
+    },
+  });
+
   const assetsRes = await (await authFetch('/api/v1/assets')).json();
   assert(Array.isArray(assetsRes.data?.sounds) && assetsRes.data.sounds.some((a) => a.path === soundUp.path),
     '资源库列表包含已上传音效');
@@ -1391,7 +1549,6 @@ async function main() {
   await admin.sendOp('deleteProject', { projectId: projectId2 });
   s = await viewer.waitState((st) => !st.projects[projectId2]);
   assert(Object.keys(s.projects).length === 1, '项目可删除');
-  await admin.sendOp('deleteProject', { projectId }).catch((e) => assert(/至少保留/.test(e.message), '最后一个项目不可删除'));
   await adminOp('updateSettings', { patch: { columns: 5 } });
   await viewer.waitState((st) => P(st).settings.columns === 5);
 
@@ -1470,6 +1627,26 @@ async function main() {
     rp.settings.featureCountdown === false, '重启后新功能开关恢复');
   assert(rp.settings.featureMobileAdmin === false && rp.settings.adminTouchTargetSize === 52,
     '重启后管理端移动布局与触控目标尺寸恢复');
+  assert(rp.settings.featureMemberConsole === true &&
+    rp.settings.memberMenus.length === 1 &&
+    rp.settings.memberMenus[0].userId === verifyMember.id &&
+    rp.settings.memberMenus[0].columns === 3 &&
+    rp.settings.memberMenus[0].gap === 24 &&
+    rp.settings.memberMenus[0].buttons.length === 2 &&
+    rp.settings.memberMenus[0].buttons[1].action === 'spotlight',
+  '重启后按账号的人员菜单配置恢复');
+  assert(rp.settings.featureBuzzer === true &&
+    rp.settings.buzzTimerMode === 'window' &&
+    rp.settings.buzzDurationSec === 5 &&
+    rp.settings.buzzTarget === 'team' &&
+    rp.settings.buzzScoreDelta === 1 &&
+    rp.settings.buzzButtonMode === 'marked' &&
+    rp.settings.buzzRunButtonAction === true &&
+    rp.settings.buzzLoserHint === false &&
+    rp.settings.buzzStopTimerOnWin === true,
+  '重启后抢答设置恢复');
+  assert(!restored.runtime.buzz?.[projectId] && !restored.runtime.countdowns[projectId],
+    '重启后抢答与计时器运行态清空');
   assert(!restored.runtime.undoCounts[projectId] && !restored.runtime.countdowns[projectId] &&
     !restored.runtime.spotlightEvents[projectId], '重启后撤销栈、倒计时与手动突显运行态清空');
 
@@ -1479,10 +1656,14 @@ async function main() {
   server = startServer(sqliteEnv);
   await waitServer();
   let sqlState = await getState();
-  const sqlProjectId = Object.keys(sqlState.projects)[0];
-  assert(Boolean(sqlProjectId), 'SQLite 后端启动并初始化');
+  assert(sqlState.projects && typeof sqlState.projects === 'object', 'SQLite 后端启动并初始化');
   const sqlClient = wsClient('sqlite-admin', adminSession);
   await sqlClient.ready;
+  let sqlProjectId = Object.keys(sqlState.projects)[0];
+  if (!sqlProjectId) {
+    const created = await sqlClient.sendOp('addProject', { name: 'SQLite 测试项目' });
+    sqlProjectId = created.result.projectId;
+  }
   await sqlClient.waitState((st) => st.projects && st.projects[sqlProjectId]);
   const sqlAck = await sqlClient.sendOp('addPerson', { projectId: sqlProjectId, name: '持久化测试' });
   const sqlPid = sqlAck.result.personId;
@@ -1519,9 +1700,13 @@ async function main() {
     let srv = startServer({ ...env, DATA_DIR: dir });
     await waitServer();
     let st = await getState();
-    const pid = Object.keys(st.projects)[0];
     const client = wsClient(label + '-admin', adminSession);
     await client.ready;
+    let pid = Object.keys(st.projects)[0];
+    if (!pid) {
+      const created = await client.sendOp('addProject', { name: label + '测试项目' });
+      pid = created.result.projectId;
+    }
     await client.waitState((x) => x.projects && x.projects[pid]);
     const ack = await client.sendOp('addPerson', { projectId: pid, name: label + '测试' });
     await new Promise((r) => setTimeout(r, 400));
@@ -1561,6 +1746,23 @@ async function main() {
     storagePayload.data.backends.length === KINDS.length,
     `返回 ${KINDS.length} 种存储后端元数据`,
   );
+  const storageExportRes = await authFetch('/api/v1/storage/export');
+  assert(storageExportRes.ok, '管理员可导出完整数据');
+  const storageExportPayload = await storageExportRes.json();
+  assert(
+    storageExportPayload.format === 'screenscoreboard.library' &&
+      storageExportPayload.state &&
+      storageExportPayload.state.projects &&
+      storageExportPayload.state.themes !== undefined &&
+      storageExportPayload.state.themeDrafts !== undefined,
+    '整库导出快照包含项目、主题与草稿',
+  );
+  assert(
+    !/"passwordHash"|"users"|"tokens"/.test(JSON.stringify(storageExportPayload)),
+    '导出不含鉴权数据',
+  );
+  const anonExport = await fetch(BASE + '/api/v1/storage/export');
+  assert(anonExport.status === 401, '匿名不可导出存储数据');
   assert(
     storagePayload.data.backends.some(
       (b) => b.kind === 'redis' && b.recommended && b.recommendedLabel === '效率推荐',
@@ -1619,9 +1821,13 @@ async function main() {
   assert(testPayload.data.ok === true, '测试 TXT 连接成功');
 
   let cfgState = await getState();
-  const cfgProjectId = Object.keys(cfgState.projects)[0];
   const cfgClient = wsClient('config-admin', adminSession);
   await cfgClient.ready;
+  let cfgProjectId = Object.keys(cfgState.projects)[0];
+  if (!cfgProjectId) {
+    const created = await cfgClient.sendOp('addProject', { name: '迁移测试项目' });
+    cfgProjectId = created.result.projectId;
+  }
   await cfgClient.waitState((st) => st.projects && st.projects[cfgProjectId]);
   const cfgAck = await cfgClient.sendOp('addPerson', { projectId: cfgProjectId, name: '迁移测试' });
   const cfgPersonId = cfgAck.result.personId;
@@ -1663,7 +1869,7 @@ async function main() {
   const freshState = await getState();
   const freshPeople = Object.values(freshState.projects).flatMap((p) => Object.keys(p.people));
   assert(!freshPeople.includes(cfgPersonId), '仅保存不迁移时新后端为空');
-  assert(Object.keys(freshState.projects).length >= 1, '空库启动自动创建默认项目');
+  assert(Object.keys(freshState.projects).length === 0, '空库启动不自动创建项目');
 
   await stopServer(server);
   writeFileSync(path.join(configDir, 'storage.json'), '{not-json');
@@ -1713,6 +1919,145 @@ async function main() {
   assert(!JSON.stringify(testPayload).includes(secret), '测试连接错误不泄露密码');
   await stopServer(server);
   rmSync(secretDir, { recursive: true, force: true });
+
+  console.log('整库导入导出:');
+  const libraryDir = mkdtempSync(path.join(tmpdir(), 'sb-library-'));
+  await stopServer(server);
+  server = startServer({ DATA_DIR: libraryDir, STORAGE: 'json' });
+  await waitServer();
+  let libraryBase = await getState();
+  let libraryProjectId = Object.keys(libraryBase.projects)[0];
+  if (!libraryProjectId) {
+    const created = await authFetch('/api/v1/projects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: '整库导出项目' }),
+    });
+    const createdPayload = await created.json();
+    libraryProjectId = createdPayload.data.projectId;
+    libraryBase = await getState();
+  }
+  assert(Boolean(libraryProjectId), '整库测试项目已创建');
+
+  async function readSqliteLibrary(buf) {
+    const dir = mkdtempSync(path.join(tmpdir(), 'sb-sqlite-read-'));
+    const file = path.join(dir, 'library.db');
+    writeFileSync(file, buf);
+    const storage = createSqliteStorage({ file });
+    try {
+      await storage.init();
+      return await storage.load();
+    } finally {
+      await storage.close().catch(() => {});
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  let libRes = await authFetch('/api/v1/storage/export?format=json&scope=projects,themes,themeDrafts');
+  assert(libRes.ok, '整库 JSON 导出成功');
+  const libraryJson = await libRes.json();
+  assert(
+    libraryJson.format === 'screenscoreboard.library' &&
+      libraryJson.state.projects[libraryProjectId] &&
+      libraryJson.state.themes !== undefined &&
+      libraryJson.state.themeDrafts !== undefined,
+    'JSON 导出包含所选项目/主题/草稿',
+  );
+  libRes = await authFetch('/api/v1/storage/export?format=json&scope=projects');
+  const projectOnly = await libRes.json();
+  assert(projectOnly.state.projects && projectOnly.state.themes === undefined
+    && projectOnly.state.themeDrafts === undefined, '整库导出范围可只选项目');
+
+  libRes = await authFetch('/api/v1/storage/export?format=txt&scope=projects,themes');
+  const txtExport = await libRes.text();
+  const txtState = JSON.parse(txtExport);
+  assert(txtState.projects && txtState.themes && txtState.themeDrafts === undefined,
+    'TXT 导出为可解析的整库 JSON');
+
+  libRes = await authFetch('/api/v1/storage/export?format=sqlite&scope=projects,themes,themeDrafts');
+  const sqliteBuf = Buffer.from(await libRes.arrayBuffer());
+  assert(sqliteBuf.subarray(0, 16).toString('latin1') === 'SQLite format 3\u0000',
+    'SQLite 导出为数据库文件');
+  const sqliteLibrary = await readSqliteLibrary(sqliteBuf);
+  assert(sqliteLibrary.projects[libraryProjectId], 'SQLite 导出可回读项目');
+
+  libRes = await authFetch('/api/v1/storage/export?format=native');
+  const nativeState = JSON.parse(await libRes.text());
+  assert(nativeState.projects[libraryProjectId], '可导出当前后端原生文件');
+
+  const libraryImport = {
+    format: 'screenscoreboard.library',
+    version: 1,
+    scope: ['projects', 'themes', 'themeDrafts'],
+    state: {
+      version: 2,
+      projects: {
+        pr_import: {
+          id: 'pr_import', name: '整库导入项目', createdAt: 1,
+          people: {}, teams: {}, settings: { title: '导入标题' }, themeId: null,
+        },
+      },
+      themes: {},
+      themeDrafts: { pr_import: v2Theme('整库导入草稿', '#224466') },
+    },
+  };
+  let libraryImportRes = await authFetch(
+    '/api/v1/storage/import?format=json&scope=projects,themes,themeDrafts',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(libraryImport),
+    },
+  );
+  let libraryImportPayload = await libraryImportRes.json();
+  assert(libraryImportRes.ok && libraryImportPayload.data.counts.projects === 1, '整库 JSON 导入成功');
+  let libraryImportedState = await getState();
+  assert(libraryImportedState.projects.pr_import && !libraryImportedState.projects[libraryProjectId],
+    '整库导入替换项目库');
+  const libraryImportedRaw = JSON.parse(readFileSync(path.join(libraryDir, 'state.json'), 'utf8'));
+  assert(libraryImportedRaw.projects.pr_import
+    && libraryImportedRaw.projects.pr_import.settings.title === '导入标题', '导入项目已持久化');
+  assert(libraryImportedRaw.themes && Object.keys(libraryImportedRaw.themes).length === 0, '导入替换主题库');
+  assert(libraryImportedRaw.themeDrafts && libraryImportedRaw.themeDrafts.pr_import, '导入主题草稿已持久化');
+
+  libraryImportRes = await authFetch(
+    '/api/v1/storage/import?format=sqlite&scope=projects,themes,themeDrafts',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: sqliteBuf,
+    },
+  );
+  libraryImportPayload = await libraryImportRes.json();
+  assert(libraryImportRes.ok, '整库 SQLite 导入成功');
+  libraryImportedState = await getState();
+  assert(libraryImportedState.projects[libraryProjectId], 'SQLite 导入恢复原项目');
+
+  libraryImportRes = await authFetch('/api/v1/storage/import?format=txt&scope=projects,themes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: txtExport,
+  });
+  assert(libraryImportRes.ok, '整库 TXT 导入成功');
+  libraryImportedState = await getState();
+  assert(libraryImportedState.projects[libraryProjectId], 'TXT 导入恢复原项目');
+
+  const badExport = await authFetch('/api/v1/storage/export?format=bad');
+  assert(badExport.status === 422, '非法整库导出格式被拒绝');
+  const badLibraryImport = await authFetch('/api/v1/storage/import?format=json&scope=projects', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  });
+  assert([400, 422].includes(badLibraryImport.status), '非法整库导入文件被拒绝');
+  const anonImport = await fetch(BASE + '/api/v1/storage/import?format=json&scope=projects', {
+    method: 'POST',
+    body: '{}',
+  });
+  assert(anonImport.status === 401, '匿名不可整库导入');
+
+  await stopServer(server);
+  rmSync(libraryDir, { recursive: true, force: true });
 
   rmSync(configDir, { recursive: true, force: true });
   rmSync(DATA_DIR, { recursive: true, force: true });

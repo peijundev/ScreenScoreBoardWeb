@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type JSX } from 'react';
+import { useCallback, useEffect, useMemo, useState, type JSX } from 'react';
 import {
   changePassword,
   createToken,
@@ -22,6 +22,8 @@ import {
   type TokenInfo,
 } from '../../shared/auth';
 import { toast } from '../../shared/ui';
+import { projectsOf, useAppStore } from '../../shared/store';
+import type { Project } from '../../shared/types';
 import DialogShell from './DialogShell';
 import { confirm, prompt } from './dialogs';
 
@@ -30,6 +32,7 @@ type Tab = 'access' | 'password' | 'sessions' | 'tokens' | 'users';
 const roleLabel: Record<Role, string> = {
   admin: '管理员',
   operator: '操作员',
+  member: '队员',
   viewer: '只读',
 };
 
@@ -38,6 +41,12 @@ function formatTime(value: string | null | undefined): string {
   const ms = Date.parse(value);
   if (!Number.isFinite(ms)) return '—';
   return new Date(ms).toLocaleString();
+}
+
+function sortedPeople(project: Project | undefined): Array<{ id: string; name: string }> {
+  return Object.values(project?.people || {})
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    .map((person) => ({ id: person.id, name: person.name }));
 }
 
 export default function AccountDialog({ onClose }: { onClose: () => void }): JSX.Element {
@@ -64,6 +73,23 @@ export default function AccountDialog({ onClose }: { onClose: () => void }): JSX
   const [newDisplayName, setNewDisplayName] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
   const [newUserRole, setNewUserRole] = useState<Role>('operator');
+  const snapshot = useAppStore((s) => s.snapshot);
+  const projects = useMemo(() => projectsOf(snapshot), [snapshot]);
+  const [newMemberProjectId, setNewMemberProjectId] = useState('');
+  const [newMemberPersonId, setNewMemberPersonId] = useState('');
+  const [bindingDrafts, setBindingDrafts] = useState<
+    Record<string, { projectId: string; personId: string }>
+  >({});
+  const newMemberProject = projects.find((p) => p.id === newMemberProjectId);
+  const newMemberPeople = sortedPeople(newMemberProject);
+
+  useEffect(() => {
+    if (newUserRole !== 'member' || newMemberProjectId) return;
+    const project = projects[0];
+    if (!project) return;
+    setNewMemberProjectId(project.id);
+    setNewMemberPersonId(sortedPeople(project)[0]?.id ?? '');
+  }, [newUserRole, newMemberProjectId, projects]);
 
   const loadUsers = useCallback(async (): Promise<void> => {
     if (!isAdmin) return;
@@ -180,6 +206,13 @@ export default function AccountDialog({ onClose }: { onClose: () => void }): JSX
 
   async function addUser(e: React.FormEvent): Promise<void> {
     e.preventDefault();
+    if (newUserRole === 'member') {
+      const project = projects.find((p) => p.id === newMemberProjectId);
+      if (!project || !project.people[newMemberPersonId]) {
+        toast('请选择队员绑定的项目与人员');
+        return;
+      }
+    }
     setBusy(true);
     try {
       await createUser({
@@ -187,10 +220,14 @@ export default function AccountDialog({ onClose }: { onClose: () => void }): JSX
         password: newUserPassword,
         role: newUserRole,
         displayName: newDisplayName.trim() || newUsername.trim(),
+        memberProjectId: newUserRole === 'member' ? newMemberProjectId : null,
+        memberPersonId: newUserRole === 'member' ? newMemberPersonId : null,
       });
       setNewUsername('');
       setNewDisplayName('');
       setNewUserPassword('');
+      setNewMemberProjectId('');
+      setNewMemberPersonId('');
       await loadUsers();
       toast('用户已创建');
     } catch (err) {
@@ -201,6 +238,18 @@ export default function AccountDialog({ onClose }: { onClose: () => void }): JSX
   }
 
   async function changeRole(user: AuthUser, role: Role): Promise<void> {
+    if (role === 'member' && (!user.memberProjectId || !user.memberPersonId)) {
+      const project = projects[0];
+      setBindingDrafts((prev) => ({
+        ...prev,
+        [user.id]: prev[user.id] ?? {
+          projectId: project?.id ?? '',
+          personId: sortedPeople(project)[0]?.id ?? '',
+        },
+      }));
+      toast('请选择该队员绑定的项目与人员，然后点「保存绑定」');
+      return;
+    }
     try {
       await updateUser(user.id, { role });
       await loadUsers();
@@ -208,6 +257,42 @@ export default function AccountDialog({ onClose }: { onClose: () => void }): JSX
     } catch (err) {
       toast((err as Error).message);
     }
+  }
+
+  async function saveBinding(user: AuthUser): Promise<void> {
+    const draft = bindingDrafts[user.id] ?? {
+      projectId: user.memberProjectId ?? '',
+      personId: user.memberPersonId ?? '',
+    };
+    const project = projects.find((p) => p.id === draft.projectId);
+    if (!project || !project.people[draft.personId]) {
+      toast('请选择有效的项目与人员');
+      return;
+    }
+    try {
+      await updateUser(user.id, {
+        role: 'member',
+        memberProjectId: draft.projectId,
+        memberPersonId: draft.personId,
+      });
+      setBindingDrafts((prev) => {
+        const next = { ...prev };
+        delete next[user.id];
+        return next;
+      });
+      await loadUsers();
+      toast('队员绑定已保存');
+    } catch (err) {
+      toast((err as Error).message);
+    }
+  }
+
+  function cancelBinding(userId: string): void {
+    setBindingDrafts((prev) => {
+      const next = { ...prev };
+      delete next[userId];
+      return next;
+    });
   }
 
   async function toggleDisabled(user: AuthUser): Promise<void> {
@@ -342,6 +427,7 @@ export default function AccountDialog({ onClose }: { onClose: () => void }): JSX
                 />
                 <select value={newUserRole} onChange={(e) => setNewUserRole(e.target.value as Role)}>
                   <option value="operator">操作员</option>
+                  <option value="member">队员</option>
                   <option value="viewer">只读</option>
                   <option value="admin">管理员</option>
                 </select>
@@ -355,6 +441,33 @@ export default function AccountDialog({ onClose }: { onClose: () => void }): JSX
                   创建
                 </button>
               </div>
+              {newUserRole === 'member' && (
+                <div className="account-form-row account-member-binding account-member-binding-new">
+                  <select
+                    value={newMemberProjectId}
+                    onChange={(e) => {
+                      const project = projects.find((p) => p.id === e.target.value);
+                      setNewMemberProjectId(e.target.value);
+                      setNewMemberPersonId(sortedPeople(project)[0]?.id ?? '');
+                    }}
+                  >
+                    <option value="">选择项目</option>
+                    {projects.map((project) => (
+                      <option key={project.id} value={project.id}>{project.name}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={newMemberPersonId}
+                    onChange={(e) => setNewMemberPersonId(e.target.value)}
+                  >
+                    <option value="">选择人员</option>
+                    {newMemberPeople.map((person) => (
+                      <option key={person.id} value={person.id}>{person.name}</option>
+                    ))}
+                  </select>
+                  <span className="hint">队员账号必须绑定项目与人员</span>
+                </div>
+              )}
             </form>
 
             <div className="account-list">
@@ -376,7 +489,7 @@ export default function AccountDialog({ onClose }: { onClose: () => void }): JSX
                         disabled={self || lastAdmin}
                         onChange={(e) => { void changeRole(user, e.target.value as Role); }}
                       >
-                        {(['admin', 'operator', 'viewer'] as Role[]).map((role) => (
+                        {(['admin', 'operator', 'member', 'viewer'] as Role[]).map((role) => (
                           <option key={role} value={role}>{roleLabel[role]}</option>
                         ))}
                       </select>
@@ -414,6 +527,79 @@ export default function AccountDialog({ onClose }: { onClose: () => void }): JSX
                         删除
                       </button>
                     </div>
+                    {(user.role === 'member' || bindingDrafts[user.id]) && (() => {
+                      const draft = bindingDrafts[user.id] ?? {
+                        projectId: user.memberProjectId ?? '',
+                        personId: user.memberPersonId ?? '',
+                      };
+                      const project = projects.find((p) => p.id === draft.projectId);
+                      const people = sortedPeople(project);
+                      const projectMissing = Boolean(draft.projectId) && !project;
+                      const personMissing = Boolean(draft.personId)
+                        && !people.some((person) => person.id === draft.personId);
+                      return (
+                        <div className="account-member-binding">
+                          <span className="hint">绑定人员</span>
+                          <select
+                            value={draft.projectId}
+                            onChange={(e) => {
+                              const nextProject = projects.find((p) => p.id === e.target.value);
+                              setBindingDrafts((prev) => ({
+                                ...prev,
+                                [user.id]: {
+                                  projectId: e.target.value,
+                                  personId: sortedPeople(nextProject)[0]?.id ?? '',
+                                },
+                              }));
+                            }}
+                          >
+                            <option value="">选择项目</option>
+                            {projectMissing && (
+                              <option value={draft.projectId}>（项目已删除）</option>
+                            )}
+                            {projects.map((item) => (
+                              <option key={item.id} value={item.id}>{item.name}</option>
+                            ))}
+                          </select>
+                          <select
+                            value={draft.personId}
+                            onChange={(e) => {
+                              setBindingDrafts((prev) => ({
+                                ...prev,
+                                [user.id]: { ...draft, personId: e.target.value },
+                              }));
+                            }}
+                          >
+                            <option value="">选择人员</option>
+                            {personMissing && (
+                              <option value={draft.personId}>（人员已删除）</option>
+                            )}
+                            {people.map((person) => (
+                              <option key={person.id} value={person.id}>{person.name}</option>
+                            ))}
+                          </select>
+                          <button
+                            className="btn small primary"
+                            type="button"
+                            onClick={() => { void saveBinding(user); }}
+                          >
+                            保存绑定
+                          </button>
+                          {bindingDrafts[user.id] && (
+                            <button
+                              className="btn small"
+                              type="button"
+                              onClick={() => cancelBinding(user.id)}
+                            >
+                              取消
+                            </button>
+                          )}
+                          {(projectMissing || personMissing) && (
+                            <span className="hint">绑定缺失，请重新选择</span>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })}

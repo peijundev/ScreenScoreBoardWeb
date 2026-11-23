@@ -389,6 +389,62 @@ const routes = [
       return { data: result };
     },
   },
+  {
+    method: 'POST', path: '/projects/:projectId/member-action', access: 'member',
+    summary: '执行管理端为队员配置的人员菜单按钮', mutates: true,
+    input: {
+      type: 'object',
+      required: ['buttonId'],
+      properties: {
+        buttonId: { type: 'string', description: '人员功能菜单中的按钮 ID' },
+      },
+      additionalProperties: false,
+    },
+    handler: (ctx) => {
+      requireProject(ctx.params.projectId);
+      const result = commit(OPS.memberAction, {
+        projectId: ctx.params.projectId,
+        buttonId: ctx.body.buttonId,
+      });
+      return { data: result };
+    },
+  },
+
+  {
+    method: 'POST', path: '/projects/:projectId/buzz/start', summary: '开始抢答（启动联动倒计时）', mutates: true,
+    handler: (ctx) => {
+      requireProject(ctx.params.projectId);
+      return { data: commit(OPS.buzzStart, { projectId: ctx.params.projectId }) };
+    },
+  },
+  {
+    method: 'POST', path: '/projects/:projectId/buzz/end', summary: '结束抢答并清除锁定突显', mutates: true,
+    handler: (ctx) => {
+      requireProject(ctx.params.projectId);
+      return { data: commit(OPS.buzzEnd, { projectId: ctx.params.projectId }) };
+    },
+  },
+  {
+    method: 'POST', path: '/projects/:projectId/buzz/press', access: 'member',
+    summary: '队员抢答；只有第一个成功的请求获胜', mutates: true,
+    input: {
+      type: 'object',
+      required: ['buttonId'],
+      properties: {
+        buttonId: { type: 'string', description: '队员菜单按钮 ID' },
+      },
+      additionalProperties: false,
+    },
+    handler: (ctx) => {
+      requireProject(ctx.params.projectId);
+      return {
+        data: commit(OPS.buzzPress, {
+          projectId: ctx.params.projectId,
+          buttonId: ctx.body.buttonId,
+        }),
+      };
+    },
+  },
 
   // ---------- 设置 / 布局 ----------
   {

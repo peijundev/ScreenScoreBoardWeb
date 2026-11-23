@@ -1,9 +1,14 @@
-import { useCallback, useEffect, useMemo, useState, type JSX } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import {
   getStorageConfig,
+  importStorageLibrary,
   migrateStorage,
+  storageLibraryExportUrl,
   testStorageConnection,
   updateStorageConfig,
+  type LibraryExportFormat,
+  type LibraryImportFormat,
+  type LibrarySection,
   type StorageBackendDescriptor,
   type StorageFieldDescriptor,
   type StorageFormValue,
@@ -19,12 +24,19 @@ interface Props {
 }
 
 type Notice = { type: 'ok' | 'warn' | 'error'; text: string };
-type Busy = 'test' | 'save' | 'migrate' | null;
+type Busy = 'test' | 'save' | 'migrate' | 'import' | null;
+
+const LIBRARY_SECTIONS: Array<[LibrarySection, string]> = [
+  ['projects', '项目'],
+  ['themes', '主题库'],
+  ['themeDrafts', '主题草稿'],
+];
 
 function sourceLabel(source: string): string {
   if (source === 'storage.json') return 'storage.json';
   if (source === 'env') return '环境变量';
-  return '默认值';
+  if (source === 'legacy') return '旧 state.json 自动识别';
+  return '默认（SQLite）';
 }
 
 function backendDefaults(backend: StorageBackendDescriptor): Record<string, StorageFormValue> {
@@ -109,7 +121,7 @@ export default function StorageDialog({ onClose }: Props): JSX.Element {
   const [status, setStatus] = useState<StorageStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [kind, setKind] = useState<StorageKind>('json');
+  const [kind, setKind] = useState<StorageKind>('sqlite');
   const [form, setForm] = useState<Record<string, StorageFormValue>>({});
   const [clearPassword, setClearPassword] = useState(false);
   const [busy, setBusy] = useState<Busy>(null);
@@ -117,6 +129,19 @@ export default function StorageDialog({ onClose }: Props): JSX.Element {
   const [testResult, setTestResult] = useState<StorageTestResult | null>(null);
   const [migrateMode, setMigrateMode] = useState<'copy' | 'empty'>('copy');
   const [overwrite, setOverwrite] = useState(false);
+  const [exportFormat, setExportFormat] = useState<LibraryExportFormat>('json');
+  const [exportScope, setExportScope] = useState<Record<LibrarySection, boolean>>({
+    projects: true,
+    themes: true,
+    themeDrafts: true,
+  });
+  const [importFormat, setImportFormat] = useState<LibraryImportFormat>('auto');
+  const [importScope, setImportScope] = useState<Record<LibrarySection, boolean>>({
+    projects: true,
+    themes: true,
+    themeDrafts: true,
+  });
+  const importFileRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -232,6 +257,56 @@ export default function StorageDialog({ onClose }: Props): JSX.Element {
       setBusy(null);
     }
   }, [backend, kind, migrateMode, overwrite, clearPassword, form, load]);
+
+  const selectedExportScope = LIBRARY_SECTIONS
+    .map(([key]) => key)
+    .filter((key) => exportScope[key]);
+  const selectedImportScope = LIBRARY_SECTIONS
+    .map(([key]) => key)
+    .filter((key) => importScope[key]);
+  const nativeAvailable = Boolean(
+    status
+      && status.location.active.type === 'file'
+      && ['json', 'txt', 'sqlite'].includes(status.active.kind),
+  );
+
+  async function runImport(): Promise<void> {
+    const file = importFileRef.current?.files?.[0];
+    if (!file) {
+      setNotice({ type: 'error', text: '请选择要导入的文件' });
+      return;
+    }
+    if (!selectedImportScope.length) {
+      setNotice({ type: 'error', text: '请选择导入范围' });
+      return;
+    }
+    const ok = await confirm({
+      title: '整库导入',
+      message: '将替换所选范围的数据，并清理相关项目的运行态（撤销/倒计时/突显/抢答）。建议先导出备份。确定继续？',
+      confirmText: '导入',
+      danger: true,
+    });
+    if (!ok) return;
+    setBusy('import');
+    setNotice(null);
+    try {
+      const result = await importStorageLibrary(file, {
+        format: importFormat,
+        scope: selectedImportScope,
+      });
+      const counts = result.counts;
+      setNotice({
+        type: 'ok',
+        text: `整库导入完成：项目 ${counts.projects ?? '未选'}、主题 ${counts.themes ?? '未选'}、草稿 ${counts.themeDrafts ?? '未选'}。`,
+      });
+      if (importFileRef.current) importFileRef.current.value = '';
+      await load();
+    } catch (err) {
+      setNotice({ type: 'error', text: (err as Error).message });
+    } finally {
+      setBusy(null);
+    }
+  }
 
   function renderField(field: StorageFieldDescriptor): JSX.Element {
     const value = form[field.name];
@@ -475,6 +550,115 @@ export default function StorageDialog({ onClose }: Props): JSX.Element {
                 </div>
               </section>
             )}
+
+            <section className="storage-migrate storage-library">
+              <h4>整库导出</h4>
+              <p className="hint">
+                选择要导出的范围与格式；不含账号/令牌、上传资源与运行态。
+              </p>
+              <div className="storage-library-row">
+                {LIBRARY_SECTIONS.map(([key, label]) => (
+                  <label className="storage-check" key={key}>
+                    <input
+                      type="checkbox"
+                      checked={exportScope[key]}
+                      onChange={(e) => setExportScope((prev) => ({ ...prev, [key]: e.target.checked }))}
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="storage-library-row">
+                <label className="storage-field">
+                  格式
+                  <select
+                    value={exportFormat}
+                    onChange={(e) => setExportFormat(e.target.value as LibraryExportFormat)}
+                  >
+                    <option value="json">JSON</option>
+                    <option value="sqlite">SQLite</option>
+                    <option value="txt">TXT</option>
+                    <option value="native" disabled={!nativeAvailable}>当前后端原生文件</option>
+                  </select>
+                </label>
+                {exportFormat === 'native' ? (
+                  nativeAvailable ? (
+                    <a
+                      className="btn"
+                      href={storageLibraryExportUrl('native', selectedExportScope)}
+                      download
+                    >
+                      导出原生文件
+                    </a>
+                  ) : (
+                    <button className="btn" type="button" disabled>原生文件不可用</button>
+                  )
+                ) : selectedExportScope.length ? (
+                  <a
+                    className="btn"
+                    href={storageLibraryExportUrl(exportFormat, selectedExportScope)}
+                    download
+                  >
+                    导出
+                  </a>
+                ) : (
+                  <button className="btn" type="button" disabled>请选择范围</button>
+                )}
+              </div>
+              {exportFormat === 'native' && (
+                <p className="hint">原生文件会导出当前后端的全部数据，忽略上方范围选择；仅支持 JSON / TXT / SQLite 文件后端。</p>
+              )}
+              {!nativeAvailable && (
+                <p className="hint">当前后端不是单文件后端，原生文件导出不可用。</p>
+              )}
+            </section>
+
+            <section className="storage-migrate storage-library">
+              <h4>整库导入</h4>
+              <p className="hint">
+                支持 JSON / SQLite / TXT 或自动识别。导入会替换所选范围的数据，并清理相关项目的运行态；建议先导出备份。
+              </p>
+              <div className="storage-library-row">
+                <input
+                  ref={importFileRef}
+                  type="file"
+                  accept=".json,.txt,.db,.sqlite,.sqlite3,application/json,text/plain,application/vnd.sqlite3"
+                  aria-label="选择整库导入文件"
+                />
+                <label className="storage-field">
+                  格式
+                  <select
+                    value={importFormat}
+                    onChange={(e) => setImportFormat(e.target.value as LibraryImportFormat)}
+                  >
+                    <option value="auto">自动识别</option>
+                    <option value="json">JSON</option>
+                    <option value="sqlite">SQLite</option>
+                    <option value="txt">TXT</option>
+                  </select>
+                </label>
+              </div>
+              <div className="storage-library-row">
+                {LIBRARY_SECTIONS.map(([key, label]) => (
+                  <label className="storage-check" key={key}>
+                    <input
+                      type="checkbox"
+                      checked={importScope[key]}
+                      onChange={(e) => setImportScope((prev) => ({ ...prev, [key]: e.target.checked }))}
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
+                <button
+                  className="btn danger"
+                  type="button"
+                  disabled={busy !== null || !selectedImportScope.length}
+                  onClick={() => { void runImport(); }}
+                >
+                  {busy === 'import' ? '导入中…' : '导入整库'}
+                </button>
+              </div>
+            </section>
 
             {testResult && (
               <div className={'storage-notice ' + (testResult.ok ? 'ok' : 'error')} aria-live="polite">

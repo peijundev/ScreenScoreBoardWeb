@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react';
 import type { Project } from '../../shared/types';
-import { projectOp } from '../../shared/store';
+import { projectOp, useAppStore } from '../../shared/store';
 import { toast } from '../../shared/ui';
 import {
   DISPLAY_RESOLUTION_LIMITS,
@@ -8,6 +8,7 @@ import {
   parseDisplayResolution,
 } from '../../shared/displayResolution';
 import { DISPLAY_STYLES } from '../settings/schema';
+import NumberInput from './NumberInput';
 
 const RESOLUTIONS: Array<{ value: string; label: string }> = [
   { value: 'auto', label: '自适应（跟随窗口）' },
@@ -241,6 +242,14 @@ export default function PreviewPanel({
                 value={resScale}
                 onChange={(e) => updateResScale(Number(e.target.value))}
               />
+              <NumberInput
+                min={0}
+                max={100}
+                step={5}
+                value={resScale}
+                onChange={updateResScale}
+                title="直接输入放大强度"
+              />
               <span>{resScale}%</span>
             </label>
           )}
@@ -266,6 +275,8 @@ export default function PreviewPanel({
       </div>
 
       {isAdmin && <QuickBar project={project} edit={canEdit} onEditChange={setEdit} />}
+      {isAdmin && <BuzzBar project={project} />}
+      {isAdmin && <CountdownBar project={project} />}
 
       <div
         className={'preview-frame-wrap' + (panMode ? ' pan-mode' : '')}
@@ -298,6 +309,206 @@ export default function PreviewPanel({
           : '当前为只读预览；布局与设置需要管理员权限。'}
       </p>
     </section>
+  );
+}
+
+function BuzzBar({ project }: { project: Project }): JSX.Element {
+  const runtime = useAppStore((s) => s.runtime);
+  const [now, setNow] = useState(() => Date.now());
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(id);
+  }, []);
+  const buzz = runtime?.buzz?.[project.id] ?? null;
+  const offset = runtime?.serverNow ? runtime.serverNow - Date.now() : 0;
+  const remaining = buzz?.endsAt
+    ? Math.max(0, Math.ceil((buzz.endsAt - (now + offset)) / 1000))
+    : 0;
+  const enabled = project.settings.featureBuzzer === true;
+  const memberConsole = project.settings.featureMemberConsole !== false;
+  const winner = buzz?.winner ?? null;
+
+  let status = '未开始';
+  if (buzz) {
+    if (buzz.phase === 'prepare') status = `准备中 · 剩余 ${remaining} 秒`;
+    else if (buzz.phase === 'open') {
+      status = buzz.endsAt ? `抢答中 · 剩余 ${remaining} 秒` : '抢答中 · 等待第一个按下';
+    } else if (winner) {
+      status = `已锁定：${winner.personName} → ${winner.targetName}`;
+    } else {
+      status = '本轮无人抢答';
+    }
+    if (winner && buzz.phase === 'open') {
+      status = `已锁定：${winner.personName} → ${winner.targetName}`;
+    }
+  }
+
+  async function start(): Promise<void> {
+    setBusy(true);
+    try {
+      await projectOp(project.id, 'buzzStart');
+    } catch (err) {
+      toast((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function end(): Promise<void> {
+    setBusy(true);
+    try {
+      await projectOp(project.id, 'buzzEnd');
+    } catch (err) {
+      toast((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="preview-buzz-bar">
+      <strong>抢答</strong>
+      <button
+        className="btn small primary"
+        type="button"
+        disabled={!enabled || !memberConsole || Boolean(buzz) || busy}
+        onClick={() => { void start(); }}
+      >
+        开始抢答
+      </button>
+      <button
+        className="btn small danger"
+        type="button"
+        disabled={!buzz || busy}
+        onClick={() => { void end(); }}
+      >
+        结束抢答
+      </button>
+      <span className={'hint' + (buzz ? ' is-live' : '')}>{status}</span>
+      {!enabled && (
+        <span className="hint">在「人员功能菜单」中启用抢答模式</span>
+      )}
+      {enabled && !memberConsole && (
+        <span className="hint">队员控制台未启用，队员无法按按钮</span>
+      )}
+    </div>
+  );
+}
+
+function formatCountdown(ms: number): string {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  return String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0');
+}
+
+function CountdownBar({ project }: { project: Project }): JSX.Element {
+  const runtime = useAppStore((s) => s.runtime);
+  const [now, setNow] = useState(() => Date.now());
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const countdown = runtime?.countdowns?.[project.id] ?? null;
+  const buzz = runtime?.buzz?.[project.id] ?? null;
+  const offset = runtime?.serverNow ? runtime.serverNow - Date.now() : 0;
+  const enabled = project.settings.featureCountdown === true;
+  const duration = Math.min(3600, Math.max(1, Number(project.settings.countdownDurationSec) || 300));
+  const state = countdown?.state;
+  const remaining = state === 'running'
+    ? Math.max(0, (countdown?.endsAt ?? 0) - (now + offset))
+    : (countdown?.remainingMs ?? 0);
+  const running = state === 'running' && remaining > 0;
+  const paused = state === 'paused';
+  const ended = state === 'ended' || (state === 'running' && remaining <= 0);
+  const status = !countdown
+    ? '未开始'
+    : running
+      ? `进行中 ${formatCountdown(remaining)}`
+      : paused
+        ? `已暂停 ${formatCountdown(remaining)}`
+        : ended ? '时间到' : '未开始';
+  const lockedByBuzz = Boolean(buzz);
+
+  async function run(
+    op: 'countdownStart' | 'countdownPause' | 'countdownResume' | 'countdownReset' | 'updateSettings',
+    payload?: Record<string, unknown>,
+  ): Promise<void> {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await projectOp(project.id, op, payload);
+    } catch (err) {
+      toast((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="preview-countdown">
+      <label className="cd-enable">
+        <input
+          type="checkbox"
+          checked={enabled}
+          disabled={lockedByBuzz || busy}
+          onChange={(e) => { void run('updateSettings', { patch: { featureCountdown: e.target.checked } }); }}
+        />
+        启用倒计时
+      </label>
+      <label>
+        时长（秒）
+        <NumberInput
+          min={1}
+          max={3600}
+          step={1}
+          value={duration}
+          disabled={lockedByBuzz || busy}
+          title="倒计时时长（秒）"
+          onChange={(next) => { void run('updateSettings', { patch: { countdownDurationSec: next } }); }}
+        />
+      </label>
+      <div className="cd-btns">
+        <button
+          className="btn small"
+          type="button"
+          disabled={!enabled || lockedByBuzz || running || busy}
+          onClick={() => { void run('countdownStart', { durationSec: duration }); }}
+        >
+          开始
+        </button>
+        <button
+          className="btn small"
+          type="button"
+          disabled={!enabled || lockedByBuzz || !running || busy}
+          onClick={() => { void run('countdownPause'); }}
+        >
+          暂停
+        </button>
+        <button
+          className="btn small"
+          type="button"
+          disabled={!enabled || lockedByBuzz || !paused || busy}
+          onClick={() => { void run('countdownResume'); }}
+        >
+          继续
+        </button>
+        <button
+          className="btn small"
+          type="button"
+          disabled={!enabled || lockedByBuzz || !countdown || busy}
+          onClick={() => { void run('countdownReset'); }}
+        >
+          重置
+        </button>
+      </div>
+      <span className="cd-status" aria-live="polite">{status}</span>
+      {lockedByBuzz && <span className="hint">抢答进行中，计时器由抢答控制</span>}
+      {!enabled && !lockedByBuzz && <span className="hint">勾选「启用倒计时」后可用</span>}
+    </div>
   );
 }
 

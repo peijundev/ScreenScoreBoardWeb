@@ -6,19 +6,20 @@ import { toast } from '../../shared/ui';
 import { confirm, prompt } from './dialogs';
 import AdminThemePicker from './AdminThemePicker';
 
-export type MobileTab = 'preview' | 'people' | 'teams' | 'theme' | 'more';
+export type MobileTab = 'preview' | 'people' | 'teams' | 'appearance' | 'more';
 
 const TABS: Array<[MobileTab, string]> = [
   ['preview', '预览'],
   ['people', '人员'],
   ['teams', '团队'],
-  ['theme', '主题'],
+  ['appearance', '外观'],
   ['more', '更多'],
 ];
 
 const roleLabel: Record<string, string> = {
   admin: '管理员',
   operator: '操作员',
+  member: '队员',
   viewer: '只读',
 };
 
@@ -41,6 +42,7 @@ interface Props {
   onOpenStudio: () => void;
   onOpenAccount: () => void;
   onOpenStorage: () => void;
+  onOpenMemberMenu: () => void;
 }
 
 export default function MobileNav({
@@ -62,13 +64,14 @@ export default function MobileNav({
   onOpenStudio,
   onOpenAccount,
   onOpenStorage,
+  onOpenMemberMenu,
 }: Props): JSX.Element {
   const sendOp = useAppStore((s) => s.sendOp);
   const logout = useAuthStore((s) => s.logout);
-  const tabs = isAdmin ? TABS : TABS.filter(([value]) => value !== 'theme');
+  const tabs = isAdmin ? TABS : TABS.filter(([value]) => value !== 'appearance');
   const undoCount = useAppStore((s) => (project ? (s.runtime?.undoCounts[project.id] ?? 0) : 0));
   useEffect(() => {
-    if (!isAdmin && tab === 'theme') onTab('people');
+    if (!isAdmin && tab === 'appearance') onTab('people');
   }, [isAdmin, tab, onTab]);
 
   async function addProject(): Promise<void> {
@@ -110,7 +113,8 @@ export default function MobileNav({
           className="project-select"
           value={project?.id ?? ''}
           onChange={(e) => onSelectProject(e.target.value)}
-          title="切换项目"
+          disabled={user?.role === 'member'}
+          title={user?.role === 'member' ? '队员账号跟随绑定项目' : '切换项目'}
         >
           {projects.length === 0 && <option value="">（无项目）</option>}
           {projects.map((p) => (
@@ -139,9 +143,9 @@ export default function MobileNav({
       </header>
 
       <div className="mobile-content">
-        {tab === 'theme' && isAdmin && (
+        {tab === 'appearance' && isAdmin && (
           <section className="mobile-card">
-            <h2>主题与外观</h2>
+            <h2>外观设置</h2>
             <button className="btn mobile-wide" type="button" onClick={onOpenSettings}>
               排版设置
             </button>
@@ -150,9 +154,6 @@ export default function MobileNav({
             </button>
             <button className="btn mobile-wide" type="button" onClick={onOpenStudio}>
               主题工作室
-            </button>
-            <button className="btn mobile-wide" type="button" onClick={onOpenFeatures}>
-              功能开关与数据
             </button>
           </section>
         )}
@@ -173,10 +174,13 @@ export default function MobileNav({
                 </button>
                 <h2>控制台</h2>
                 <button className="btn mobile-wide" type="button" onClick={onOpenFeatures}>
-                  数据导入 / 导出 / 备份
+                  功能开关与数据
                 </button>
                 <button className="btn mobile-wide" type="button" onClick={onOpenAssets} disabled={!project}>
                   资源库
+                </button>
+                <button className="btn mobile-wide" type="button" onClick={onOpenMemberMenu} disabled={!project}>
+                  人员菜单
                 </button>
                 <button className="btn mobile-wide" type="button" onClick={onOpenStorage}>
                   存储后端

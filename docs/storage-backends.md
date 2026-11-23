@@ -38,7 +38,7 @@
 
 1. `DATA_DIR/storage.json`（管理端保存）
 2. 存储相关环境变量（`STORAGE`、`STATE_FILE`、`DATABASE_URL` 等）
-3. 默认 `json`
+3. 默认 `sqlite`（若 `DATA_DIR/state.json` 存在且没有 `storage.json`/存储环境变量，则自动识别为旧 JSON）
 
 `storage.json` 存在时环境变量不再决定连接目标；运行时调优变量（重试、超时、锁 TTL 等）仍然生效。
 
@@ -61,7 +61,7 @@
 ```
 
 - 文件权限 `0600`；仅管理员 API 可读，密码不回传前端。
-- 文件损坏、版本不支持或字段非法时服务**拒绝启动**（fail-closed）。修复该文件，或移走它回退到环境变量/默认 JSON。
+- 文件损坏、版本不支持或字段非法时服务**拒绝启动**（fail-closed）。修复该文件，或移走它回退到环境变量/默认 SQLite（已有旧 `state.json` 时会自动识别为 JSON）。
 - 文件类后端的 `file` 必须是 `DATA_DIR` 内的相对路径；拒绝绝对路径、`..`、符号链接、保留文件与错误扩展名。
 
 ## 管理端操作
@@ -218,12 +218,15 @@ maxmemory-policy noeviction
 - 管理端「存储后端」对话框的「当前运行中」会显示**数据目录**与**数据位置**：文件后端（JSON / TXT / SQLite / LMDB）显示绝对路径，远端后端显示不含密码的连接目标；均可一键复制。`GET /api/v1/storage` 的 `location` 字段提供同一信息。
 - 公共 `GET /api/health`：`storage`（后端类型）与 `storageOk`（无冲突），不泄露连接信息。
 - 管理员 `GET /api/v1/storage/health`：revision、延迟、最近写入、锁状态、冲突与警告；`?refresh=1` 强制探测，否则缓存 10 秒。
+- 管理员 `GET /api/v1/storage/export`：整库导出，可选范围（项目 / 主题库 / 主题草稿）与格式（JSON / SQLite / TXT / 当前后端原生文件）；原生文件仅适用于 JSON / TXT / SQLite 文件后端。
+- 管理员 `POST /api/v1/storage/import`：整库导入，原始文件 body，支持自动识别 JSON / SQLite / TXT，并按所选范围替换数据；导入会清理相关项目的运行态。
+- 导出/导入不含鉴权数据、上传资源与运行态；原生文件导出会包含当前后端的全部数据，忽略范围选择。
 
 ## 故障排查
 
 | 现象 | 处理 |
 |---|---|
-| 启动报「存储配置文件损坏」 | 修复或移走 `DATA_DIR/storage.json`，回退到环境变量/默认 JSON |
+| 启动报「存储配置文件损坏」 | 修复或移走 `DATA_DIR/storage.json`，回退到环境变量/默认 SQLite（旧 `state.json` 会自动识别） |
 | 启动报「不支持的存储后端」 | 检查 `kind`/`STORAGE` 拼写；可用值见上表 |
 | 启动报驱动缺失 | 按提示 `npm install <pkg>`，或改回文件后端 |
 | 迁移 409 | 目标已有数据；勾选覆盖，或改用空库启动 |

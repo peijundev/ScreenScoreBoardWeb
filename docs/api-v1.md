@@ -95,10 +95,11 @@ curl -X PATCH http://localhost:3000/api/v1/themes/th_x/layers \
 | DELETE | `/auth/users/:id/tokens/:tokenId` | admin | 吊销用户令牌 |
 
 - 会话 Cookie：`ssb_session`，HttpOnly、`SameSite=Lax`、`Path=/`；CSRF Cookie：`ssb_csrf`（JS 可读）。
+- 创建 `member` 用户时必须提供 `memberProjectId` 与 `memberPersonId`，人员必须存在于该项目；改成其他角色时会清空绑定。
 - 非 GET 的 Cookie 请求需要 `X-CSRF-Token`；`Authorization: Bearer ssb_...` 豁免。
 - 管理员可在「访问控制」中设置 `requireLogin: false`（开放模式）。此时所有请求按管理员处理，无需登录；响应中的 `openAccess` 为 `true`。该模式会持久化到 `auth.json`，并要求至少保留一个启用中的管理员。
 - 公开读：`/health`、`/version`、`/state`、`/themes/:themeId`。
-- 其余 GET 至少需要 `viewer`；写操作默认需要 `admin`；记分相关写接口与手动突显接口允许 `operator`。
+- 其余 GET 至少需要 `viewer`；写操作默认需要 `admin`；记分相关写接口与手动突显接口允许 `operator`；人员菜单按钮与抢答按下接口允许 `member`，抢答开始/结束仅 admin。
 - `/mcp` 仅管理员。
 
 ## 端点
@@ -167,6 +168,10 @@ curl -X PATCH http://localhost:3000/api/v1/themes/th_x/layers \
 | POST | `/projects/:projectId/people/:personId/score/set` | 直接设分，body `{ "score": 10 }` |
 | POST | `/projects/:projectId/teams/:teamId/score/add` | 团队全员加减分，body `{ "delta": 2 }` |
 | POST | `/projects/:projectId/spotlight` | 凭空触发起居放大突显，不改变分数、不写撤销栈；body `{ "targetType": "person" \| "team", "targetId": "…", "durationMs?": 2000 }`，允许 `operator` |
+| POST | `/projects/:projectId/member-action` | 执行管理端为该队员账号配置的人员菜单按钮；body `{ "buttonId": "…" }`，动作/目标/数值取自 `memberMenus` 中该账号的条目，并校验账号绑定的项目必须等于 `projectId`；允许 `member` |
+| POST | `/projects/:projectId/buzz/start` | 开始抢答并联动倒计时；仅 admin |
+| POST | `/projects/:projectId/buzz/end` | 结束抢答并清除锁定突显与计时器；仅 admin |
+| POST | `/projects/:projectId/buzz/press` | 队员抢答，body `{ "buttonId": "…" }`；只有第一个有效请求返回 `won: true`，其余返回 `won: false` 与 reason；允许 `member` |
 | POST | `/projects/:projectId/scores/reset` | 重置本局全部分数 |
 | GET | `/projects/:projectId/runtime` | 撤销栈、分数日志、倒计时 |
 | POST | `/projects/:projectId/runtime/undo` | 撤销最近一步记分 |
@@ -245,6 +250,8 @@ curl -X PATCH http://localhost:3000/api/v1/themes/th_x/layers \
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/storage` | 脱敏配置、来源、后端元数据、运行状态、`restartRequired` |
+| GET | `/storage/export` | 整库导出：`format=json\|sqlite\|txt\|native`，`scope=projects,themes,themeDrafts`；返回文件下载；仅 admin |
+| POST | `/storage/import` | 整库导入：原始文件 body，`format=auto\|json\|sqlite\|txt`，`scope=…`；替换所选范围并清理相关运行态；仅 admin |
 | GET | `/storage/health` | 连接/锁/revision/warnings；`?refresh=1` 强制探测 |
 | PUT | `/storage` | 保存配置（不迁移），body `{ "kind": "txt", "options": {…}, "clearPassword": false }` |
 | POST | `/storage/test` | 测试连接，body `{ "kind": "redis", "options": {…} }`；失败也返回 200 与 `{ "ok": false }` |
@@ -252,6 +259,8 @@ curl -X PATCH http://localhost:3000/api/v1/themes/th_x/layers \
 
 - 仅管理员可访问，且不会出现在 MCP 工具表中。
 - 响应永不包含密码；配置写入 `DATA_DIR/storage.json`（0600）。
+- 全新部署默认 `sqlite`；没有 `storage.json`/存储环境变量但存在旧 `DATA_DIR/state.json` 时自动识别为 JSON。
+- `/storage/export` / `/storage/import` 作用于项目、主题库与主题草稿；不含鉴权数据、上传资源与运行态。导出可选 JSON / SQLite / TXT / 当前后端原生文件；导入支持自动识别 JSON / SQLite / TXT，并替换所选范围的数据。
 - 保存/迁移后需要重启服务；详见 [storage-backends.md](storage-backends.md)。
 
 上传示例：

@@ -72,6 +72,20 @@ export function applyAppearance(s: Settings): void {
   // 显示端没有对应语义，明确跳过（设置仍走完整校验、契约与持久化链路）。
   void s.featureMobileAdmin;
   void s.adminTouchTargetSize;
+  // 队员控制台 / 人员功能菜单只影响管理端「队员」界面，显示端不应用。
+  void s.featureMemberConsole;
+  void s.memberMenus;
+  // 抢答设置由服务端运行态与锁定突显层消费，外观层不应用。
+  void s.featureBuzzer;
+  void s.buzzTimerMode;
+  void s.buzzDurationSec;
+  void s.buzzTarget;
+  void s.buzzScoreDelta;
+  void s.buzzButtonMode;
+  void s.buzzRunButtonAction;
+  void s.buzzLoserHint;
+  void s.buzzStopTimerOnWin;
+  void s.buzzShowStartPrompt;
 
   // 字体
   const serifStyles = ['guofeng', 'ink', 'trueage'];
@@ -403,6 +417,7 @@ export function fxInfo(s: Settings, delta: number | null | undefined): FxInfo {
 interface LiveSpotlight {
   overlay: HTMLElement;
   cleanup: () => void;
+  persistent?: boolean;
 }
 
 const liveSpotlights = new Set<LiveSpotlight>();
@@ -426,8 +441,12 @@ export function showOriginalCard(el: HTMLElement): void {
   if (el.isConnected) el.style.visibility = '';
 }
 
-function registerSpotlight(overlay: HTMLElement, cleanup: () => void): () => void {
-  const handle: LiveSpotlight = { overlay, cleanup };
+function registerSpotlight(
+  overlay: HTMLElement,
+  cleanup: () => void,
+  persistent = false,
+): () => void {
+  const handle: LiveSpotlight = { overlay, cleanup, persistent };
   liveSpotlights.add(handle);
   return () => {
     liveSpotlights.delete(handle);
@@ -436,11 +455,12 @@ function registerSpotlight(overlay: HTMLElement, cleanup: () => void): () => voi
 
 /**
  * 打断模式：清除正在播放的居中突显特效。
- * fadeMs <= 0 立即移除；否则整体淡出后再移除并恢复原卡。
+ * 抢答锁定突显（persistent）不参与打断，只有结束抢答才清除。
  */
 export function interruptSpotlights(fadeMs = 0): void {
   const dur = clamp(Number(fadeMs) || 0, 0, 2000);
   for (const handle of Array.from(liveSpotlights)) {
+    if (handle.persistent) continue;
     liveSpotlights.delete(handle);
     if (dur <= 0 || !handle.overlay.isConnected) {
       handle.cleanup();
@@ -451,6 +471,15 @@ export function interruptSpotlights(fadeMs = 0): void {
       { duration: dur, easing: 'ease', fill: 'forwards' },
     );
     anim.onfinish = () => handle.cleanup();
+  }
+}
+
+/** 结束抢答时清除锁定突显（赢家退回原卡）。 */
+export function clearPersistentSpotlights(): void {
+  for (const handle of Array.from(liveSpotlights)) {
+    if (!handle.persistent) continue;
+    liveSpotlights.delete(handle);
+    handle.cleanup();
   }
 }
 
@@ -813,14 +842,16 @@ function spawnSpotlightPop(
   s: Settings,
   delta?: number,
   durationOverride?: number,
+  options: { persistent?: boolean } = {},
 ): void {
+  const persistent = options.persistent === true;
   const total = spotlightTotal(durationOverride, Math.max(1200, Number(s.scoreEffectDuration) + 600));
   const overlay = document.createElement('div');
-  overlay.className = 'spotlight-overlay';
-  overlay.style.setProperty('--spot-duration', total + 'ms');
+  overlay.className = 'spotlight-overlay' + (persistent ? ' spotlight-locked' : '');
+  if (!persistent) overlay.style.setProperty('--spot-duration', total + 'ms');
   const stack = document.createElement('div');
   stack.className = 'spotlight-stack';
-  stack.style.setProperty('--spot-duration', total + 'ms');
+  if (!persistent) stack.style.setProperty('--spot-duration', total + 'ms');
 
   for (const el of els) {
     const clone = cloneCard(el, s);
@@ -852,12 +883,26 @@ function spawnSpotlightPop(
   }
   overlay.appendChild(stack);
   document.body.appendChild(overlay);
-  const cleanup = () => overlay.remove();
-  const unregister = registerSpotlight(overlay, cleanup);
+  if (persistent) {
+    // 锁定突显：隐藏原卡，赢家一直停留在中央，直到结束抢答
+    els.forEach((el) => hideOriginalCard(el));
+  }
+  const cleanup = () => {
+    if (persistent) els.forEach((el) => showOriginalCard(el));
+    overlay.remove();
+  };
+  const unregister = registerSpotlight(overlay, cleanup, persistent);
+  if (persistent) return;
   setTimeout(() => {
     cleanup();
     unregister();
   }, total + 250);
+}
+
+/** 抢答赢家的锁定突显：居中、不自动消失，由 clearPersistentSpotlights 清除。 */
+export function spawnPersistentSpotlight(els: HTMLElement[], s: Settings): void {
+  if (!els.length) return;
+  spawnSpotlightPop(els, s, undefined, undefined, { persistent: true });
 }
 
 /** 从原卡片位置平滑放大到屏幕中心，停留后再缩回——像查看图片时的缩放。 */

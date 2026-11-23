@@ -26,6 +26,7 @@ const BASE = 'http://127.0.0.1:3470';
 const AUTH_ENV = {
   ADMIN_USERNAME: 'admin',
   ADMIN_PASSWORD,
+  STORAGE: 'json',
   ADMIN_PASSWORD_FILE: '',
   SESSION_TTL_HOURS: '',
   SESSION_REMEMBER_DAYS: '',
@@ -193,7 +194,15 @@ test('鉴权系统：登录、角色、CSRF、会话、MCP 与本地模式', asy
   assert.ok(afterFailures.session.cookie, '连续失败后仍可正常登录');
 
   const state = await api(BASE, admin, '/state');
-  const projectId = Object.keys(state.json.data.projects)[0];
+  let projectId = Object.keys(state.json.data.projects)[0];
+  if (!projectId) {
+    const created = await api(BASE, admin, '/projects', {
+      method: 'POST',
+      body: JSON.stringify({ name: '鉴权测试项目' }),
+    });
+    projectId = created.json.data.projectId;
+  }
+  assert.ok(projectId, '鉴权测试项目已创建');
 
   // CSRF
   const noCsrf = await api(BASE, admin, '/projects', {
@@ -367,8 +376,12 @@ test('鉴权系统：登录、角色、CSRF、会话、MCP 与本地模式', asy
 
   // 权限矩阵完整性
   assert.deepEqual(Object.keys(OP_MIN_ROLE).sort(), Object.keys(OPS).sort(), 'op 权限表覆盖全部 op');
+  assert.equal(OP_MIN_ROLE.memberAction, 'member', '队员专用 op 的最低角色为 member');
   for (const route of listRoutes()) {
-    assert.ok(['public', 'viewer', 'operator', 'admin'].includes(routeMinRole(route)), '路由权限值合法');
+    assert.ok(
+      ['public', 'viewer', 'member', 'operator', 'admin'].includes(routeMinRole(route)),
+      '路由权限值合法',
+    );
   }
   assert.equal(legacyMinRole('GET', '/api/state'), 'public');
   assert.equal(legacyMinRole('GET', '/api/themes/th_1'), 'public');

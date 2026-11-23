@@ -9,6 +9,8 @@ const { StorageConfigError, sha256, canonicalJSON } = require('./storage/common'
 const { canonicalKind, KINDS } = require('./storage/registry');
 
 const CONFIG_VERSION = 1;
+/** 全新部署的默认后端；已有 state.json 会在 resolveStorageConfig 中自动识别为 JSON。 */
+const DEFAULT_KIND = 'sqlite';
 
 const RESERVED_FILES = new Set([
   'storage.json', 'auth.json', 'sessions.json', 'scoreboard.lock',
@@ -114,7 +116,7 @@ const BACKEND_DEFS = {
   json: {
     label: 'JSON 文件',
     category: 'file',
-    description: '默认后端。整份状态写入单个 JSON 文件，兼容旧数据目录。',
+    description: '整份状态写入单个 JSON 文件，兼容旧数据目录。',
     pros: ['零依赖，开箱即用', '文件可读，备份与迁移简单'],
     cons: ['整份重写，无索引与查询', '多实例和大状态量下性能差'],
     warning: '仅适合单实例；不要放在 NFS 等网络文件系统上。',
@@ -134,7 +136,7 @@ const BACKEND_DEFS = {
   sqlite: {
     label: 'SQLite',
     category: 'file',
-    description: '单机数据库，无需外部服务；WAL 模式，适合桌面和单机部署。',
+    description: '默认后端。单机数据库，无需外部服务；WAL 模式，适合桌面和单机部署。',
     recommended: true,
     recommendedLabel: '本地推荐',
     recommendedNote: '单机/桌面部署推荐；无需外部服务，数据保存在 DATA_DIR 内。',
@@ -719,7 +721,9 @@ function normalizeStorageConfig(raw, meta = {}) {
  * @param {NodeJS.ProcessEnv} [env]
  */
 function fromEnv(env = process.env) {
-  const rawKind = env.STORAGE || 'json';
+  // 兼容旧部署：只设置 STATE_FILE / STATE_FILE_PRETTY 时仍视为 JSON
+  const legacyJsonEnv = !env.STORAGE && (env.STATE_FILE || env.STATE_FILE_PRETTY);
+  const rawKind = env.STORAGE || (legacyJsonEnv ? 'json' : DEFAULT_KIND);
   let kind;
   try {
     kind = canonicalKind(rawKind);
@@ -893,7 +897,7 @@ function readStorageConfigFile(file = STORAGE_CONFIG_FILE) {
     return JSON.parse(text);
   } catch (error) {
     asConfigError(
-      `存储配置文件损坏：${file}。请修复该文件，或将其移走以回退到环境变量/默认 JSON。`,
+      `存储配置文件损坏：${file}。请修复该文件，或将其移走以回退到环境变量/默认 SQLite（有旧 state.json 时会自动识别为 JSON）。`,
       { cause: String(error) },
     );
   }
@@ -913,6 +917,18 @@ function resolveStorageConfig(options = {}) {
   }
   const envConfig = fromEnv(env);
   const source = hasStorageEnv(env) ? 'env' : 'default';
+  if (source === 'default') {
+    // 旧部署没有 storage.json/存储环境变量时，优先识别既有 state.json，避免看起来数据丢失。
+    const legacyState = path.join(dataDir, 'state.json');
+    const defaultSqlite = path.join(dataDir, 'scoreboard.db');
+    if (fs.existsSync(legacyState) && !fs.existsSync(defaultSqlite)) {
+      const legacyConfig = normalizeStorageConfig(
+        fromEnv({ ...env, STORAGE: 'json' }),
+        { source: 'legacy', dataDir },
+      );
+      return { config: legacyConfig, source: 'legacy', configPath: file };
+    }
+  }
   const config = normalizeStorageConfig(envConfig, { source, dataDir });
   return { config, source, configPath: file };
 }

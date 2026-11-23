@@ -1,12 +1,15 @@
 import { create } from 'zustand';
 
-export type Role = 'admin' | 'operator' | 'viewer';
+export type Role = 'admin' | 'operator' | 'member' | 'viewer';
 
 export interface AuthUser {
   id: string;
   username: string;
   displayName?: string;
   role: Role;
+  /** 队员账号绑定的项目与人员；其他角色为 null。 */
+  memberProjectId?: string | null;
+  memberPersonId?: string | null;
   disabled?: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -191,6 +194,8 @@ export async function createUser(input: {
   password: string;
   role: Role;
   displayName?: string;
+  memberProjectId?: string | null;
+  memberPersonId?: string | null;
 }): Promise<AuthUser> {
   const res = await authFetch('/api/v1/auth/users', jsonInit('POST', input));
   return (await parseEnvelope<{ user: AuthUser }>(res)).user;
@@ -198,7 +203,13 @@ export async function createUser(input: {
 
 export async function updateUser(
   id: string,
-  patch: { role?: Role; displayName?: string; disabled?: boolean },
+  patch: {
+    role?: Role;
+    displayName?: string;
+    disabled?: boolean;
+    memberProjectId?: string | null;
+    memberPersonId?: string | null;
+  },
 ): Promise<AuthUser> {
   const res = await authFetch('/api/v1/auth/users/' + encodeURIComponent(id), jsonInit('PATCH', patch));
   return (await parseEnvelope<{ user: AuthUser }>(res)).user;

@@ -61,6 +61,31 @@ export interface CountdownRuntime {
   endsAt?: number;
   remainingMs?: number;
   durationMs?: number;
+  endedAt?: number;
+}
+
+export interface BuzzWinner {
+  userId: string;
+  username: string;
+  personId: string;
+  personName: string;
+  teamId: string | null;
+  teamName: string;
+  targetType: 'person' | 'team';
+  targetId: string;
+  targetName: string;
+  buttonId: string;
+  at: number;
+}
+
+export interface BuzzRuntime {
+  roundId: number;
+  mode: 'prepare' | 'window';
+  phase: 'prepare' | 'open' | 'locked';
+  startedAt: number;
+  endsAt: number;
+  durationMs: number;
+  winner: BuzzWinner | null;
 }
 
 export interface UndoLabel {
@@ -88,5 +113,6 @@ export interface RuntimeSnapshot {
   scoreLogs?: Record<string, ScoreLogEntry[]>;
   countdowns: Record<string, CountdownRuntime>;
   spotlightEvents?: Record<string, SpotlightRuntimeEvent[]>;
+  buzz?: Record<string, BuzzRuntime>;
   serverNow?: number;
 }

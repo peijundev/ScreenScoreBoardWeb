@@ -66,6 +66,8 @@ function resolveRequest(req) {
         kind: 'token',
         userId: found.user.id,
         role: found.user.role,
+        memberProjectId: found.user.memberProjectId || null,
+        memberPersonId: found.user.memberPersonId || null,
         tokenId: found.token.id,
         username: found.user.username,
       };
@@ -89,6 +91,8 @@ function resolveRequest(req) {
     kind: 'user',
     userId: found.user.id,
     role: found.user.role,
+    memberProjectId: found.user.memberProjectId || null,
+    memberPersonId: found.user.memberPersonId || null,
     sessionId: found.session.id,
     sessionExpiresAt: found.session.expiresAt,
     remember: found.session.remember,
@@ -253,14 +257,22 @@ function validateActor(actor) {
     const session = store.findSessionById(actor.sessionId);
     if (!session || Date.parse(session.expiresAt) <= Date.now()) return false;
     const user = store.findUserById(session.userId);
-    return Boolean(user && !user.disabled && user.role === actor.role);
+    return Boolean(
+      user && !user.disabled && user.role === actor.role
+      && (user.memberProjectId || null) === (actor.memberProjectId || null)
+      && (user.memberPersonId || null) === (actor.memberPersonId || null),
+    );
   }
   if (actor.kind === 'token') {
     const record = store.findTokenById(actor.tokenId);
     if (!record) return false;
     if (record.expiresAt && Date.parse(record.expiresAt) <= Date.now()) return false;
     const user = store.findUserById(record.userId);
-    return Boolean(user && !user.disabled && user.role === actor.role);
+    return Boolean(
+      user && !user.disabled && user.role === actor.role
+      && (user.memberProjectId || null) === (actor.memberProjectId || null)
+      && (user.memberPersonId || null) === (actor.memberPersonId || null),
+    );
   }
   return false;
 }
@@ -527,23 +539,62 @@ async function createUser(ctx) {
   const password = String(ctx.body.password || '');
   const role = String(ctx.body.role || 'viewer');
   const displayName = String(ctx.body.displayName || username);
+  const memberProjectId = ctx.body.memberProjectId;
+  const memberPersonId = ctx.body.memberPersonId;
+  if (role === 'member') assertMemberBindingExists(memberProjectId, memberPersonId);
   const hash = await store.hashPassword(password);
-  const user = store.createUser({ username, passwordHash: hash, role, displayName });
+  const user = store.createUser({
+    username, passwordHash: hash, role, displayName, memberProjectId, memberPersonId,
+  });
   log.info('创建用户', { username: user.username, role: user.role });
   return { data: { user: store.publicUser(user) } };
 }
 
 async function updateUser(ctx) {
   requireAdmin(ctx);
+  const existing = store.findUserById(ctx.params.id);
+  if (!existing) throw new NotFoundError('用户不存在');
   const patch = {};
   if (ctx.body.displayName !== undefined) patch.displayName = ctx.body.displayName;
   if (ctx.body.role !== undefined) patch.role = ctx.body.role;
   if (ctx.body.disabled !== undefined) patch.disabled = Boolean(ctx.body.disabled);
+  if (ctx.body.memberProjectId !== undefined) patch.memberProjectId = ctx.body.memberProjectId;
+  if (ctx.body.memberPersonId !== undefined) patch.memberPersonId = ctx.body.memberPersonId;
+  const nextRole = patch.role !== undefined ? patch.role : existing.role;
+  const bindingTouched = patch.role !== undefined
+    || patch.memberProjectId !== undefined
+    || patch.memberPersonId !== undefined;
+  if (nextRole === 'member' && bindingTouched) {
+    const projectId = patch.memberProjectId !== undefined
+      ? patch.memberProjectId
+      : existing.memberProjectId;
+    const personId = patch.memberPersonId !== undefined
+      ? patch.memberPersonId
+      : existing.memberPersonId;
+    assertMemberBindingExists(projectId, personId);
+  }
   const user = store.updateUser(ctx.params.id, patch, {
     actorId: ctx.auth && ctx.auth.userId,
   });
   log.info('更新用户', { username: user.username, role: user.role, disabled: user.disabled });
   return { data: { user: store.publicUser(user) } };
+}
+
+/** 队员必须绑定当前项目中的真实人员；只校验存在性，不在此处写项目状态。 */
+function assertMemberBindingExists(projectId, personId) {
+  const pid = String(projectId == null ? '' : projectId).trim();
+  const person = String(personId == null ? '' : personId).trim();
+  const fail = (message) => {
+    const err = new Error(message);
+    err.name = 'UserInputError';
+    return err;
+  };
+  if (!pid || !person) throw fail('队员账号必须绑定项目与人员');
+  // 延迟加载，避免 auth 模块与 state 模块初始化顺序互相牵制
+  const { state } = require('../state');
+  const project = state.projects[pid];
+  if (!project) throw fail('绑定的项目不存在');
+  if (!project.people[person]) throw fail('绑定的人员不存在');
 }
 
 async function resetUserPassword(ctx) {
