@@ -15,6 +15,15 @@ try {
   app.setPath('userData', path.join(app.getPath('appData'), APP_NAME));
 } catch (_) {}
 
+// 显示端窗口可能长期处于后台 / 非焦点 / 被管理端遮挡。
+// Chromium 默认会节流后台窗口的 rAF 与定时器，导致记分特效不播或延迟；
+// 这里关闭后台节流，保证 Electron 与浏览器前台显示一致。
+app.commandLine.appendSwitch('disable-background-timer-throttling');
+app.commandLine.appendSwitch('disable-renderer-backgrounding');
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+// 白板显示端通常不会有人点击页面；允许无需手势播放记分音效 / 背景音乐。
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+
 let serverPort = 0;
 let adminWindow = null;
 let launcherWindow = null;
@@ -141,6 +150,7 @@ function createAdminWindow(projectId) {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      backgroundThrottling: false,
     },
   });
   attachZoom(win);
@@ -173,6 +183,7 @@ function openDisplayWindow(projectId) {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      backgroundThrottling: false,
       preload: path.join(__dirname, 'display-preload.js'),
     },
   });
@@ -209,6 +220,7 @@ function openLauncherWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      backgroundThrottling: false,
     },
   });
   launcherWindow.loadFile(path.join(__dirname, 'launcher.html'));
@@ -601,7 +613,12 @@ function buildMenu() {
 }
 
 async function startEmbeddedServer(options = {}) {
-  const dataDir = path.join(app.getPath('userData'), 'data');
+  // 默认使用 Electron 独立数据目录；设置 SCOREBOARD_DATA_DIR 可显式共享部署端数据
+  // （同一目录同时只能有一个服务实例，需先停止另一个服务）。
+  const overrideDataDir = String(process.env.SCOREBOARD_DATA_DIR || '').trim();
+  const dataDir = overrideDataDir
+    ? path.resolve(overrideDataDir)
+    : path.join(app.getPath('userData'), 'data');
   fs.mkdirSync(dataDir, { recursive: true });
   process.env.DATA_DIR = dataDir;
   // Electron 本地窗口固定走 http://127.0.0.1；避免外部 TLS 环境变量把内嵌服务变成 https

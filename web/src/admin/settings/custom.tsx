@@ -10,7 +10,7 @@ import {
 import { SOUND_PRESETS, playPresetSound, playSoundFile } from '../../shared/sound';
 import { authFetch } from '../../shared/auth';
 import { useAppStore } from '../../shared/store';
-import { toast } from '../../shared/ui';
+import { toast, roundScore } from '../../shared/ui';
 import { confirm } from '../components/dialogs';
 
 function ResetLayout({ op }: Ctx): JSX.Element {
@@ -357,12 +357,12 @@ function ToggleLeaderboard(ctx: Ctx): JSX.Element {
 function QuickPresets(ctx: Ctx): JSX.Element {
   const initial = Array.isArray(ctx.settings.quickScorePresets)
     ? (ctx.settings.quickScorePresets as number[]).join(',')
-    : '1,5,10,-1';
+    : '1,3,5,-1';
   const [text, setText] = useState(initial);
   const [error, setError] = useState('');
   return (
     <label>
-      快捷分预设（逗号分隔，1–6 个非 0 整数）
+      快捷分预设（逗号分隔，1–6 个非 0 数字，支持小数）
       <input
         type="text"
         value={text}
@@ -373,8 +373,13 @@ function QuickPresets(ctx: Ctx): JSX.Element {
             .split(/[,，、\s]+/)
             .map((s) => s.trim())
             .filter(Boolean)
-            .map(Number);
-          if (items.length >= 1 && items.length <= 6 && items.every((n) => Number.isInteger(n) && n !== 0)) {
+            .map(Number)
+            .map((n) => roundScore(n));
+          if (
+            items.length >= 1
+            && items.length <= 6
+            && items.every((n) => Number.isFinite(n) && n !== 0 && Math.abs(n) <= 10000)
+          ) {
             setError('');
             ctx.set('quickScorePresets', items, true);
           } else {

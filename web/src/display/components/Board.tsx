@@ -7,6 +7,7 @@ import {
   fxInfo,
   leaderboardEntries,
   memberFallbackLayouts,
+  round2,
   scoreClass,
   shelfLayouts,
   type Item,
@@ -267,7 +268,7 @@ function TeamCard({
   editable: boolean;
   free: boolean;
 }): JSX.Element {
-  const total = members.reduce((sum, m) => sum + m.score, 0);
+  const total = round2(members.reduce((sum, m) => sum + m.score, 0));
   let teamDelta = 0;
   for (const m of members) {
     const d = deltas.get(m.id);

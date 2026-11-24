@@ -2,7 +2,7 @@
 // 设置默认值、主题白名单与逐项校验（前后端契约的单一来源）
 const {
   OpError, needString, needAvatar, needSoundPath,
-  HEX_COLOR, hexOrEmpty, intRange, boolStrict, fontNameOrEmpty, fontChoice,
+  HEX_COLOR, hexOrEmpty, intRange, boolStrict, fontNameOrEmpty, fontChoice, roundScore,
 } = require('./validation');
 
 const DEFAULT_SETTINGS = {
@@ -39,7 +39,7 @@ const DEFAULT_SETTINGS = {
   glassOpacity: 0.55,       // 毛玻璃卡片不透明度（0.15–0.95）
   scoreEffect: 'bounce',    // none | bounce | glow | float | shake | confetti | spotlight
   spotlightScope: 'person', // team（仅团队）| person_team（人物 + 团队）| person（仅人物）
-  teamSpotlightCard: 'team', // 团队突显卡片：team（团队名称+头像）| captain（队长姓名+头像）
+  teamSpotlightCard: 'team', // 团队卡片模式：team（团队名称+头像，加分给全队）| captain（队长姓名+头像，加分仅给队长）
   spotlightWidth: 520,      // 居中突显宽度 px（200–4000）
   spotlightHeight: 0,       // 居中突显高度 px；0 = 自动（0–3000）
   spotlightTheme: 'pop',    // pop | fly | genie | squeeze
@@ -182,7 +182,7 @@ const DEFAULT_SETTINGS = {
   rankTieMode: 'competition', // competition | dense | none
 
   // ---- 记分效率与动效 ----
-  quickScorePresets: [1, 5, 10, -1], // 快捷记分预设
+  quickScorePresets: [1, 3, 5, -1], // 快捷记分预设（支持小数）
   scoreRolling: true,         // 滚动数字
   sortAnimation: true,        // 排序重排动画（FLIP）
   rankChangeAnimation: true,  // 名次升降动画
@@ -300,9 +300,10 @@ function normalizeMemberMenuButton(raw) {
   const targetId = needString(raw.targetId, '按钮目标', 64);
   let delta = 0;
   if (action === 'score') {
-    delta = Number(raw.delta);
-    if (!Number.isInteger(delta) || delta === 0 || Math.abs(delta) > 10000) {
-      throw new OpError('人员菜单按钮分值须为 ±10000 内非 0 整数');
+    const rawDelta = Number(raw.delta);
+    delta = Number.isFinite(rawDelta) ? roundScore(rawDelta) : NaN;
+    if (!Number.isFinite(delta) || delta === 0 || Math.abs(delta) > 10000) {
+      throw new OpError('人员菜单按钮分值须为 ±10000 内非 0 数字');
     }
   }
   const durationMs = raw.durationMs == null
@@ -707,9 +708,10 @@ const SETTINGS_VALIDATORS = {
     if (!Array.isArray(v)) throw new OpError('快捷分预设须为数组');
     if (v.length < 1 || v.length > 6) throw new OpError('快捷分预设须为 1–6 个');
     const out = v.map((n) => {
-      const num = Number(n);
-      if (!Number.isInteger(num) || num === 0 || Math.abs(num) > 10000) {
-        throw new OpError('快捷分预设每项须为 ±10000 内非 0 整数');
+      const raw = Number(n);
+      const num = Number.isFinite(raw) ? roundScore(raw) : NaN;
+      if (!Number.isFinite(num) || num === 0 || Math.abs(num) > 10000) {
+        throw new OpError('快捷分预设每项须为 ±10000 内非 0 数字');
       }
       return num;
     });
@@ -737,7 +739,14 @@ const SETTINGS_VALIDATORS = {
     (['self', 'team'].includes(v)
       ? v
       : (() => { throw new OpError('抢答突显目标非法'); })()),
-  buzzScoreDelta: (v) => intRange(v, 0, 10000, '抢答加分须为 0–10000 的整数'),
+  buzzScoreDelta: (v) => {
+    const raw = Number(v);
+    const n = Number.isFinite(raw) ? roundScore(raw) : NaN;
+    if (!Number.isFinite(n) || n < 0 || n > 10000) {
+      throw new OpError('抢答加分须为 0–10000 的数字');
+    }
+    return n;
+  },
   buzzButtonMode: (v) =>
     (['all', 'marked'].includes(v)
       ? v

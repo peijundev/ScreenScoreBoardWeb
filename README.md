@@ -248,11 +248,11 @@ SQLite / PostgreSQL / MySQL / libSQL / D1 / Redis 还提供可选的分块存储
 - 批量添加人员：粘贴名单（换行/逗号/顿号/分号/制表符分隔），自动去重并跳过重名
 - 人员 / 团队搜索过滤
 - 人员 / 团队手动调序：列表中的 ↑↓ 按钮调整顺序，首次调序会自动切换到「自定义顺序」，大屏卡片随即按该顺序展示
-- 给人员记分：输入分数，点「+分」「−分」（支持负分），可选 +1/+5/+10/−1 快捷按钮
+- 给人员记分：输入分数，点「+分」「−分」（支持负分与两位小数），可选 +1/+3/+5/−1 快捷按钮；快捷分预设可在「功能开关 → 记分效率」中自定义（支持小数）
 - 纯突显（不加分）：人员行 / 团队行的「突显」按钮，或 `POST /api/v1/projects/:id/spotlight`，在不改变分数的情况下让大屏居中放大突显指定对象；可在功能开关中关闭，时长与既有突显主题参数均可调
 - 队员账号与人员功能菜单：每个队员账号绑定项目与人员，管理员逐人配置大按钮；按钮可设为「仅抢答时启用」，抢答开放期间执行抢答或原加分/突显动作
 - 显示端预览顶部可一键暂停 / 恢复本项目所有队员按钮；也可批量停用 / 启用所有 `member` 账号（全局操作，停用会立即吊销会话与令牌）
-- 团队整体记分：+1/+5/−1，对每位成员各加减一次
+- 团队整体记分：+1/+3/+5/−1 快捷按钮，或输入任意分值（支持小数）；团队卡片模式下给每位成员各加减一次，队长卡片模式下只给队长加减（「排版设置 → 特效 → 团队卡片模式」）
 - 撤销上一步记分、一键重置本局分数（均可关闭对应功能）
 - 所有新增功能都有独立开关（设置 → 功能开关），可单独隐藏/禁用
 - 创建/删除/改名团队（点击团队名即可改名；删除团队不删人，成员自动移出）
@@ -324,6 +324,26 @@ SQLite / PostgreSQL / MySQL / libSQL / D1 / Redis 还提供可选的分块存储
 
 ## 部署（Docker / Podman / Kubernetes / systemd）
 
+### 一键脚本（白板 / 单机）
+
+仓库提供两个零依赖脚本，会自动准备 Node.js 24+（缺失时下载到项目内 `.tools/node`，不需要管理员 / root）、安装依赖、构建前端并启动服务：
+
+Windows（PowerShell 5.1+）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\deploy\quickstart.ps1
+# 可选：.\deploy\quickstart.ps1 -Port 8080 -AdminPassword "强密码" -NoBrowser
+```
+
+Linux / macOS（POSIX sh）：
+
+```bash
+./deploy/quickstart.sh
+# 可选：./deploy/quickstart.sh --port 8080 --admin-password '强密码' --no-browser
+```
+
+默认监听 `0.0.0.0:3000`，数据写入 `./data`，启动后打印管理端、显示端与局域网地址。首次运行请在管理端创建管理员；也可以用 `-AdminPassword` / `--admin-password`（或 `ADMIN_PASSWORD` 环境变量）让服务端首次启动时自动创建。脚本重复运行是安全的：已有 Node、依赖和构建结果会被复用或快速重建。
+
 所有方式都要求 **Node 24+**。运行镜像基于 Alpine（约 200 MB），Docker、Docker Rootless、Podman、Dev Container 与 Kubernetes 的完整说明见 [docs/containers.md](docs/containers.md)，K8s 从零部署步骤见 [deploy/k8s/README.md](deploy/k8s/README.md)。
 
 Docker：
@@ -377,6 +397,10 @@ Electron 应用同时承载**管理端**和显示端窗口。**每次启动都�
 - **远程屏幕模式**：只需要填写一项完整显示端网址（可以是任意 http/https 页面，不要求与服务器同源）。显示端窗口就是一个无标签页、无地址栏的浏览器，直接加载这个网址；不需要登录。
 
 密码只用于本次登录，不会保存；服务器地址、账号、显示端网址会保存到配置文件。旧配置里的 `mode: "remote"` 会自动迁移为远程管理模式。
+
+> **数据目录**：Electron 本地模式使用独立数据目录（Linux 为 `~/.config/ScreenScoreBoard/data`，Windows 为 `%APPDATA%\ScreenScoreBoard\data`），与 `npm start` / Docker 使用的 `./data` 默认不共享。想在 Electron 里看到部署端同一份数据，请使用「远程管理模式」连接部署服务器，或设置 `SCOREBOARD_DATA_DIR` 指向部署数据目录（同一目录同时只能有一个服务实例，需先停止另一个服务）。
+>
+> **特效**：Electron 的显示端 / 管理端窗口已关闭 Chromium 后台节流（`backgroundThrottling: false` 与相关启动开关），窗口不在前台或被遮挡时也会按真实时间播放记分特效；同时允许无需点击页面即可播放音效。
 
 ```bash
 npm run electron        # 开发模式启动 Electron（preelectron 会先构建前端）

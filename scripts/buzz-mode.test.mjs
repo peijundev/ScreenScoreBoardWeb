@@ -71,6 +71,8 @@ test('抢答设置校验：合法值与非法值', () => {
   assert.equal(v.buzzTarget('team'), 'team');
   assert.equal(v.buzzScoreDelta(0), 0);
   assert.equal(v.buzzScoreDelta(10000), 10000);
+  assert.equal(v.buzzScoreDelta(0.5), 0.5);
+  assert.equal(v.buzzScoreDelta(1.234), 1.23);
   assert.equal(v.buzzButtonMode('all'), 'all');
   assert.equal(v.buzzButtonMode('marked'), 'marked');
   assert.equal(v.buzzRunButtonAction(true), true);
@@ -84,8 +86,7 @@ test('抢答设置校验：合法值与非法值', () => {
   assert.throws(() => v.buzzDurationSec(3601), /倒计时时长/);
   assert.throws(() => v.buzzTarget('other'), /突显目标/);
   assert.throws(() => v.buzzScoreDelta(-1), /加分/);
-  assert.throws(() => v.buzzScoreDelta(10001), /加分/);
-  assert.throws(() => v.buzzButtonMode('some'), /按钮范围/);
+  assert.throws(() => v.buzzScoreDelta(10001), /加分/);  assert.throws(() => v.buzzButtonMode('some'), /按钮范围/);
   assert.throws(() => v.buzzRunButtonAction('yes'), /布尔/);
   assert.throws(() => v.buzzShowStartPrompt('yes'), /布尔/);
 });

@@ -2,7 +2,7 @@ import { memo, useMemo, useRef, useState, type ChangeEvent, type JSX } from 'rea
 import type { Person, Project, Team } from '../../shared/types';
 import { avatarURL, uploadAvatar } from '../../shared/api';
 import { projectOp } from '../../shared/store';
-import { quickPresets, scoreClass, toast } from '../../shared/ui';
+import { quickPresets, roundScore, scoreClass, toast } from '../../shared/ui';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { confirm, prompt } from './dialogs';
 
@@ -236,9 +236,9 @@ function PersonRowBase({
   }
 
   function readDelta(): number | null {
-    const n = Math.round(Number(delta));
+    const n = Number(delta);
     if (!Number.isFinite(n) || n === 0) return null;
-    return Math.max(-10000, Math.min(10000, n));
+    return roundScore(Math.max(-10000, Math.min(10000, n)));
   }
 
   async function rename(): Promise<void> {
@@ -429,7 +429,7 @@ function PersonRowBase({
             type="number"
             className="delta-input"
             value={delta}
-            step={1}
+            step="any"
             onChange={(e) => setDelta(e.target.value)}
           />
           <button

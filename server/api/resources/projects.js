@@ -8,6 +8,7 @@ const {
   projectSummary, projectDetail,
 } = require('./common');
 const { ApiUnprocessableError } = require('../errors');
+const { roundScore } = require('../../validation');
 
 function sorted(map) {
   return Object.values(map || {}).sort((a, b) => (a.order - b.order) || (a.createdAt - b.createdAt));
@@ -33,7 +34,7 @@ function teamOf(project, teamId) {
   return {
     ...team,
     members,
-    total: members.reduce((sum, p) => sum + p.score, 0),
+    total: roundScore(members.reduce((sum, p) => sum + p.score, 0)),
   };
 }
 

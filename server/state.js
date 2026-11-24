@@ -12,7 +12,7 @@ const { logger } = require('./logger');
 const { OPS } = require('./ops');
 const {
   OpError, NotFoundError, FeatureDisabledError,
-  needString, needAvatar, needBio, needScore, needLayout, intRange,
+  needString, needAvatar, needBio, needScore, needLayout, intRange, roundScore,
 } = require('./validation');
 const {
   DEFAULT_SETTINGS, THEME_SETTING_KEYS, SETTINGS_VALIDATORS,
@@ -248,6 +248,14 @@ function normalizeProject(raw) {
 
   // 旧版本：座右铭字段/设置改名为简介（bio）
   const rawSettings = p.settings && typeof p.settings === 'object' ? p.settings : {};
+  // 旧默认快捷分 [1, 5, 10, -1] → 新默认 [1, 3, 5, -1]（只迁移仍保持旧默认的项目）
+  if (
+    Array.isArray(rawSettings.quickScorePresets)
+    && rawSettings.quickScorePresets.length === 4
+    && rawSettings.quickScorePresets.every((n, i) => Number(n) === [1, 5, 10, -1][i])
+  ) {
+    settings.quickScorePresets = [1, 3, 5, -1];
+  }
   const bioRename = {
     featureMotto: 'featureBio',
     mottoFont: 'bioFont',
@@ -616,28 +624,41 @@ function requireFeature(project, key) {
 // ---- 记分 / 突显内部实现：操作员 op、队员菜单 op、REST 共用同一语义 ----
 function applyPersonScore(project, person, delta) {
   const before = person.score;
-  person.score = Math.max(-100000, Math.min(100000, before + delta));
+  person.score = Math.max(-100000, Math.min(100000, roundScore(before + delta)));
   if (person.score !== before) {
     const label = `${person.name} ${delta > 0 ? '+' : ''}${delta}`;
     runtime.pushUndo(project.id, label, [{ personId: person.id, before }]);
     runtime.pushScoreLog(project.id, label, delta);
+    runtime.pushScoreEvent(project.id, {
+      targetType: 'person', targetId: person.id, delta,
+    });
   }
   return { score: person.score };
 }
 
 function applyTeamScore(project, team, delta) {
   requireFeature(project, 'featureTeamScore');
-  const members = Object.values(project.people).filter((p) => p.teamId === team.id);
+  const captain = team.captainId ? project.people[team.captainId] : null;
+  // 团队加分对象与「团队突显卡片」保持一致：队长卡片 → 仅队长；否则全队。
+  const captainOnly = project.settings.teamSpotlightCard === 'captain'
+    && captain
+    && captain.teamId === team.id;
+  const members = Object.values(project.people).filter(
+    (p) => p.teamId === team.id && (!captainOnly || p.id === team.captainId),
+  );
   if (!members.length) throw new OpError('团队暂无成员');
   const entries = members.map((p) => {
     const before = p.score;
-    p.score = Math.max(-100000, Math.min(100000, before + delta));
+    p.score = Math.max(-100000, Math.min(100000, roundScore(before + delta)));
     return { personId: p.id, before };
   });
-  const label = `${team.name} 各 ${delta > 0 ? '+' : ''}${delta}`;
+  const label = `${team.name} ${captainOnly ? '队长' : '各'} ${delta > 0 ? '+' : ''}${delta}`;
   runtime.pushUndo(project.id, label, entries);
   runtime.pushScoreLog(project.id, label, delta);
-  return { count: members.length };
+  runtime.pushScoreEvent(project.id, {
+    targetType: 'team', targetId: team.id, delta,
+  });
+  return { count: members.length, captainOnly: Boolean(captainOnly) };
 }
 
 function pushSpotlightEvent(project, targetType, targetId, durationMs) {
@@ -1469,7 +1490,7 @@ function sanitizeImportedProject(raw) {
       name: needString(rawPerson.name, '姓名', 20),
       avatar: rawPerson.avatar ? needAvatar(rawPerson.avatar) : null,
       cardImage: rawPerson.cardImage ? needAvatar(rawPerson.cardImage) : null,
-      score: Number.isFinite(rawScore) ? Math.max(-100000, Math.min(100000, Math.round(rawScore))) : 0,
+      score: Number.isFinite(rawScore) ? Math.max(-100000, Math.min(100000, roundScore(rawScore))) : 0,
       teamId: rawPerson.teamId && teams[rawPerson.teamId] ? rawPerson.teamId : null,
       layout: rawPerson.layout ? needLayout(rawPerson.layout) : null,
       memberLayout: rawPerson.memberLayout ? needLayout(rawPerson.memberLayout) : null,

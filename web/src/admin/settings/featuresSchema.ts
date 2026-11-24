@@ -5,7 +5,7 @@ const FEATURES: Array<[string, string]> = [
   ['featureSettingsResize', '设置窗口缩放'],
   ['featureBatchAdd', '批量添加人员'],
   ['featureSearch', '人员 / 团队搜索'],
-  ['featureQuickScore', '快捷记分按钮'],
+  ['featureQuickScore', '快捷记分按钮（人员 / 团队）'],
   ['featureTeamScore', '团队整体记分'],
   ['featureSpotlightTrigger', '手动 / API 突显（不加分）'],
   ['featureUndo', '撤销上一步记分'],

@@ -5,6 +5,8 @@ interface Props {
   min: number;
   max: number;
   step?: number;
+  /** 允许小数（默认按整数截断）。 */
+  decimal?: boolean;
   onChange: (value: number) => void;
   className?: string;
   title?: string;
@@ -20,6 +22,7 @@ export default function NumberInput({
   min,
   max,
   step = 1,
+  decimal = false,
   onChange,
   className,
   title,
@@ -35,7 +38,8 @@ export default function NumberInput({
   function clamp(raw: string): number | null {
     const n = Number(raw);
     if (!Number.isFinite(n)) return null;
-    return Math.min(max, Math.max(min, Math.trunc(n)));
+    const clamped = Math.min(max, Math.max(min, n));
+    return decimal ? Math.round(clamped * 100) / 100 : Math.trunc(clamped);
   }
 
   function commit(raw: string): void {

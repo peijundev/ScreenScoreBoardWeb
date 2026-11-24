@@ -1196,6 +1196,92 @@ async function main() {
   await adminOp('undoScore', {});
   s = await viewer.waitState((st) => P(st).people[pid] && P(st).people[pid].score === scoreBefore);
   assert(true, '撤销团队记分');
+  await adminOp('addTeamScore', { teamId: tid, delta: 0.25 });
+  s = await viewer.waitState(
+    (st) => P(st).people[pid]
+      && Math.abs(P(st).people[pid].score - (scoreBefore + 0.25)) < 1e-9,
+  );
+  assert(true, '团队记分支持小数');
+  await adminOp('undoScore', {});
+  await viewer.waitState((st) => P(st).people[pid] && P(st).people[pid].score === scoreBefore);
+
+  // 团队加分对象跟随「团队卡片模式」：队长卡片只给队长加分
+  const modeTeam = await adminOp('addTeam', { name: '卡片模式队' });
+  const modeCaptain = await adminOp('addPerson', { name: '卡片队长' });
+  const modeMember = await adminOp('addPerson', { name: '卡片队员' });
+  await adminOp('assignTeam', {
+    personId: modeCaptain.result.personId, teamId: modeTeam.result.teamId,
+  });
+  await adminOp('assignTeam', {
+    personId: modeMember.result.personId, teamId: modeTeam.result.teamId,
+  });
+  await adminOp('setTeamCaptain', {
+    teamId: modeTeam.result.teamId, personId: modeCaptain.result.personId,
+  });
+  await adminOp('updateSettings', { patch: { teamSpotlightCard: 'captain' } });
+  const captainAck = await adminOp('addTeamScore', {
+    teamId: modeTeam.result.teamId, delta: 2,
+  });
+  assert(captainAck.result.captainOnly === true, '队长卡片模式下团队加分只作用于队长');
+  const modeEventState = await getState();
+  const modeEvents = modeEventState.runtime.scoreEvents?.[projectId] || [];
+  const modeEvent = modeEvents[modeEvents.length - 1];
+  assert(
+    modeEvent && modeEvent.targetType === 'team'
+      && modeEvent.targetId === modeTeam.result.teamId && modeEvent.delta === 2,
+    '团队加分写入团队记分事件，供显示端按团队卡片模式突显',
+  );
+  s = await viewer.waitState(
+    (st) => P(st).people[modeCaptain.result.personId]
+      && P(st).people[modeCaptain.result.personId].score === 2,
+  );
+  assert(P(s).people[modeMember.result.personId].score === 0, '队长卡片模式下普通队员不加分');
+  await adminOp('undoScore', {});
+  await viewer.waitState(
+    (st) => P(st).people[modeCaptain.result.personId]
+      && P(st).people[modeCaptain.result.personId].score === 0,
+  );
+  await adminOp('updateSettings', { patch: { teamSpotlightCard: 'team' } });
+  const allAck = await adminOp('addTeamScore', { teamId: modeTeam.result.teamId, delta: 3 });
+  assert(allAck.result.captainOnly === false, '团队卡片模式下团队加分作用于全队');
+  s = await viewer.waitState(
+    (st) => P(st).people[modeMember.result.personId]
+      && P(st).people[modeMember.result.personId].score === 3,
+  );
+  assert(P(s).people[modeCaptain.result.personId].score === 3, '团队卡片模式下队长也加分');
+  await adminOp('undoScore', {});
+  await viewer.waitState(
+    (st) => P(st).people[modeMember.result.personId]
+      && P(st).people[modeMember.result.personId].score === 0,
+  );
+  await adminOp('removePerson', { personId: modeCaptain.result.personId });
+  await adminOp('removePerson', { personId: modeMember.result.personId });
+  await adminOp('removeTeam', { teamId: modeTeam.result.teamId });
+  // 恢复后续持久化断言所需的状态
+  await adminOp('updateSettings', { patch: { teamSpotlightCard: 'captain' } });
+  await adminOp('addScore', { personId: pid, delta: 0.5 });
+  s = await viewer.waitState(
+    (st) => P(st).people[pid]
+      && Math.abs(P(st).people[pid].score - (scoreBefore + 0.5)) < 1e-9,
+  );
+  assert(true, '人员记分支持小数');
+  await adminOp('addScore', { personId: pid, delta: 0.25 });
+  s = await viewer.waitState(
+    (st) => P(st).people[pid]
+      && Math.abs(P(st).people[pid].score - (scoreBefore + 0.75)) < 1e-9,
+  );
+  assert(true, '小数累加无浮点误差');
+  await adminOp('undoScore', {});
+  await adminOp('undoScore', {});
+  await viewer.waitState((st) => P(st).people[pid] && P(st).people[pid].score === scoreBefore);
+  await adminOp('addScore', { personId: pid, delta: 0.005 });
+  s = await viewer.waitState(
+    (st) => P(st).people[pid]
+      && Math.abs(P(st).people[pid].score - (scoreBefore + 0.01)) < 1e-9,
+  );
+  assert(true, '小数分值保留两位');
+  await adminOp('undoScore', {});
+  await viewer.waitState((st) => P(st).people[pid] && P(st).people[pid].score === scoreBefore);
   await adminOp('addScore', { personId: pid, delta: 5 });
   await viewer.waitState((st) => P(st).people[pid] && P(st).people[pid].score === scoreBefore + 5);
   await adminOp('undoScore', {});
@@ -1216,14 +1302,17 @@ async function main() {
   await adminOp('updateSettings', { patch: { featureUndo: true } });
 
   // 快捷分预设 + undoTo + 分数日志
-  await adminOp('updateSettings', { patch: { quickScorePresets: [2, 4, 8, -2] } });
+  await adminOp('updateSettings', { patch: { quickScorePresets: [0.5, 1.25, -0.75] } });
   s = await viewer.waitState((st) => Array.isArray(P(st).settings.quickScorePresets) &&
-    P(st).settings.quickScorePresets[0] === 2);
-  assert(P(s).settings.quickScorePresets.length === 4, '快捷分预设自定义同步');
+    P(st).settings.quickScorePresets[0] === 0.5);
+  assert(P(s).settings.quickScorePresets.length === 3, '快捷分预设支持小数');
+  await adminOp('updateSettings', { patch: { quickScorePresets: [0.555] } });
+  s = await viewer.waitState((st) => P(st).settings.quickScorePresets[0] === 0.56);
+  assert(true, '快捷分预设保留两位小数');
   await adminOp('updateSettings', { patch: { quickScorePresets: [0, 1] } }).catch((e) => {
     assert(/预设/.test(e.message), '非法快捷分预设被拒绝');
   });
-  await adminOp('updateSettings', { patch: { quickScorePresets: [1, 5, 10, -1] } });
+  await adminOp('updateSettings', { patch: { quickScorePresets: [1, 3, 5, -1] } });
 
   const rtSince = viewer.runtimes.length;
   await adminOp('addScore', { personId: pid, delta: 5 });
@@ -1693,7 +1782,7 @@ async function main() {
     version: 1,
     people: { p_legacy: { id: 'p_legacy', name: '旧成员', score: 3, teamId: null, createdAt: 1, avatar: null } },
     teams: {},
-    settings: { title: '旧积分榜', displayStyle: 'trueage' },
+    settings: { title: '旧积分榜', displayStyle: 'trueage', quickScorePresets: [1, 5, 10, -1] },
   }));
   server = startServer({ DATA_DIR: legacyDir });
   await waitServer();
@@ -1704,6 +1793,10 @@ async function main() {
   assert(legacyProjects[0].people.p_legacy.order === 0, '旧数据补齐排序序号');
   assert(legacyProjects[0].settings.title === '旧积分榜' && legacyProjects[0].settings.scoreEffect, '旧设置保留并补全新字段');
   assert(legacyProjects[0].settings.displayStyle === 'trueage', '旧的真·古风风格保留');
+  assert(
+    JSON.stringify(legacyProjects[0].settings.quickScorePresets) === JSON.stringify([1, 3, 5, -1]),
+    '旧默认快捷分 [1,5,10,-1] 迁移为 [1,3,5,-1]',
+  );
   await stopServer(server);
 
   async function backendRoundtrip(label, env) {

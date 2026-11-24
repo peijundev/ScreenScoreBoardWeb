@@ -4,7 +4,7 @@ import type { AuthUser } from '../../shared/auth';
 import { listUsers } from '../../shared/auth';
 import { uploadAvatar } from '../../shared/api';
 import { projectOp } from '../../shared/store';
-import { toast } from '../../shared/ui';
+import { toast, roundScore } from '../../shared/ui';
 import {
   MEMBER_MENU_DEFAULTS,
   MEMBER_MENU_LIMIT,
@@ -35,6 +35,11 @@ function cloneMenu(menu: MemberMenuConfig): MemberMenuConfig {
 function clampInt(value: unknown, min: number, max: number, fallback: number): number {
   const n = Math.trunc(Number(value));
   return Number.isInteger(n) ? Math.min(max, Math.max(min, n)) : fallback;
+}
+
+function clampScore(value: unknown, min: number, max: number, fallback: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? roundScore(Math.min(max, Math.max(min, n))) : fallback;
 }
 
 function ButtonEditor({
@@ -160,13 +165,13 @@ function ButtonEditor({
         {button.action === 'score' ? (
           <label>
             分值
-            <input
-              type="number"
+            <NumberInput
+              value={button.delta}
               min={-10000}
               max={10000}
-              step={1}
-              value={button.delta}
-              onChange={(e) => onChange({ delta: Math.trunc(Number(e.target.value)) || 0 })}
+              step={0.01}
+              decimal
+              onChange={(value) => onChange({ delta: value })}
             />
           </label>
         ) : (
@@ -341,7 +346,7 @@ export default function MemberMenuDialog({
     project.settings.buzzTarget === 'team' ? 'team' : 'self',
   );
   const [buzzScoreDelta, setBuzzScoreDelta] = useState(
-    clampInt(project.settings.buzzScoreDelta, 0, 10000, 0),
+    clampScore(project.settings.buzzScoreDelta, 0, 10000, 0),
   );
   const [buzzButtonMode, setBuzzButtonMode] = useState<'all' | 'marked'>(
     project.settings.buzzButtonMode === 'marked' ? 'marked' : 'all',
@@ -469,8 +474,8 @@ export default function MemberMenuDialog({
           toast(`按钮「${button.label}」的目标已被删除，请重新选择`);
           return;
         }
-        if (button.action === 'score' && (!Number.isInteger(button.delta) || button.delta === 0)) {
-          toast(`按钮「${button.label}」的分值须为非 0 整数`);
+        if (button.action === 'score' && (!Number.isFinite(Number(button.delta)) || Number(button.delta) === 0)) {
+          toast(`按钮「${button.label}」的分值须为非 0 数字`);
           return;
         }
       }
@@ -637,14 +642,14 @@ export default function MemberMenuDialog({
             </label>
             <label>
               抢到后加分（0=只突显）
-              <input
-                type="number"
+              <NumberInput
+                value={buzzScoreDelta}
                 min={0}
                 max={10000}
-                step={1}
-                value={buzzScoreDelta}
+                step={0.01}
+                decimal
                 disabled={!buzzEnabled}
-                onChange={(e) => setBuzzScoreDelta(clampInt(e.target.value, 0, 10000, 0))}
+                onChange={(value) => setBuzzScoreDelta(value)}
               />
             </label>
             <label>

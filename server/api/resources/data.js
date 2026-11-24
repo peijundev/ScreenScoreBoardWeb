@@ -13,6 +13,7 @@ const { send } = require('../../static');
 const { readRawBody } = require('../responses');
 const { commit, requireProject } = require('./common');
 const { ApiUnprocessableError } = require('../errors');
+const { roundScore } = require('../../validation');
 const {
   ASSET_KEY_RE, IMAGE_EXT, AUDIO_EXT, assetFileRe, decodeOriginalName, uniqueFileName,
 } = require('../../filename');
@@ -232,9 +233,9 @@ function scoresCsv(project, scope) {
   }
   if (scope !== 'people') {
     for (const t of Object.values(project.teams)) {
-      const total = Object.values(project.people)
+      const total = roundScore(Object.values(project.people)
         .filter((p) => p.teamId === t.id)
-        .reduce((sum, p) => sum + p.score, 0);
+        .reduce((sum, p) => sum + p.score, 0));
       entries.push({ type: '团队', name: t.name, team: '', score: total, createdAt: t.createdAt });
     }
   }

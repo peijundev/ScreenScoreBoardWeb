@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, type ChangeEvent, type JSX } from 'react';
 import type { Project, Team } from '../../shared/types';
 import { avatarURL, uploadAvatar } from '../../shared/api';
 import { projectOp } from '../../shared/store';
-import { quickPresets, toast } from '../../shared/ui';
+import { quickPresets, roundScore, toast } from '../../shared/ui';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { confirm, prompt } from './dialogs';
 
@@ -125,6 +125,7 @@ export default function TeamsPanel({
             canDown={allTeams.indexOf(t) < allTeams.length - 1}
             presets={quickPresets(project.settings)}
             teamScore={Boolean(project.settings.featureTeamScore)}
+            quickScore={project.settings.featureQuickScore !== false}
             avatarEdit={project.settings.featureAvatarEdit !== false}
             mobile={mobile}
             canScore={canScore}
@@ -144,6 +145,7 @@ interface BlockProps {
   canDown: boolean;
   presets: number[];
   teamScore: boolean;
+  quickScore: boolean;
   avatarEdit: boolean;
   mobile: boolean;
   canScore: boolean;
@@ -157,6 +159,7 @@ function TeamBlock({
   canDown,
   presets,
   teamScore,
+  quickScore,
   avatarEdit,
   mobile,
   canScore,
@@ -169,12 +172,23 @@ function TeamBlock({
         .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
     [project.people, team.id],
   );
-  const total = members.reduce((sum, m) => sum + m.score, 0);
+  const total = roundScore(members.reduce((sum, m) => sum + m.score, 0));
+  const captain = team.captainId ? project.people[team.captainId] : null;
+  const captainOnly = project.settings.teamSpotlightCard === 'captain'
+    && Boolean(captain)
+    && captain?.teamId === team.id;
+  const [delta, setDelta] = useState('1');
 
   function addAll(delta: number): void {
     projectOp(project.id, 'addTeamScore', { teamId: team.id, delta }).catch((err: Error) =>
       toast(err.message),
     );
+  }
+
+  function readDelta(): number | null {
+    const n = Number(delta);
+    if (!Number.isFinite(n) || n === 0) return null;
+    return roundScore(Math.max(-10000, Math.min(10000, n)));
   }
 
   async function rename(): Promise<void> {
@@ -293,7 +307,7 @@ function TeamBlock({
         )}
         <span className="t-total">{total} 分</span>
 
-        {canScore && teamScore && (mobile ? (
+        {canScore && teamScore && quickScore && (mobile ? (
           <span className="remote-pad">
             <button className="remote-btn remote-plus" type="button" onClick={() => addAll(1)}>
               +1
@@ -308,7 +322,7 @@ function TeamBlock({
               <button
                 key={v}
                 className="btn small team-quick"
-                title={'每位成员 ' + (v > 0 ? '+' : '') + v}
+                title={(captainOnly ? '仅队长 ' : '每位成员 ') + (v > 0 ? '+' : '') + v}
                 onClick={() => addAll(v)}
               >
                 {v > 0 ? '+' : ''}
@@ -317,6 +331,37 @@ function TeamBlock({
             ))}
           </span>
         ))}
+
+        {canScore && teamScore && (!mobile || !quickScore) && (
+          <span className="score-ctl">
+            <input
+              type="number"
+              className="delta-input"
+              value={delta}
+              step="any"
+              aria-label={captainOnly ? '仅给队长加减小数分值' : '团队每人加减小数分值'}
+              onChange={(e) => setDelta(e.target.value)}
+            />
+            <button
+              className="btn small score-plus"
+              onClick={() => {
+                const d = readDelta();
+                if (d != null) addAll(d);
+              }}
+            >
+              +分
+            </button>
+            <button
+              className="btn small score-minus"
+              onClick={() => {
+                const d = readDelta();
+                if (d != null) addAll(-d);
+              }}
+            >
+              −分
+            </button>
+          </span>
+        )}
 
         {canScore && project.settings.featureSpotlightTrigger !== false && (
           <button

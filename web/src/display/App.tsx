@@ -14,6 +14,7 @@ import {
   playScoreSound,
   prefersReducedMotion,
   rollNumber,
+  round2,
   spawnConfetti,
   spawnHighlight,
   spawnPersistentSpotlight,
@@ -230,6 +231,7 @@ export default function App(): JSX.Element {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const prevScores = useRef<Record<string, number>>({});
+  const scoreEventSeen = useRef<{ projectId: string; seq: number } | null>(null);
   const prevRanks = useRef<Record<string, number>>({});
   const prevProject = useRef<string | null>(null);
   const manualSpotlightSeen = useRef<{ projectId: string; seq: number } | null>(null);
@@ -292,7 +294,7 @@ export default function App(): JSX.Element {
     }
     for (const p of Object.values(project.people)) {
       const prev = prevScores.current[p.id];
-      if (prev !== undefined && prev !== p.score) map.set(p.id, p.score - prev);
+      if (prev !== undefined && prev !== p.score) map.set(p.id, round2(p.score - prev));
     }
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -398,6 +400,24 @@ export default function App(): JSX.Element {
     const totalDelta = Array.from(deltas.values()).reduce((a, b) => a + b, 0);
     if (totalDelta !== 0) playScoreSound(totalDelta, settings);
 
+    // 本次快照是否来自团队加分：团队加分的突显目标跟随「团队卡片模式」，
+    // 不能再按第一个变化的人播放个人突显。
+    const scoreEvents = runtime?.scoreEvents?.[project.id] || [];
+    const latestScoreSeq = scoreEvents.length ? scoreEvents[scoreEvents.length - 1].seq : 0;
+    let teamScoreEvent: { targetId: string; delta: number } | null = null;
+    const seenScore = scoreEventSeen.current;
+    if (!seenScore || seenScore.projectId !== project.id) {
+      scoreEventSeen.current = { projectId: project.id, seq: latestScoreSeq };
+    } else if (latestScoreSeq < seenScore.seq) {
+      // 服务端重启后 seq 会从头开始，重新建立基线，避免漏播后续事件。
+      scoreEventSeen.current = { projectId: project.id, seq: latestScoreSeq };
+    } else if (latestScoreSeq > seenScore.seq) {
+      const freshEvents = scoreEvents.filter((event) => event.seq > seenScore.seq);
+      const latestTeam = [...freshEvents].reverse().find((event) => event.targetType === 'team');
+      if (latestTeam) teamScoreEvent = latestTeam;
+      scoreEventSeen.current = { projectId: project.id, seq: latestScoreSeq };
+    }
+
     if (settings.displayStyle !== 'trueage' && settings.scoreEffect === 'confetti') {
       const colors = [
         settings.scoreEffectColor || settings.accent,
@@ -418,30 +438,50 @@ export default function App(): JSX.Element {
     if (settings.displayStyle !== 'trueage' && settings.scoreEffect === 'spotlight') {
       const scope = String(settings.spotlightScope || 'person');
       const mode = String(settings.spotlightPlayMode || 'queue');
-      const changed = Object.values(project.people).filter((p) => {
-        const d = deltas.get(p.id);
-        return d && !(settings.scoreEffectOnlyPositive && d < 0);
-      });
-      // 并列模式：同一次刷新的多人变化一起并列；队列/打断模式保持原行为（只播第一个人）
-      const list = mode === 'parallel' ? changed : changed.slice(0, 1);
-      const targets = list
-        .map((p) => ({
-          key: p.id,
-          els: spotlightElsFor(board, project, 'person', p.id, scope, settings),
-          delta: deltas.get(p.id),
-        }))
-        .filter((t) => t.els.length > 0);
-      if (targets.length) {
-        if (mode === 'parallel' && !prefersReducedMotion()) {
-          playSpotlightParallel(board, targets, settings);
-        } else {
-          if (mode === 'interrupt') {
-            const fade = Number(settings.spotlightInterruptFade);
-            const fadeMs = Number.isFinite(fade) ? fade : 150;
-            interruptSpotlights(fadeMs);
-            interruptSpotlightParallel(fadeMs);
+      if (teamScoreEvent) {
+        const delta = teamScoreEvent.delta;
+        const allowed = delta !== 0
+          && !(settings.scoreEffectOnlyPositive && delta < 0);
+        if (allowed) {
+          const els = spotlightElsFor(
+            board, project, 'team', teamScoreEvent.targetId, 'team', settings,
+          );
+          if (els.length) {
+            if (mode === 'interrupt') {
+              const fade = Number(settings.spotlightInterruptFade);
+              const fadeMs = Number.isFinite(fade) ? fade : 150;
+              interruptSpotlights(fadeMs);
+              interruptSpotlightParallel(fadeMs);
+            }
+            spawnSpotlight(board, els, settings, delta);
           }
-          spawnSpotlight(board, targets[0].els, settings, targets[0].delta);
+        }
+      } else {
+        const changed = Object.values(project.people).filter((p) => {
+          const d = deltas.get(p.id);
+          return d && !(settings.scoreEffectOnlyPositive && d < 0);
+        });
+        // 并列模式：同一次刷新的多人变化一起并列；队列/打断模式保持原行为（只播第一个人）
+        const list = mode === 'parallel' ? changed : changed.slice(0, 1);
+        const targets = list
+          .map((p) => ({
+            key: p.id,
+            els: spotlightElsFor(board, project, 'person', p.id, scope, settings),
+            delta: deltas.get(p.id),
+          }))
+          .filter((t) => t.els.length > 0);
+        if (targets.length) {
+          if (mode === 'parallel' && !prefersReducedMotion()) {
+            playSpotlightParallel(board, targets, settings);
+          } else {
+            if (mode === 'interrupt') {
+              const fade = Number(settings.spotlightInterruptFade);
+              const fadeMs = Number.isFinite(fade) ? fade : 150;
+              interruptSpotlights(fadeMs);
+              interruptSpotlightParallel(fadeMs);
+            }
+            spawnSpotlight(board, targets[0].els, settings, targets[0].delta);
+          }
         }
       }
     }

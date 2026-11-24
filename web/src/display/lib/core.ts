@@ -256,7 +256,7 @@ export function buildItems(project: Project, s: Settings): Item[] {
   }
   for (const t of teams) {
     const members = sortMembers(people.filter((p) => p.teamId === t.id), s);
-    const total = members.reduce((sum, m) => sum + m.score, 0);
+    const total = round2(members.reduce((sum, m) => sum + m.score, 0));
     items.push({ kind: 'team', team: t, members, sortKey: s.sortBy === 'score' ? total : t.createdAt });
   }
 
@@ -353,7 +353,7 @@ export function leaderboardEntries(project: Project, s: Settings): LeaderEntry[]
   const scope = s.leaderboardScope || 'auto';
   const entries: LeaderEntry[] = [];
   const teamScore = (team: Team): number =>
-    people.filter((p) => p.teamId === team.id).reduce((sum, p) => sum + p.score, 0);
+    round2(people.filter((p) => p.teamId === team.id).reduce((sum, p) => sum + p.score, 0));
 
   if (scope === 'people') {
     for (const p of people) {
@@ -492,7 +492,7 @@ export function rollNumber(el: HTMLElement | null, from: number, to: number): vo
   const step = (now: number): void => {
     const t = Math.min(1, (now - start) / dur);
     const eased = 1 - Math.pow(1 - t, 3);
-    el.textContent = String(Math.round(from + (to - from) * eased));
+    el.textContent = String(round2(from + (to - from) * eased));
     if (t < 1) requestAnimationFrame(step);
   };
   requestAnimationFrame(step);

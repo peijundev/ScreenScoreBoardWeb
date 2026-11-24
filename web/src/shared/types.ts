@@ -99,6 +99,14 @@ export interface ScoreLogEntry {
   delta: number;
 }
 
+export interface ScoreEvent {
+  seq: number;
+  targetType: 'person' | 'team';
+  targetId: string;
+  delta: number;
+  at: number;
+}
+
 export interface SpotlightRuntimeEvent {
   seq: number;
   targetType: 'person' | 'team' | string;
@@ -111,6 +119,7 @@ export interface RuntimeSnapshot {
   undoCounts: Record<string, number>;
   undoLabels?: Record<string, UndoLabel[]>;
   scoreLogs?: Record<string, ScoreLogEntry[]>;
+  scoreEvents?: Record<string, ScoreEvent[]>;
   countdowns: Record<string, CountdownRuntime>;
   spotlightEvents?: Record<string, SpotlightRuntimeEvent[]>;
   buzz?: Record<string, BuzzRuntime>;

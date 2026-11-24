@@ -5,11 +5,14 @@ const UNDO_LIMIT = 50;
 const undoStacks = new Map();   // projectId -> [{ label, entries, at }]
 const countdowns = new Map();   // projectId -> { state, durationMs, endsAt, remainingMs, endedAt, timer }
 const scoreLogs = new Map();    // projectId -> [{ at, label, delta }]
+const scoreEvents = new Map();  // projectId -> [{ seq, targetType, targetId, delta, at }]
 const spotlightEvents = new Map(); // projectId -> [{ seq, targetType, targetId, at, durationMs? }]
 const buzzes = new Map();       // projectId -> { roundId, mode, phase, startedAt, endsAt, durationMs, winner, timer }
 
 const SCORE_LOG_LIMIT = 200;
+const SCORE_EVENT_LIMIT = 20;
 const SPOTLIGHT_EVENT_LIMIT = 20;
+let scoreSeq = 0;
 let spotlightSeq = 0;
 let buzzSeq = 0;
 
@@ -79,6 +82,27 @@ function getScoreLogs(projectId, n) {
   const logs = scoreLogs.get(projectId);
   if (!logs || !logs.length) return [];
   return logs.slice(-n).reverse();
+}
+
+/** 记分事件：让显示端知道这次变化是个人还是团队，从而按对应设置播放突显。 */
+function pushScoreEvent(projectId, event) {
+  if (!projectId || !event) return null;
+  const entry = {
+    seq: ++scoreSeq,
+    targetType: event.targetType === 'team' ? 'team' : 'person',
+    targetId: event.targetId,
+    delta: Number(event.delta) || 0,
+    at: Date.now(),
+  };
+  const list = scoreEvents.get(projectId) || [];
+  list.push(entry);
+  while (list.length > SCORE_EVENT_LIMIT) list.shift();
+  scoreEvents.set(projectId, list);
+  return entry;
+}
+
+function getScoreEvents(projectId) {
+  return scoreEvents.get(projectId) || [];
 }
 
 // ---------- 纯突显事件（不加分） ----------
@@ -289,6 +313,7 @@ function clearProjectRuntime(projectId) {
   resetCountdown(projectId);
   clearUndo(projectId);
   scoreLogs.delete(projectId);
+  scoreEvents.delete(projectId);
   spotlightEvents.delete(projectId);
 }
 
@@ -314,6 +339,10 @@ function getRuntimeSnapshot() {
   for (const [projectId, events] of spotlightEvents) {
     if (events.length) snapshotSpotlights[projectId] = events.slice();
   }
+  const snapshotScoreEvents = {};
+  for (const [projectId, events] of scoreEvents) {
+    if (events.length) snapshotScoreEvents[projectId] = events.slice();
+  }
   const snapshotBuzz = {};
   for (const [projectId, entry] of buzzes) {
     snapshotBuzz[projectId] = compactBuzz(entry);
@@ -322,6 +351,7 @@ function getRuntimeSnapshot() {
     undoCounts,
     undoLabels: undoLabelsMap,
     scoreLogs: snapshotLogs,
+    scoreEvents: snapshotScoreEvents,
     countdowns: snapshotCountdowns,
     spotlightEvents: snapshotSpotlights,
     buzz: snapshotBuzz,
@@ -339,6 +369,8 @@ module.exports = {
   clearUndo,
   pushScoreLog,
   getScoreLogs,
+  pushScoreEvent,
+  getScoreEvents,
   pushSpotlight,
   getSpotlightEvents,
   startCountdown,

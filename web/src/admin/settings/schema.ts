@@ -365,16 +365,16 @@ export const SETTINGS_GROUPS: Group[] = [
     ],
   },
   {
-    title: '团队突显卡片',
+    title: '团队卡片模式',
     tab: 'effect',
     fields: [
       {
         t: 'select',
         k: 'teamSpotlightCard',
-        label: '团队突显时显示',
+        label: '团队突显 / 团队加分对象',
         opts: [
-          ['team', '团队卡片（团队名称 + 头像）'],
-          ['captain', '队长卡片（队长姓名 + 头像；无队长回退团队）'],
+          ['team', '团队卡片（名称+头像；团队加分给全队）'],
+          ['captain', '队长卡片（队长姓名+头像；团队加分仅给队长）'],
         ],
       },
     ],

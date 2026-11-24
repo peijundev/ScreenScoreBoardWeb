@@ -289,7 +289,7 @@ export function buildThemeScriptContext({
     people,
     teams,
     maxScore: scores.length ? Math.max(...scores) : 0,
-    totalScore: scores.reduce((sum, score) => sum + score, 0),
+    totalScore: Math.round(scores.reduce((sum, score) => sum + score, 0) * 100) / 100,
     countdown: buildCountdown(countdown, Number(runtime?.serverNow) || Date.now()),
   };
 }

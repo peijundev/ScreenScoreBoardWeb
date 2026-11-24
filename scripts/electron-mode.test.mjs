@@ -210,6 +210,12 @@ test('Electron 本机模式接线：登录开关绑定局域网监听', () => {
     /startLocalMode\(\{ auth: config && config\.auth === true \}\)/,
     '主进程必须把 auth 传给本机模式',
   );
+  assert.match(main, /disable-background-timer-throttling/, '关闭后台定时器节流');
+  assert.match(main, /disable-renderer-backgrounding/, '关闭后台渲染节流');
+  assert.match(main, /disable-backgrounding-occluded-windows/, '窗口被遮挡时仍保持渲染');
+  assert.match(main, /autoplay-policy.*no-user-gesture-required/, '允许白板免手势播放音效');
+  assert.match(main, /backgroundThrottling: false/, '显示端窗口关闭后台节流');
+  assert.match(main, /SCOREBOARD_DATA_DIR/, '支持显式共享部署端数据目录');
 });
 
 test('启动器 preload 把登录开关转发给主进程', async () => {

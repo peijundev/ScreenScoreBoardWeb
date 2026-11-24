@@ -389,4 +389,49 @@ test('独立显示端：抢答临时计时器与锁定突显', { skip: skipReaso
     ),
     '队长卡片显示团队名称',
   );
+
+  // 团队加分的突显目标跟随「团队卡片模式」，不再突显第一个变化的人
+  assert.ok(await waitFor(`!document.querySelector('.spotlight-overlay')`, 8000), '等待手动突显结束');
+  await api(admin, `/projects/${projectId}/settings`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      patch: {
+        scoreEffect: 'spotlight',
+        spotlightScope: 'person',
+        spotlightPlayMode: 'queue',
+        teamSpotlightCard: 'team',
+      },
+    }),
+  });
+  await new Promise((r) => setTimeout(r, 300));
+  await adminWs.op('addTeamScore', { projectId, teamId: team.teamId, delta: 1 });
+  assert.ok(
+    await waitFor(
+      `[...document.querySelectorAll('.spotlight-overlay .spotlight-team-card .team-name')]
+        .some((el) => el.textContent.trim() === '突显队')`,
+      5000,
+    ),
+    '团队卡片模式下，团队加分突显团队卡片',
+  );
+  assert.equal(
+    await evalJs(`Boolean(document.querySelector('.spotlight-overlay .card[data-kind="person"]'))`),
+    false,
+    '团队加分不再按个人卡片突显',
+  );
+
+  assert.ok(await waitFor(`!document.querySelector('.spotlight-overlay')`, 8000), '等待团队加分突显结束');
+  await api(admin, `/projects/${projectId}/settings`, {
+    method: 'PATCH',
+    body: JSON.stringify({ patch: { teamSpotlightCard: 'captain' } }),
+  });
+  await new Promise((r) => setTimeout(r, 300));
+  await adminWs.op('addTeamScore', { projectId, teamId: team.teamId, delta: 1 });
+  assert.ok(
+    await waitFor(
+      `[...document.querySelectorAll('.spotlight-overlay .spotlight-team-card .team-name')]
+        .some((el) => el.textContent.trim() === '抢答甲')`,
+      5000,
+    ),
+    '队长卡片模式下，团队加分突显队长卡片',
+  );
 });

@@ -66,10 +66,14 @@ function needBio(v) {
   if (text.length > 60) throw new OpError('简介过长（最多 60 字）');
   return text;
 }
+/** 分数统一保留 2 位小数，避免 0.1 + 0.2 之类的浮点误差累积。 */
+function roundScore(n) {
+  return Math.round(Number(n) * 100) / 100;
+}
 function needScore(v, field) {
   const n = Number(v);
   if (!Number.isFinite(n)) throw new OpError(`${field}必须是数字`);
-  return Math.max(-10000, Math.min(10000, Math.round(n)));
+  return Math.max(-10000, Math.min(10000, roundScore(n)));
 }
 function needLayout(l) {
   if (!l || typeof l !== 'object') throw new OpError('布局参数非法');
@@ -119,6 +123,6 @@ function fontChoice(label) {
 
 module.exports = {
   OpError, NotFoundError, FeatureDisabledError, UnauthorizedError, ForbiddenError,
-  needString, needAvatar, needSoundPath, needBio, needScore, needLayout,
+  needString, needAvatar, needSoundPath, needBio, needScore, needLayout, roundScore,
   HEX_COLOR, hexOrEmpty, intRange, boolStrict, fontNameOrEmpty, fontChoice,
 };

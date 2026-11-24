@@ -750,3 +750,21 @@ test('手机管理端：全屏对话框与主要流程', { skip: skipReason }, a
   assert.ok(dialog.enableHeight < 40, '启用菜单标签不再竖排');
   assert.equal(dialog.hasDisplayPreview, false, '人员菜单已移除内嵌大屏预览');
 });
+
+test('人员与团队记分控件共用同一组功能开关', () => {
+  const people = readFileSync(
+    path.join(ROOT, 'web/src/admin/components/PeoplePanel.tsx'), 'utf8',
+  );
+  const teams = readFileSync(
+    path.join(ROOT, 'web/src/admin/components/TeamsPanel.tsx'), 'utf8',
+  );
+  const features = readFileSync(
+    path.join(ROOT, 'web/src/admin/settings/featuresSchema.ts'), 'utf8',
+  );
+  assert.match(people, /quickScore=\{Boolean\(settings\.featureQuickScore\)\}/);
+  assert.match(teams, /quickScore=\{project\.settings\.featureQuickScore !== false\}/);
+  assert.match(teams, /canScore && teamScore && quickScore/, '团队快捷分受同一开关控制');
+  assert.match(teams, /\(!mobile \|\| !quickScore\)/, '团队任意加分的显示规则与人员一致');
+  assert.match(teams, /featureSpotlightTrigger/, '团队突显仍受突显开关控制');
+  assert.match(features, /快捷记分按钮（人员 \/ 团队）/, '开关文案说明同时作用于人员与团队');
+});

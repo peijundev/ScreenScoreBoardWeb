@@ -167,7 +167,9 @@ curl -X PATCH http://localhost:3000/api/v1/themes/th_x/layers \
 |---|---|---|
 | POST | `/projects/:projectId/people/:personId/score/add` | 加减分，body `{ "delta": 5 }`；body 可省略 `projectId`/`personId` |
 | POST | `/projects/:projectId/people/:personId/score/set` | 直接设分，body `{ "score": 10 }` |
-| POST | `/projects/:projectId/teams/:teamId/score/add` | 团队全员加减分，body `{ "delta": 2 }` |
+| POST | `/projects/:projectId/teams/:teamId/score/add` | 团队加减分，body `{ "delta": 2 }`；团队卡片模式加全队，队长卡片模式只加队长 |
+
+> `delta` / `score` 支持小数，服务端统一保留两位小数（例如 `0.5`、`-1.25`），单次操作范围 ±10000，个人总分范围 ±100000。
 | POST | `/projects/:projectId/spotlight` | 凭空触发起居放大突显，不改变分数、不写撤销栈；body `{ "targetType": "person" \| "team", "targetId": "…", "durationMs?": 2000 }`，允许 `operator` |
 | POST | `/projects/:projectId/member-action` | 执行管理端为该队员账号配置的人员菜单按钮；body `{ "buttonId": "…" }`，动作/目标/数值取自 `memberMenus` 中该账号的条目，并校验账号绑定的项目必须等于 `projectId`；允许 `member` |
 | POST | `/projects/:projectId/buzz/start` | 开始抢答并联动倒计时；仅 admin |

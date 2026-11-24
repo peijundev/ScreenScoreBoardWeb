@@ -97,6 +97,16 @@ test('按钮 onlyDuringBuzz：默认 false，非法值拒绝', () => {
   );
 });
 
+test('人员菜单按钮支持小数分值并保留两位', () => {
+  assert.equal(normalizeMemberMenuButton(validButton({ delta: 0.5 })).delta, 0.5);
+  assert.equal(normalizeMemberMenuButton(validButton({ delta: -1.25 })).delta, -1.25);
+  assert.equal(normalizeMemberMenuButton(validButton({ delta: 0.555 })).delta, 0.56);
+  assert.throws(
+    () => normalizeMemberMenuButton(validButton({ delta: 0.001 })),
+    /非 0 数字/,
+  );
+});
+
 test('按队员菜单校验：合法值与缺省字段', () => {
   const missingEnabled = validButton();
   delete missingEnabled.enabled;
