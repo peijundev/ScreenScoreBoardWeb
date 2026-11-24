@@ -48,6 +48,7 @@ test('抢答设置默认值与权限契约', () => {
   assert.equal(DEFAULT_SETTINGS.buzzRunButtonAction, false);
   assert.equal(DEFAULT_SETTINGS.buzzLoserHint, true);
   assert.equal(DEFAULT_SETTINGS.buzzStopTimerOnWin, true);
+  assert.equal(DEFAULT_SETTINGS.buzzShowStartPrompt, true);
 
   assert.ok(Object.prototype.hasOwnProperty.call(OPS, 'buzzStart'));
   assert.ok(Object.prototype.hasOwnProperty.call(OPS, 'buzzEnd'));
@@ -75,6 +76,8 @@ test('抢答设置校验：合法值与非法值', () => {
   assert.equal(v.buzzRunButtonAction(true), true);
   assert.equal(v.buzzLoserHint(false), false);
   assert.equal(v.buzzStopTimerOnWin(true), true);
+  assert.equal(v.buzzShowStartPrompt(true), true);
+  assert.equal(v.buzzShowStartPrompt(false), false);
 
   assert.throws(() => v.buzzTimerMode('later'), /计时器模式/);
   assert.throws(() => v.buzzDurationSec(0), /倒计时时长/);
@@ -84,6 +87,7 @@ test('抢答设置校验：合法值与非法值', () => {
   assert.throws(() => v.buzzScoreDelta(10001), /加分/);
   assert.throws(() => v.buzzButtonMode('some'), /按钮范围/);
   assert.throws(() => v.buzzRunButtonAction('yes'), /布尔/);
+  assert.throws(() => v.buzzShowStartPrompt('yes'), /布尔/);
 });
 
 test('人员菜单按钮 buzz 字段缺省为 true', () => {

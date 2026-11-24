@@ -365,6 +365,21 @@ export const SETTINGS_GROUPS: Group[] = [
     ],
   },
   {
+    title: '团队突显卡片',
+    tab: 'effect',
+    fields: [
+      {
+        t: 'select',
+        k: 'teamSpotlightCard',
+        label: '团队突显时显示',
+        opts: [
+          ['team', '团队卡片（团队名称 + 头像）'],
+          ['captain', '队长卡片（队长姓名 + 头像；无队长回退团队）'],
+        ],
+      },
+    ],
+  },
+  {
     title: '居中放大突显',
     tab: 'effect',
     advanced: true,

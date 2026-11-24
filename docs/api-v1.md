@@ -87,6 +87,7 @@ curl -X PATCH http://localhost:3000/api/v1/themes/th_x/layers \
 | GET/POST | `/auth/tokens` | 登录 | 自己的令牌（创建时明文只返回一次） |
 | DELETE | `/auth/tokens/:id` | 登录 | 吊销令牌 |
 | GET/POST | `/auth/users` | admin | 用户列表 / 创建用户 |
+| POST | `/auth/users/members/disabled` | admin | 批量停用 / 启用所有 `member` 账号；body `{ "disabled": true \| false }`，停用会吊销会话与令牌 |
 | PATCH/DELETE | `/auth/users/:id` | admin | 更新（角色/显示名/停用）或删除 |
 | POST | `/auth/users/:id/password` | admin | 重置密码并吊销该用户全部会话/令牌 |
 | GET | `/auth/users/:id/sessions` | admin | 用户会话 |

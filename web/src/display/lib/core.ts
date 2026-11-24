@@ -74,6 +74,7 @@ export function applyAppearance(s: Settings): void {
   void s.adminTouchTargetSize;
   // 队员控制台 / 人员功能菜单只影响管理端「队员」界面，显示端不应用。
   void s.featureMemberConsole;
+  void s.memberButtonsPaused;
   void s.memberMenus;
   // 抢答设置由服务端运行态与锁定突显层消费，外观层不应用。
   void s.featureBuzzer;

@@ -668,7 +668,7 @@ async function main() {
 
   await adminOp('updateSettings', {
     patch: {
-      scoreEffect: 'spotlight', spotlightScope: 'person_team',
+      scoreEffect: 'spotlight', spotlightScope: 'person_team', teamSpotlightCard: 'captain',
       spotlightWidth: 700, spotlightHeight: 420, spotlightTheme: 'fly',
       spotlightReturnDuration: 2200, spotlightScrimEnabled: true, spotlightScrimOpacity: 0.25,
       spotlightPlayMode: 'parallel', spotlightParallelMax: 6, spotlightParallelGap: 36,
@@ -682,6 +682,7 @@ async function main() {
   });
   s = await viewer.waitState((st) => P(st).settings.scoreEffect === 'spotlight');
   assert(P(s).settings.customSound === soundUp.path && P(s).settings.spotlightScope === 'person_team' &&
+    P(s).settings.teamSpotlightCard === 'captain' &&
     P(s).settings.spotlightWidth === 700 && P(s).settings.spotlightHeight === 420 &&
     P(s).settings.spotlightTheme === 'fly' && P(s).settings.spotlightReturnDuration === 2200 &&
     P(s).settings.spotlightScrimEnabled === true && P(s).settings.spotlightScrimOpacity === 0.25 &&
@@ -846,6 +847,7 @@ async function main() {
       buzzRunButtonAction: true,
       buzzLoserHint: false,
       buzzStopTimerOnWin: true,
+      buzzShowStartPrompt: true,
     },
   });
   s = await viewer.waitState((st) => (P(st).settings.memberMenus || []).length === 1);
@@ -863,7 +865,8 @@ async function main() {
     P(s).settings.buzzButtonMode === 'marked' &&
     P(s).settings.buzzRunButtonAction === true &&
     P(s).settings.buzzLoserHint === false &&
-    P(s).settings.buzzStopTimerOnWin === true,
+    P(s).settings.buzzStopTimerOnWin === true &&
+    P(s).settings.buzzShowStartPrompt === true,
   '抢答设置同步');
   await adminOp('updateSettings', { patch: { buzzTimerMode: 'later' } })
     .catch((e) => assert(/计时器模式/.test(e.message), '非法抢答计时器模式被拒绝'));
@@ -877,6 +880,8 @@ async function main() {
     .catch((e) => assert(/加分/.test(e.message), '非法抢答加分被拒绝'));
   await adminOp('updateSettings', { patch: { buzzButtonMode: 'some' } })
     .catch((e) => assert(/按钮范围/.test(e.message), '非法抢答按钮范围被拒绝'));
+  await adminOp('updateSettings', { patch: { buzzShowStartPrompt: 'yes' } })
+    .catch((e) => assert(/布尔/.test(e.message), '非法抢答开始提示开关被拒绝'));
   await adminOp('updateSettings', { patch: { memberMenus: 'x' } })
     .catch((e) => assert(/数组/.test(e.message), '非法人员菜单类型被拒绝'));
   await adminOp('updateSettings', { patch: { memberMenus: [memberMenu([], { columns: 0 })] } })
@@ -908,6 +913,7 @@ async function main() {
       buzzRunButtonAction: true,
       buzzLoserHint: false,
       buzzStopTimerOnWin: true,
+      buzzShowStartPrompt: true,
     },
   });
 
@@ -927,6 +933,9 @@ async function main() {
   });
   await adminOp('updateSettings', { patch: { spotlightScope: 'team_only' } }).catch((e) => {
     assert(/突显范围/.test(e.message), '非法突显范围被拒绝');
+  });
+  await adminOp('updateSettings', { patch: { teamSpotlightCard: 'other' } }).catch((e) => {
+    assert(/团队突显卡片/.test(e.message), '非法团队突显卡片模式被拒绝');
   });
   await adminOp('updateSettings', { patch: { spotlightWidth: 9 } }).catch((e) => {
     assert(/突显宽度/.test(e.message), '非法突显宽度被拒绝');
@@ -1595,7 +1604,8 @@ async function main() {
     '重启后标题自由位置恢复');
   assert(rp.settings.scoreEffect === 'highlight' && rp.settings.customSound === soundUp.path &&
     rp.settings.soundPreset === 'chime' &&
-    rp.settings.spotlightScope === 'person_team' && rp.settings.spotlightWidth === 700 &&
+    rp.settings.spotlightScope === 'person_team' && rp.settings.teamSpotlightCard === 'captain' &&
+    rp.settings.spotlightWidth === 700 &&
     rp.settings.spotlightHeight === 420 && rp.settings.spotlightTheme === 'squeeze' &&
     rp.settings.spotlightReturnDuration === 2200 && rp.settings.spotlightScrimEnabled === true &&
     rp.settings.spotlightScrimOpacity === 0.25 && rp.settings.spotlightPlayMode === 'parallel' &&
@@ -1643,7 +1653,8 @@ async function main() {
     rp.settings.buzzButtonMode === 'marked' &&
     rp.settings.buzzRunButtonAction === true &&
     rp.settings.buzzLoserHint === false &&
-    rp.settings.buzzStopTimerOnWin === true,
+    rp.settings.buzzStopTimerOnWin === true &&
+    rp.settings.buzzShowStartPrompt === true,
   '重启后抢答设置恢复');
   assert(!restored.runtime.buzz?.[projectId] && !restored.runtime.countdowns[projectId],
     '重启后抢答与计时器运行态清空');

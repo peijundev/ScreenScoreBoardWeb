@@ -76,7 +76,25 @@ test('member 角色与专用 op 契约', () => {
 
 test('人员菜单设置默认值', () => {
   assert.equal(DEFAULT_SETTINGS.featureMemberConsole, true);
+  assert.equal(DEFAULT_SETTINGS.memberButtonsPaused, false);
   assert.deepEqual(DEFAULT_SETTINGS.memberMenus, []);
+});
+
+test('按钮 onlyDuringBuzz：默认 false，非法值拒绝', () => {
+  assert.equal(normalizeMemberMenuButton(validButton()).onlyDuringBuzz, false);
+  assert.equal(
+    normalizeMemberMenuButton(validButton({ onlyDuringBuzz: true })).onlyDuringBuzz,
+    true,
+  );
+  assert.equal(
+    SETTINGS_VALIDATORS.memberButtonsPaused(true),
+    true,
+  );
+  assert.throws(() => SETTINGS_VALIDATORS.memberButtonsPaused('yes'), /布尔/);
+  assert.throws(
+    () => normalizeMemberMenuButton(validButton({ onlyDuringBuzz: 'yes' })),
+    /布尔/,
+  );
 });
 
 test('按队员菜单校验：合法值与缺省字段', () => {
@@ -197,6 +215,26 @@ test('队员端预览与真实界面共用组件与样式，显示端显式跳�
       && previewSrc.includes('preview-countdown')
       && previewSrc.includes("'countdownStart'"),
     '显示端预览包含计时器控制条',
+  );
+  assert.ok(
+    previewSrc.includes('function MemberControls')
+      && previewSrc.includes('暂停所有队员按钮')
+      && previewSrc.includes('停用所有队员账号')
+      && previewSrc.includes('setMembersDisabled'),
+    '显示端预览提供队员按钮暂停与账号批量停用入口',
+  );
+  assert.ok(
+    consoleSrc.includes('memberButtonsPaused') && consoleSrc.includes('onlyDuringBuzz'),
+    '队员端消费暂停状态与仅抢答时启用设置',
+  );
+  assert.ok(
+    consoleSrc.includes('const dimmed')
+      && consoleSrc.includes("dimmed ? ' is-disabled'"),
+    '仅抢答时启用的按钮在无抢答时显式置灰',
+  );
+  assert.ok(
+    dialogSrc.includes('仅抢答时启用'),
+    '人员菜单按钮可配置仅抢答时启用',
   );
   assert.ok(coreSrc.includes('void s.memberMenus'), '显示端显式跳过管理端专用设置');
 });
@@ -327,6 +365,17 @@ async function getState() {
   return res.json();
 }
 
+async function waitBuzzPhase(projectId, phase, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const state = await getState();
+    const buzz = state.runtime && state.runtime.buzz ? state.runtime.buzz[projectId] : null;
+    if (buzz && buzz.phase === phase) return buzz;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  throw new Error('等待抢答阶段超时：' + phase);
+}
+
 test('队员绑定与逐人菜单：只能执行自己账号的配置按钮', async () => {
   const dataDir = mkdtempSync(path.join(tmpdir(), 'sb-member-'));
   let server = startServer(dataDir);
@@ -410,6 +459,10 @@ test('队员绑定与逐人菜单：只能执行自己账号的配置按钮', as
       projectId,
       patch: {
         featureMemberConsole: true,
+        featureBuzzer: true,
+        buzzTimerMode: 'prepare',
+        buzzDurationSec: 1,
+        buzzButtonMode: 'all',
         memberMenus: [{
           userId: memberUser.id,
           enabled: true,
@@ -421,6 +474,14 @@ test('队员绑定与逐人菜单：只能执行自己账号的配置按钮', as
               id: 'show-1', label: '突显', action: 'spotlight', targetId: personId, delta: 0,
             }),
             validButton({ id: 'off-1', label: '停用', enabled: false, targetId: personId }),
+            validButton({
+              id: 'session-1',
+              label: '抢答投票',
+              onlyDuringBuzz: true,
+              buzz: false,
+              targetId: personId,
+              delta: 2,
+            }),
           ],
         }],
       },
@@ -505,6 +566,74 @@ test('队员绑定与逐人菜单：只能执行自己账号的配置按钮', as
     state = await getState();
     assert.equal(state.projects[projectId].people[personId].score, 3);
 
+    // 一键暂停：服务端同时拒绝普通动作与抢答按下
+    await admin.op('updateSettings', { projectId, patch: { memberButtonsPaused: true } });
+    await assert.rejects(
+      member.op('memberAction', { projectId, buttonId: 'vote-1' }),
+      /暂停所有队员按钮/,
+    );
+    await admin.op('updateSettings', { projectId, patch: { memberButtonsPaused: false } });
+
+    // 仅抢答时启用：未开始抢答时不可用
+    await assert.rejects(
+      member.op('memberAction', { projectId, buttonId: 'session-1' }),
+      /仅在抢答时可用/,
+    );
+
+    const started = await admin.op('buzzStart', { projectId });
+    assert.equal(started.phase, 'prepare');
+    await assert.rejects(
+      member.op('memberAction', { projectId, buttonId: 'session-1' }),
+      /仅在抢答时可用|尚未开放/,
+      '准备倒计时期间不开放投票按钮',
+    );
+    await waitBuzzPhase(projectId, 'open');
+    const sessionResult = await member.op('memberAction', { projectId, buttonId: 'session-1' });
+    assert.equal(sessionResult.action, 'score');
+    state = await getState();
+    assert.equal(state.projects[projectId].people[personId].score, 5, '抢答开放期间投票按钮执行原动作');
+
+    await assert.rejects(
+      member.op('memberAction', { projectId, buttonId: 'vote-1' }),
+      /请使用抢答按钮/,
+      '参与抢答的按钮在抢答期间仍只能走 buzzPress',
+    );
+    const sessionBuzz = await member.op('buzzPress', { projectId, buttonId: 'session-1' });
+    assert.deepEqual(sessionBuzz, { won: false, reason: 'not-buzz-button' });
+
+    await admin.op('updateSettings', { projectId, patch: { memberButtonsPaused: true } });
+    const pausedPress = await member.op('buzzPress', { projectId, buttonId: 'vote-1' });
+    assert.deepEqual(pausedPress, { won: false, reason: 'paused' });
+    await admin.op('updateSettings', { projectId, patch: { memberButtonsPaused: false } });
+    await admin.op('buzzEnd', { projectId });
+
+    // 全局批量停用/启用队员账号
+    const nonBoolean = await api(adminSession, '/auth/users/members/disabled', {
+      method: 'POST',
+      body: JSON.stringify({ disabled: 'yes' }),
+    });
+    assert.equal(nonBoolean.status, 422, '非法 disabled 被拒绝');
+    const memberForbidden = await api(memberSession, '/auth/users/members/disabled', {
+      method: 'POST',
+      body: JSON.stringify({ disabled: true }),
+    });
+    assert.equal(memberForbidden.status, 403, '队员不能批量停用账号');
+    const disabledAll = await api(adminSession, '/auth/users/members/disabled', {
+      method: 'POST',
+      body: JSON.stringify({ disabled: true }),
+    });
+    assert.equal(disabledAll.status, 200, JSON.stringify(disabledAll.json));
+    assert.ok(disabledAll.json.data.count >= 2);
+    assert.equal(disabledAll.json.data.disabled, true);
+    const afterDisable = await api(memberSession, '/auth/me');
+    assert.equal(afterDisable.status, 401, '停用后旧会话立即失效');
+    const enabledAll = await api(adminSession, '/auth/users/members/disabled', {
+      method: 'POST',
+      body: JSON.stringify({ disabled: false }),
+    });
+    assert.equal(enabledAll.status, 200);
+    assert.ok(enabledAll.json.data.count >= 2);
+
     // 重启后绑定与菜单配置都应恢复
     for (const ws of [...adminWs, ...memberWs]) { try { ws.close(); } catch (_) {} }
     await stopServer(server);
@@ -517,12 +646,19 @@ test('队员绑定与逐人菜单：只能执行自己账号的配置按钮', as
     const afterRestart = await memberAgain.op('memberAction', { projectId, buttonId: 'vote-1' });
     assert.equal(afterRestart.action, 'score');
     state = await getState();
-    assert.equal(state.projects[projectId].people[personId].score, 4, '重启后绑定与菜单仍可用');
+    assert.equal(state.projects[projectId].people[personId].score, 6, '重启后绑定与菜单仍可用');
     assert.equal(
       state.projects[projectId].settings.memberMenus[0].userId,
       memberUser.id,
       '菜单按账号存储',
     );
+    assert.equal(
+      state.projects[projectId].settings.memberMenus[0].buttons
+        .find((button) => button.id === 'session-1')?.onlyDuringBuzz,
+      true,
+      '仅抢答时启用设置重启后保留',
+    );
+    assert.equal(state.projects[projectId].settings.memberButtonsPaused, false);
     assert.notEqual(memberUser2.id, memberUser.id);
   } finally {
     for (const ws of memberWs) { try { ws.close(); } catch (_) {} }

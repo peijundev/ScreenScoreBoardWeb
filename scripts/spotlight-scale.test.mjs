@@ -179,3 +179,31 @@ test('所有滑块都提供数值直填输入框', () => {
   // Android 主题的 filled 输入框不能把数值框也套进去
   assert.match(css, /:not\(\.range-number\)/);
 });
+
+test('团队突显使用独立团队/队长大卡片，抢答开始提示可开关', () => {
+  const app = readFileSync(path.join(root, 'web/src/display/App.tsx'), 'utf8');
+  assert.match(app, /function teamSpotlightEl/);
+  assert.match(app, /teamSpotlightCard === 'captain'/);
+  assert.match(app, /spotlight-team-card/);
+  assert.match(app, /buzzShowStartPrompt/);
+  assert.match(app, /prompt=\{buzzStartPrompt \? '开始抢答'/);
+
+  const overlays = readFileSync(
+    path.join(root, 'web/src/display/components/Overlays.tsx'),
+    'utf8',
+  );
+  assert.match(overlays, /prompt\?: string/);
+  assert.match(overlays, /第一个按下的队员获胜/);
+
+  const css = readFileSync(path.join(root, 'public/display.css'), 'utf8');
+  assert.match(css, /\.spotlight-team-card/);
+  assert.match(css, /\.countdown-big\.is-buzz-start/);
+
+  const schema = readFileSync(path.join(root, 'web/src/admin/settings/schema.ts'), 'utf8');
+  assert.match(schema, /k: 'teamSpotlightCard'/);
+  const dialog = readFileSync(
+    path.join(root, 'web/src/admin/components/MemberMenuDialog.tsx'),
+    'utf8',
+  );
+  assert.match(dialog, /buzzShowStartPrompt/);
+});

@@ -8,6 +8,8 @@ export interface MemberMenuButton {
   label: string;
   enabled: boolean;
   buzz: boolean;
+  /** 仅抢答进行中可用；其余时间按钮禁用。 */
+  onlyDuringBuzz: boolean;
   action: MemberMenuAction;
   targetType: MemberMenuTargetType;
   targetId: string;
@@ -38,6 +40,7 @@ export const MEMBER_MENU_ENTRY_LIMIT = 200;
 export const MEMBER_MENU_DEFAULTS = {
   enabled: true,
   buzz: true,
+  onlyDuringBuzz: false,
   action: 'score' as MemberMenuAction,
   targetType: 'person' as MemberMenuTargetType,
   delta: 1,

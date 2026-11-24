@@ -187,6 +187,7 @@ test('Electron 模式配置、远程 URL、显示端 URL 与 Cookie 解析', () 
 test('Electron 本机模式接线：登录开关绑定局域网监听', () => {
   const main = readFileSync(path.join(ROOT, 'electron/main.js'), 'utf8');
   const launcher = readFileSync(path.join(ROOT, 'electron/launcher.html'), 'utf8');
+  const preload = readFileSync(path.join(ROOT, 'electron/launcher-preload.js'), 'utf8');
   assert.match(main, /host = useAuth \? '0\.0\.0\.0' : '127\.0\.0\.1'/);
   assert.match(main, /auth: useAuth/);
   assert.match(main, /lanBaseUrls/);
@@ -194,4 +195,56 @@ test('Electron 本机模式接线：登录开关绑定局域网监听', () => {
   assert.match(launcher, /启用登录（局域网共享）/);
   assert.match(launcher, /localAuth/);
   assert.match(launcher, /lanUrls/);
+  assert.match(
+    preload,
+    /local: \(config\) => ipcRenderer\.invoke\('ssb:launcher:local', config\)/,
+    'preload 必须把启动器的 { auth } 参数转发给主进程',
+  );
+  assert.match(
+    main,
+    /ipcMain\.handle\('ssb:launcher:local', async \(_event, config\) =>/,
+    '主进程必须从 IPC 参数读取登录开关',
+  );
+  assert.match(
+    main,
+    /startLocalMode\(\{ auth: config && config\.auth === true \}\)/,
+    '主进程必须把 auth 传给本机模式',
+  );
+});
+
+test('启动器 preload 把登录开关转发给主进程', async () => {
+  const Module = require('node:module');
+  const calls = [];
+  const exposed = {};
+  const originalLoad = Module._load;
+  Module._load = function load(request, parent, isMain) {
+    if (request === 'electron') {
+      return {
+        contextBridge: {
+          exposeInMainWorld: (name, api) => {
+            exposed[name] = api;
+          },
+        },
+        ipcRenderer: {
+          invoke: (...args) => {
+            calls.push(args);
+            return Promise.resolve({ ok: true });
+          },
+        },
+      };
+    }
+    return originalLoad.call(this, request, parent, isMain);
+  };
+  try {
+    const file = path.join(ROOT, 'electron/launcher-preload.js');
+    delete require.cache[require.resolve(file)];
+    require(file);
+  } finally {
+    Module._load = originalLoad;
+  }
+  assert.equal(typeof exposed.ssbLauncher?.local, 'function');
+  await exposed.ssbLauncher.local({ auth: true });
+  assert.deepEqual(calls[0], ['ssb:launcher:local', { auth: true }]);
+  await exposed.ssbLauncher.local({ auth: false });
+  assert.deepEqual(calls[1], ['ssb:launcher:local', { auth: false }]);
 });

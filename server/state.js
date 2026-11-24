@@ -1023,8 +1023,8 @@ function applyOp(op, payload, actor = currentActor()) {
     }
     case OPS.memberAction: {
       requireFeature(project, 'featureMemberConsole');
-      if (runtime.getBuzz(project.id)) {
-        throw new OpError('抢答进行中，请使用抢答按钮');
+      if (project.settings.memberButtonsPaused) {
+        throw new OpError('管理员已暂停所有队员按钮');
       }
       const userId = actor && actor.userId;
       if (!userId) throw new OpError('该操作仅限已绑定人员的队员账号');
@@ -1053,6 +1053,19 @@ function applyOp(op, payload, actor = currentActor()) {
         throw new OpError('按钮配置非法，请让管理员重新保存人员菜单');
       }
       if (!button.enabled) throw new OpError('按钮已停用');
+      const activeBuzz = runtime.getBuzz(project.id);
+      if (activeBuzz) {
+        // 抢答期间只允许「仅抢答时启用 + 不参与抢答」的按钮执行原动作；
+        // 参与抢答的按钮必须走 buzzPress，保证第一个按下的人获胜。
+        if (button.onlyDuringBuzz !== true || button.buzz !== false) {
+          throw new OpError('抢答进行中，请使用抢答按钮');
+        }
+        if (activeBuzz.phase !== 'open') {
+          throw new OpError('抢答尚未开放或已结束');
+        }
+      } else if (button.onlyDuringBuzz) {
+        throw new OpError('该按钮仅在抢答时可用');
+      }
       if (button.action === 'score') {
         if (button.targetType === 'person') {
           const person = needPerson(project, button.targetId);
@@ -1104,6 +1117,7 @@ function applyOp(op, payload, actor = currentActor()) {
     }
     case OPS.buzzPress: {
       requireFeature(project, 'featureBuzzer');
+      if (project.settings.memberButtonsPaused) return { won: false, reason: 'paused' };
       const buzz = runtime.getBuzz(project.id);
       if (!buzz) return { won: false, reason: 'inactive' };
       if (buzz.winner) return { won: false, reason: 'taken', winner: buzz.winner };
@@ -1142,6 +1156,10 @@ function applyOp(op, payload, actor = currentActor()) {
         return { won: false, reason: 'no-button' };
       }
       if (!button.enabled) return { won: false, reason: 'button-disabled' };
+      // 「仅抢答时启用 + 不参与抢答」的按钮只执行原动作，不参与首个获胜判定。
+      if (button.onlyDuringBuzz === true && button.buzz === false) {
+        return { won: false, reason: 'not-buzz-button' };
+      }
       if (project.settings.buzzButtonMode === 'marked' && button.buzz !== true) {
         return { won: false, reason: 'not-buzz-button' };
       }

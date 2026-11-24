@@ -35,6 +35,7 @@ export interface SettingsFields {
   glassOpacity: number;
   scoreEffect: string;
   spotlightScope: string;
+  teamSpotlightCard: string;
   spotlightWidth: number;
   spotlightHeight: number;
   spotlightTheme: string;
@@ -206,5 +207,6 @@ export interface SettingsFields {
   featureMobileAdmin: boolean;
   adminTouchTargetSize: number;
   featureMemberConsole: boolean;
+  memberButtonsPaused: boolean;
   memberMenus: MemberMenuConfig[];
 }

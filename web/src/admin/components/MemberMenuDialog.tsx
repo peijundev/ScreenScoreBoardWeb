@@ -93,6 +93,14 @@ function ButtonEditor({
           />
           参与抢答
         </label>
+        <label className="member-check" title="未开始抢答时该按钮不可用，抢答开放期间才可点">
+          <input
+            type="checkbox"
+            checked={button.onlyDuringBuzz === true}
+            onChange={(e) => onChange({ onlyDuringBuzz: e.target.checked })}
+          />
+          仅抢答时启用
+        </label>
         <button className="btn small" type="button" disabled={index === 0} onClick={() => onMove(-1)}>
           上移
         </button>
@@ -103,6 +111,14 @@ function ButtonEditor({
           删除
         </button>
       </header>
+      {button.onlyDuringBuzz && (
+        <p className="hint">
+          未开始抢答时该按钮不可用，抢答开放期间：
+          {button.buzz
+            ? '按下算抢答，只有第一个按下的队员获胜。'
+            : '按下执行上面的原动作（可用于投票 / 评分）。'}
+        </p>
+      )}
 
       <div className="member-field-grid">
         <label>

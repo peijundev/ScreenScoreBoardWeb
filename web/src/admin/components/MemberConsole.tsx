@@ -90,6 +90,7 @@ export interface MemberConsoleViewProps {
   buzz?: BuzzRuntime | null;
   buzzButtonMode?: 'all' | 'marked';
   buzzBusy?: boolean;
+  memberButtonsPaused?: boolean;
   serverOffsetMs?: number;
   onBuzz?: (button: MemberMenuButton) => void;
 }
@@ -113,6 +114,7 @@ export function MemberConsoleView({
   buzz = null,
   buzzButtonMode = 'all',
   buzzBusy = false,
+  memberButtonsPaused = false,
   serverOffsetMs = 0,
   onBuzz,
 }: MemberConsoleViewProps): JSX.Element {
@@ -123,7 +125,9 @@ export function MemberConsoleView({
   const fillMode = Boolean(
     menu?.fillMode === 'adaptive' && columns === 1 && buttons.length === 1,
   );
-  const emptyNotice = notice
+  const emptyNotice = memberButtonsPaused
+    ? '管理员已暂停所有队员按钮'
+    : notice
     || (!menu
       ? '管理员尚未为你配置人员菜单'
       : !menuEnabled
@@ -155,7 +159,13 @@ export function MemberConsoleView({
       <div className={'member-content' + (fillMode ? ' is-fill' : '')}>
         {tab === 'ops' && (
           <>
-            {banner && (
+            {memberButtonsPaused && (
+              <div className="member-buzz-banner has-winner" role="status">
+                <strong>队员按钮已暂停</strong>
+                <span className="hint">管理员已在显示端预览中暂停所有队员按钮</span>
+              </div>
+            )}
+            {banner && !memberButtonsPaused && (
               <div
                 className={
                   'member-buzz-banner' +
@@ -182,17 +192,42 @@ export function MemberConsoleView({
                 {buttons.map((button) => {
                   const busy = pendingId === button.id;
                   const buzzable = eligible(button);
+                  const buzzActive = Boolean(buzz);
+                  const buzzOpen = buzz?.phase === 'open' && !buzz?.winner;
+                  // 仅抢答时启用 + 不参与抢答：抢答开放期间执行按钮原动作。
+                  const canRunDuringBuzz = button.onlyDuringBuzz === true
+                    && button.buzz === false
+                    && buzzOpen;
+                  const paused = memberButtonsPaused;
                   const disabled = !button.enabled
                     || busy
                     || buzzBusy
+                    || paused
                     || (!preview && !connected)
-                    || (Boolean(buzz) && !buzzable);
+                    || (buzzActive ? !buzzable && !canRunDuringBuzz : button.onlyDuringBuzz === true);
+                  // 显式控制变暗：不能只依赖 :disabled，确保「仅抢答时启用」在无抢答时也明显置灰。
+                  const dimmed = paused
+                    || !button.enabled
+                    || (buzzActive ? !buzzable && !canRunDuringBuzz : button.onlyDuringBuzz === true);
+                  const title = paused
+                    ? button.label + '（已暂停）'
+                    : !button.enabled
+                      ? button.label + '（已停用）'
+                      : buzzActive
+                        ? buzzable
+                          ? button.label
+                          : canRunDuringBuzz
+                            ? button.label
+                            : button.label + '（当前不可抢答）'
+                        : button.onlyDuringBuzz
+                          ? button.label + '（仅抢答时可用）'
+                          : button.label;
                   return (
                     <button
                       key={button.id}
                       className={
                         'member-action' +
-                        (button.enabled ? '' : ' is-disabled') +
+                        (dimmed ? ' is-disabled' : '') +
                         (busy || (buzz && buzzBusy) ? ' is-busy' : '')
                       }
                       type="button"
@@ -200,18 +235,15 @@ export function MemberConsoleView({
                         ? { ...memberButtonStyle(button), minHeight: 0, height: '100%' }
                         : memberButtonStyle(button)}
                       disabled={disabled}
-                      title={
-                        button.enabled
-                          ? buzz && !buzzable
-                            ? button.label + '（当前不可抢答）'
-                            : button.label
-                          : button.label + '（已停用）'
-                      }
+                      title={title}
                       onClick={() => {
+                        if (paused) return;
                         if (buzz) {
                           if (buzzable) onBuzz?.(button);
+                          else if (canRunDuringBuzz) onAction(button);
                           return;
                         }
+                        if (button.onlyDuringBuzz) return;
                         onAction(button);
                       }}
                     >
@@ -346,6 +378,8 @@ export default function MemberConsole({
         toast('本轮抢答已结束');
       } else if (result?.reason === 'inactive') {
         toast('抢答尚未开始');
+      } else if (result?.reason === 'paused') {
+        toast('管理员已暂停所有队员按钮');
       } else if (result?.reason === 'binding-missing') {
         toast('账号绑定的人员不存在，请联系管理员');
       } else if (result?.reason === 'no-menu' || result?.reason === 'no-button') {
@@ -382,6 +416,7 @@ export default function MemberConsole({
       buzz={buzz}
       buzzButtonMode={project?.settings.buzzButtonMode === 'marked' ? 'marked' : 'all'}
       buzzBusy={buzzBusy}
+      memberButtonsPaused={project?.settings.memberButtonsPaused === true}
       serverOffsetMs={serverOffsetMs}
       onBuzz={(button) => { void runBuzz(button); }}
     />

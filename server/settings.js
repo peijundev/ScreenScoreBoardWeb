@@ -39,6 +39,7 @@ const DEFAULT_SETTINGS = {
   glassOpacity: 0.55,       // 毛玻璃卡片不透明度（0.15–0.95）
   scoreEffect: 'bounce',    // none | bounce | glow | float | shake | confetti | spotlight
   spotlightScope: 'person', // team（仅团队）| person_team（人物 + 团队）| person（仅人物）
+  teamSpotlightCard: 'team', // 团队突显卡片：team（团队名称+头像）| captain（队长姓名+头像）
   spotlightWidth: 520,      // 居中突显宽度 px（200–4000）
   spotlightHeight: 0,       // 居中突显高度 px；0 = 自动（0–3000）
   spotlightTheme: 'pop',    // pop | fly | genie | squeeze
@@ -225,6 +226,7 @@ const DEFAULT_SETTINGS = {
 
   // ---- 队员控制台 / 人员功能菜单 ----
   featureMemberConsole: true, // 队员登录后使用「操作 / 更多」两栏控制台
+  memberButtonsPaused: false, // 一键暂停本项目所有队员按钮（服务端拒绝 memberAction / buzzPress）
   memberMenus: [],            // 按队员账号逐个配置的按钮菜单（结构见 normalizeMemberMenuConfig）
 };
 
@@ -317,8 +319,11 @@ function normalizeMemberMenuButton(raw) {
   const image = raw.image === '' || raw.image == null ? '' : needAvatar(raw.image);
   const enabled = raw.enabled === undefined ? true : boolStrict(raw.enabled, '按钮启用开关');
   const buzz = raw.buzz === undefined ? true : boolStrict(raw.buzz, '按钮抢答开关');
+  const onlyDuringBuzz = raw.onlyDuringBuzz === undefined
+    ? false
+    : boolStrict(raw.onlyDuringBuzz, '按钮仅抢答时启用开关');
   return {
-    id, label, enabled, buzz, action, targetType, targetId, delta, durationMs,
+    id, label, enabled, buzz, onlyDuringBuzz, action, targetType, targetId, delta, durationMs,
     height, fontSize, radius, color, textColor, image,
   };
 }
@@ -429,6 +434,10 @@ const SETTINGS_VALIDATORS = {
     (['team', 'person_team', 'person'].includes(v)
       ? v
       : (() => { throw new OpError('突显范围非法'); })()),
+  teamSpotlightCard: (v) =>
+    (['team', 'captain'].includes(v)
+      ? v
+      : (() => { throw new OpError('团队突显卡片模式非法'); })()),
   spotlightWidth: (v) => intRange(v, 200, 4000, '突显宽度须为 200–4000'),
   spotlightHeight: (v) => intRange(v, 0, 3000, '突显高度须为 0–3000（0=自动）'),
   spotlightReturnToOrigin: (v) => boolStrict(v, '从哪来回哪去开关'),
@@ -779,6 +788,7 @@ const SETTINGS_VALIDATORS = {
 
   // ---- 队员控制台 / 人员功能菜单 ----
   featureMemberConsole: (v) => boolStrict(v, '队员控制台开关'),
+  memberButtonsPaused: (v) => boolStrict(v, '队员按钮暂停开关'),
   memberMenus: (v) => {
     if (!Array.isArray(v)) throw new OpError('人员菜单须为数组');
     if (v.length > MEMBER_MENU_ENTRY_LIMIT) {

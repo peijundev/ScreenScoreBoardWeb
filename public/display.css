@@ -1945,3 +1945,42 @@ body[data-style-free="on"] .card {
   letter-spacing: 0.06em;
   white-space: nowrap;
 }
+
+/* 团队突显：只显示团队/队长名称与头像的大卡片，不展开成员 */
+.spotlight-team-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 28px 32px;
+  min-width: 360px;
+  text-align: center;
+  box-sizing: border-box;
+}
+.spotlight-team-card .team-head {
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 0;
+  margin: 0;
+  border-bottom: 0;
+  text-align: center;
+}
+.spotlight-team-card .team-head img {
+  width: clamp(72px, 38%, 168px);
+  height: auto;
+  aspect-ratio: 1;
+}
+.spotlight-team-card .team-name {
+  flex: 0 0 auto;
+  font-size: calc(var(--name-size) * 1.45);
+  text-align: center;
+  white-space: normal;
+}
+.spotlight-team-card .captain-badge { font-size: 15px; order: 2; }
+.team-spotlight-caption {
+  font-size: calc(var(--name-size) * 0.72);
+  color: var(--text-dim, #8a94a6);
+}

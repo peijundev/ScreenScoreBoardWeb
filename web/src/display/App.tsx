@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { projectOf, useAppStore } from '../shared/store';
-import type { Project, Settings } from '../shared/types';
+import type { Project, Settings, Team } from '../shared/types';
 import type { ThemeV2 } from '../shared/theme';
 import type { Item } from './lib/core';
+import { avatarURL } from '../shared/api';
 import {
   applyAppearance,
   applyAutoAvatarSizes,
@@ -44,6 +45,54 @@ function itemScore(it: Item): number {
   return it.kind === 'person' && it.person ? it.person.score : it.members.reduce((s, m) => s + m.score, 0);
 }
 
+/** 团队突显使用独立的大卡片：只有名称 + 头像，可切换团队卡或队长卡。 */
+function teamSpotlightEl(
+  board: HTMLElement,
+  project: Project,
+  team: Team,
+  settings: Settings,
+): HTMLElement {
+  const captain = settings.teamSpotlightCard === 'captain' && team.captainId
+    ? project.people[team.captainId] || null
+    : null;
+  const card = document.createElement('div');
+  card.className = 'card team-card spotlight-team-card';
+  card.dataset.kind = 'team';
+  card.dataset.id = team.id;
+
+  const head = document.createElement('div');
+  head.className = 'team-head av-top';
+  const img = document.createElement('img');
+  img.alt = '';
+  img.src = avatarURL(captain || team, 96);
+  const name = document.createElement('div');
+  name.className = 'team-name';
+  name.textContent = captain ? captain.name : team.name;
+  head.append(img, name);
+  if (captain) {
+    const badge = document.createElement('span');
+    badge.className = 'captain-badge';
+    badge.textContent = settings.teamCaptainLabel || '队长';
+    head.append(badge);
+  }
+  card.append(head);
+  if (captain) {
+    const caption = document.createElement('div');
+    caption.className = 'team-spotlight-caption';
+    caption.textContent = team.name;
+    card.append(caption);
+  }
+
+  // 离屏挂载以便测量尺寸，克隆/动画同步完成后即可移除
+  card.style.position = 'absolute';
+  card.style.left = '-10000px';
+  card.style.top = '0';
+  card.style.width = '360px';
+  board.appendChild(card);
+  setTimeout(() => card.remove(), 0);
+  return card;
+}
+
 /** 按突显范围找到目标卡片；手动突显与记分突显共用同一套取卡规则。 */
 function spotlightElsFor(
   board: HTMLElement,
@@ -51,12 +100,11 @@ function spotlightElsFor(
   targetType: 'person' | 'team',
   targetId: string,
   scope: string,
+  settings: Settings,
 ): HTMLElement[] {
   if (targetType === 'team') {
-    const teamEl = board.querySelector<HTMLElement>(
-      '.card[data-kind="team"][data-id="' + targetId + '"]',
-    );
-    return teamEl ? [teamEl] : [];
+    const team = project.teams[targetId];
+    return team ? [teamSpotlightEl(board, project, team, settings)] : [];
   }
   const person = project.people[targetId];
   if (!person) return [];
@@ -64,21 +112,19 @@ function spotlightElsFor(
   const personEl =
     memberEl ||
     board.querySelector<HTMLElement>('.card[data-kind="person"][data-id="' + person.id + '"]');
-  const teamEl = person.teamId
-    ? board.querySelector<HTMLElement>('.card[data-kind="team"][data-id="' + person.teamId + '"]')
-    : null;
+  const team = person.teamId ? project.teams[person.teamId] : null;
   if (scope === 'team') {
-    if (teamEl) return [teamEl];
+    if (team) return [teamSpotlightEl(board, project, team, settings)];
     return personEl ? [personEl] : [];
   }
   if (scope === 'person_team') {
-    if (memberEl && teamEl) return [memberEl, teamEl];
+    if (memberEl && team) return [memberEl, teamSpotlightEl(board, project, team, settings)];
     if (personEl) return [personEl];
-    return teamEl ? [teamEl] : [];
+    return team ? [teamSpotlightEl(board, project, team, settings)] : [];
   }
   if (memberEl) return [memberEl];
   if (personEl) return [personEl];
-  return teamEl ? [teamEl] : [];
+  return team ? [teamSpotlightEl(board, project, team, settings)] : [];
 }
 
 export default function App(): JSX.Element {
@@ -381,7 +427,7 @@ export default function App(): JSX.Element {
       const targets = list
         .map((p) => ({
           key: p.id,
-          els: spotlightElsFor(board, project, 'person', p.id, scope),
+          els: spotlightElsFor(board, project, 'person', p.id, scope, settings),
           delta: deltas.get(p.id),
         }))
         .filter((t) => t.els.length > 0);
@@ -465,6 +511,7 @@ export default function App(): JSX.Element {
             event.targetType === 'team' ? 'team' : 'person',
             event.targetId,
             scope,
+            settings,
           ),
           durationMs: Number.isFinite(duration) && duration > 0 ? duration : undefined,
         };
@@ -510,6 +557,7 @@ export default function App(): JSX.Element {
       winner.targetType,
       winner.targetId,
       winner.targetType === 'team' ? 'team' : 'person',
+      settings,
     );
     if (!els.length) {
       lockedSpotlightKey.current = null;

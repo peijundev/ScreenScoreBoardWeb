@@ -165,6 +165,9 @@ test('独立显示端：抢答临时计时器与锁定突显', { skip: skipReaso
   assert.ok(await waitUrl(BASE + '/api/health'), '服务未启动');
 
   const admin = await login('admin', ADMIN_PASSWORD);
+  const adminWs = memberWs(admin);
+  t.after(() => adminWs.close());
+  await adminWs.ready;
   const snapshot = await (await fetch(BASE + '/api/state')).json();
   let projectId = Object.keys(snapshot.projects)[0];
   if (!projectId) {
@@ -180,6 +183,11 @@ test('独立显示端：抢答临时计时器与锁定突显', { skip: skipReaso
     body: JSON.stringify({ name: '抢答甲' }),
   });
   const person = personRes.json.data;
+  const team = await adminWs.op('addTeam', { projectId, name: '突显队' });
+  await adminWs.op('assignTeam', { projectId, personId: person.id, teamId: team.teamId });
+  await adminWs.op('setTeamCaptain', {
+    projectId, teamId: team.teamId, personId: person.id,
+  });
   const userRes = await api(admin, '/auth/users', {
     method: 'POST',
     body: JSON.stringify({
@@ -273,8 +281,10 @@ test('独立显示端：抢答临时计时器与锁定突显', { skip: skipReaso
   }
 
   assert.ok(
-    await waitFor(`document.querySelector('.card[data-kind="person"]')`),
-    '显示端渲染人员卡片',
+    await waitFor(
+      `document.querySelector('.card[data-kind="person"], .member[data-person], .card[data-kind="team"]')`,
+    ),
+    '显示端渲染人员/团队卡片',
   );
 
   const startRes = await api(admin, `/projects/${projectId}/buzz/start`, {
@@ -287,10 +297,14 @@ test('独立显示端：抢答临时计时器与锁定突显', { skip: skipReaso
     '抢答准备期间即使 featureCountdown 关闭也显示计时器',
   );
   await new Promise((r) => setTimeout(r, 2600));
+  const promptText = await evalJs(
+    `document.querySelector('.overlay-countdown, .countdown-big')?.textContent || ''`,
+  );
+  assert.ok(promptText.includes('开始抢答'), '准备倒计时结束后显示开始抢答');
   assert.equal(
-    await evalJs(`Boolean(document.querySelector('.overlay-countdown, .countdown-big'))`),
-    false,
-    '准备倒计时到 0 后计时器关闭',
+    await evalJs(`Boolean(document.querySelector('.overlay-countdown.is-buzz-start, .countdown-big.is-buzz-start'))`),
+    true,
+    '开始抢答提示沿用计时器样式',
   );
 
   const member = memberWs(await login('display-member', MEMBER_PASSWORD));
@@ -306,10 +320,73 @@ test('独立显示端：抢答临时计时器与锁定突显', { skip: skipReaso
     `document.querySelector('.spotlight-overlay.spotlight-locked')?.textContent || ''`,
   );
   assert.ok(lockedText.includes('抢答甲'), '锁定突显包含赢家人员');
+  assert.equal(
+    await evalJs(`Boolean(document.querySelector('.overlay-countdown, .countdown-big'))`),
+    false,
+    '抢到后开始提示消失',
+  );
 
   await api(admin, `/projects/${projectId}/buzz/end`, { method: 'POST', body: '{}' });
   assert.ok(
     await waitFor(`!document.querySelector('.spotlight-overlay.spotlight-locked')`, 3000),
     '结束抢答后锁定突显清除',
+  );
+
+  // 关闭「开始抢答」开关：倒计时结束后计时器直接关闭
+  await api(admin, `/projects/${projectId}/settings`, {
+    method: 'PATCH',
+    body: JSON.stringify({ patch: { buzzShowStartPrompt: false } }),
+  });
+  await new Promise((r) => setTimeout(r, 300));
+  await api(admin, `/projects/${projectId}/buzz/start`, { method: 'POST', body: '{}' });
+  await new Promise((r) => setTimeout(r, 2600));
+  assert.equal(
+    await evalJs(`Boolean(document.querySelector('.overlay-countdown, .countdown-big'))`),
+    false,
+    '关闭开关后倒计时结束不显示开始提示',
+  );
+  await api(admin, `/projects/${projectId}/buzz/end`, { method: 'POST', body: '{}' });
+  await new Promise((r) => setTimeout(r, 300));
+
+  // 团队突显：团队卡片 / 队长卡片，不展开成员
+  await api(admin, `/projects/${projectId}/spotlight`, {
+    method: 'POST',
+    body: JSON.stringify({ targetType: 'team', targetId: team.teamId, durationMs: 4000 }),
+  });
+  assert.ok(
+    await waitFor(
+      `[...document.querySelectorAll('.spotlight-overlay .spotlight-team-card .team-name')]
+        .some((el) => el.textContent.trim() === '突显队')`,
+    ),
+    '团队突显显示团队名称+头像卡片',
+  );
+  assert.equal(
+    await evalJs(`Boolean(document.querySelector('.spotlight-overlay .team-members'))`),
+    false,
+    '团队突显不展开成员',
+  );
+
+  await api(admin, `/projects/${projectId}/settings`, {
+    method: 'PATCH',
+    body: JSON.stringify({ patch: { teamSpotlightCard: 'captain' } }),
+  });
+  await new Promise((r) => setTimeout(r, 300));
+  await api(admin, `/projects/${projectId}/spotlight`, {
+    method: 'POST',
+    body: JSON.stringify({ targetType: 'team', targetId: team.teamId, durationMs: 4000 }),
+  });
+  assert.ok(
+    await waitFor(
+      `[...document.querySelectorAll('.spotlight-overlay .spotlight-team-card .team-name')]
+        .some((el) => el.textContent.trim() === '抢答甲')`,
+    ),
+    '队长卡片显示队长姓名',
+  );
+  assert.ok(
+    await evalJs(
+      `[...document.querySelectorAll('.spotlight-overlay .spotlight-team-card .team-spotlight-caption')]
+        .some((el) => el.textContent.includes('突显队'))`,
+    ),
+    '队长卡片显示团队名称',
   );
 });

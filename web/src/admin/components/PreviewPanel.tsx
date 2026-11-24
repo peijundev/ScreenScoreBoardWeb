@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 
 import type { Project } from '../../shared/types';
 import { projectOp, useAppStore } from '../../shared/store';
 import { toast } from '../../shared/ui';
+import { listUsers, setMembersDisabled, type AuthUser } from '../../shared/auth';
+import { confirm } from './dialogs';
 import {
   DISPLAY_RESOLUTION_LIMITS,
   formatDisplayResolution,
@@ -275,6 +277,7 @@ export default function PreviewPanel({
       </div>
 
       {isAdmin && <QuickBar project={project} edit={canEdit} onEditChange={setEdit} />}
+      {isAdmin && <MemberControls project={project} />}
       {isAdmin && <BuzzBar project={project} />}
       {isAdmin && <CountdownBar project={project} />}
 
@@ -309,6 +312,113 @@ export default function PreviewPanel({
           : '当前为只读预览；布局与设置需要管理员权限。'}
       </p>
     </section>
+  );
+}
+
+function MemberControls({ project }: { project: Project }): JSX.Element {
+  const paused = project.settings.memberButtonsPaused === true;
+  const [users, setUsers] = useState<AuthUser[] | null>(null);
+  const [accountError, setAccountError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    setAccountError('');
+    setUsers(null);
+    listUsers()
+      .then((list) => {
+        if (alive) setUsers(list);
+      })
+      .catch((err: Error) => {
+        if (alive) {
+          setUsers([]);
+          setAccountError(err.message);
+        }
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const members = (users ?? []).filter((user) => user.role === 'member');
+  const disabledCount = members.filter((user) => user.disabled).length;
+  const allDisabled = members.length > 0 && disabledCount === members.length;
+
+  async function togglePaused(): Promise<void> {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await projectOp(project.id, 'updateSettings', {
+        patch: { memberButtonsPaused: !paused },
+      });
+      toast(paused ? '已恢复所有队员按钮' : '已暂停所有队员按钮');
+    } catch (err) {
+      toast((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggleAccounts(): Promise<void> {
+    if (busy || !members.length) return;
+    const next = !allDisabled;
+    if (next) {
+      const ok = await confirm({
+        title: '停用所有队员账号',
+        message:
+          '将停用全部 member 账号，并立即吊销它们的会话与令牌。这是全局操作，会影响其他项目里的队员登录。确定继续？',
+        confirmText: '全部停用',
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    setBusy(true);
+    try {
+      const result = await setMembersDisabled(next);
+      setUsers(await listUsers());
+      toast(
+        next
+          ? `已停用 ${result.count} 个队员账号`
+          : `已启用 ${result.count} 个队员账号`,
+      );
+    } catch (err) {
+      toast((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="preview-member-bar">
+      <strong>队员</strong>
+      <button
+        className={'btn small' + (paused ? ' primary' : '')}
+        type="button"
+        disabled={busy}
+        onClick={() => { void togglePaused(); }}
+        title="暂停后服务端同时拒绝 memberAction 与 buzzPress"
+      >
+        {paused ? '恢复所有队员按钮' : '暂停所有队员按钮'}
+      </button>
+      <button
+        className={'btn small' + (allDisabled ? ' primary' : ' danger')}
+        type="button"
+        disabled={busy || members.length === 0 || Boolean(accountError)}
+        onClick={() => { void toggleAccounts(); }}
+      >
+        {allDisabled ? '启用所有队员账号' : '停用所有队员账号'}
+      </button>
+      <span className={'hint' + (paused ? ' warn' : '')}>
+        {paused ? '所有队员按钮已暂停' : '队员按钮可用'}
+      </span>
+      <span className="hint">
+        {accountError
+          ? '未启用登录系统，无法管理队员账号'
+          : users === null
+            ? '正在读取队员账号…'
+            : `队员账号 ${members.length} 个，已停用 ${disabledCount} 个（全局）`}
+      </span>
+    </div>
   );
 }
 

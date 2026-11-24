@@ -215,6 +215,17 @@ export async function updateUser(
   return (await parseEnvelope<{ user: AuthUser }>(res)).user;
 }
 
+/** 批量停用/启用所有 role=member 的账号（全局，影响所有项目）。 */
+export async function setMembersDisabled(
+  disabled: boolean,
+): Promise<{ count: number; total: number; disabled: boolean }> {
+  const res = await authFetch(
+    '/api/v1/auth/users/members/disabled',
+    jsonInit('POST', { disabled }),
+  );
+  return parseEnvelope<{ count: number; total: number; disabled: boolean }>(res);
+}
+
 export async function resetUserPassword(id: string, password: string): Promise<void> {
   const res = await authFetch(
     '/api/v1/auth/users/' + encodeURIComponent(id) + '/password',

@@ -580,6 +580,25 @@ async function updateUser(ctx) {
   return { data: { user: store.publicUser(user) } };
 }
 
+/** 批量停用 / 启用所有 role=member 的账号；停用会立即吊销其会话与令牌。 */
+async function setMembersDisabled(ctx) {
+  const auth = requireAdmin(ctx);
+  if (typeof ctx.body.disabled !== 'boolean') {
+    throw new ApiUnprocessableError('disabled 必须为布尔值');
+  }
+  const disabled = ctx.body.disabled;
+  const members = store.listUsers().filter((user) => user.role === 'member');
+  const actorId = auth.kind === 'system' ? null : auth.userId;
+  let count = 0;
+  for (const member of members) {
+    if (Boolean(member.disabled) === disabled) continue;
+    store.updateUser(member.id, { disabled }, { actorId });
+    count += 1;
+  }
+  log.info('批量更新队员账号状态', { disabled, count, total: members.length });
+  return { data: { count, total: members.length, disabled } };
+}
+
 /** 队员必须绑定当前项目中的真实人员；只校验存在性，不在此处写项目状态。 */
 function assertMemberBindingExists(projectId, personId) {
   const pid = String(projectId == null ? '' : projectId).trim();
@@ -699,6 +718,7 @@ module.exports = {
     listUsers,
     createUser,
     updateUser,
+    setMembersDisabled,
     resetUserPassword,
     deleteUser,
     userSessions,

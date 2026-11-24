@@ -415,8 +415,9 @@ body {
 .preview-frame-wrap.pan-ready iframe { pointer-events: none; }
 .preview-frame-wrap.panning { cursor: grabbing; }
 
-/* 显示端预览：抢答控制条 */
-.preview-buzz-bar {
+/* 显示端预览：抢答 / 队员控制条 */
+.preview-buzz-bar,
+.preview-member-bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -427,10 +428,12 @@ body {
   border-radius: 10px;
   background: var(--subcard);
 }
-.preview-buzz-bar strong { font-size: 14px; }
+.preview-buzz-bar strong,
+.preview-member-bar strong { font-size: 14px; }
 .preview-buzz-bar .hint.is-live { color: var(--accent); font-weight: 600; }
 @media (max-width: 860px) {
-  .preview-buzz-bar .btn.small { min-height: var(--touch-target, 44px); }
+  .preview-buzz-bar .btn.small,
+  .preview-member-bar .btn.small { min-height: var(--touch-target, 44px); }
 }
 
 /* 常用排版快速调节 */
@@ -2529,6 +2532,7 @@ body[data-theme^="android"] ::-webkit-scrollbar-thumb {
   word-break: break-word;
   touch-action: manipulation;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  transition: opacity 0.15s ease, filter 0.15s ease;
 }
 .member-action:active { transform: translateY(1px); }
 .member-action.is-disabled,

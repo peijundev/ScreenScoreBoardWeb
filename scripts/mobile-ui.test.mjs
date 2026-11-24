@@ -286,6 +286,11 @@ test('手机管理端：全屏对话框与主要流程', { skip: skipReason }, a
     await sleep(250);
     out.buzzBar = Boolean(document.querySelector('.preview-buzz-bar'));
     out.buzzStartButton = Boolean(document.querySelector('.preview-buzz-bar .btn.primary'));
+    out.memberBar = Boolean(document.querySelector('.preview-member-bar'));
+    const memberBarButtons = [...document.querySelectorAll('.preview-member-bar button')]
+      .map((b) => b.textContent.trim());
+    out.memberPauseButton = memberBarButtons.some((t) => t.includes('暂停所有队员按钮'));
+    out.memberAccountButton = memberBarButtons.some((t) => t.includes('停用所有队员账号'));
     out.countdownBar = Boolean(document.querySelector('.preview-countdown'));
     const cdButton = (text) => [...document.querySelectorAll('.preview-countdown .cd-btns button')]
       .find((b) => b.textContent.trim() === text);
@@ -476,6 +481,9 @@ test('手机管理端：全屏对话框与主要流程', { skip: skipReason }, a
   assert.equal(out.adminTheme, 'macos-light', '管理端默认主题为 macOS 浅色');
   assert.equal(out.buzzBar, true, '显示端预览包含抢答控制条');
   assert.equal(out.buzzStartButton, true, '显示端预览包含开始抢答按钮');
+  assert.equal(out.memberBar, true, '显示端预览包含队员控制条');
+  assert.equal(out.memberPauseButton, true, '预览可一键暂停所有队员按钮');
+  assert.equal(out.memberAccountButton, true, '预览可一键停用所有队员账号');
   assert.equal(out.countdownBar, true, '显示端预览包含计时器控制条');
   assert.ok(out.countdownRunning.includes('进行中'), '计时器开始后显示进行中与剩余时间');
   assert.equal(out.previewCountdown, true, '计时器在显示端预览中实际显示');

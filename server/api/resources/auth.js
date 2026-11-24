@@ -32,6 +32,13 @@ const routes = [
   authRoute('DELETE', '/auth/tokens/:id', 'viewer', '吊销令牌', handlers.revokeToken),
 
   authRoute('GET', '/auth/users', 'admin', '用户列表', handlers.listUsers),
+  authRoute(
+    'POST',
+    '/auth/users/members/disabled',
+    'admin',
+    '批量停用/启用所有队员账号',
+    handlers.setMembersDisabled,
+  ),
   authRoute('POST', '/auth/users', 'admin', '创建用户', handlers.createUser),
   authRoute('PATCH', '/auth/users/:id', 'admin', '更新用户', handlers.updateUser),
   authRoute('POST', '/auth/users/:id/password', 'admin', '重置用户密码', handlers.resetUserPassword),
