@@ -195,4 +195,23 @@ test('零项目欢迎页与默认 macOS 浅色', { skip: skipReason }, async (t)
     (await evalJs(`document.body.textContent || ''`)).includes('欢迎页项目'),
     '新建项目出现在管理端',
   );
+
+  const appearance = await evalJs(`(async () => {
+    const trigger = [...document.querySelectorAll('.topbar button')]
+      .find((btn) => btn.textContent.trim() === '外观设置');
+    trigger?.click();
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    return {
+      opened: Boolean(document.querySelector('.topbar-popover')),
+      inlineTheme: Boolean(document.querySelector('.topbar-popover .admin-theme-picker.inline select')),
+      menuItems: document.querySelectorAll('.topbar-popover .appearance-menu-item').length,
+      standaloneTheme: Boolean(document.querySelector('.topbar > .admin-theme-picker')),
+      port: document.querySelector('.app-port')?.textContent?.trim() || '',
+    };
+  })()`);
+  assert.equal(appearance.opened, true, '外观设置面板可打开');
+  assert.equal(appearance.inlineTheme, true, '管理端主题已并入外观设置');
+  assert.equal(appearance.standaloneTheme, false, '顶栏不再有独立主题选择器');
+  assert.equal(appearance.menuItems, 3, '外观设置保留排版/主题编辑器/主题工作室');
+  assert.equal(appearance.port, '端口 ' + PORT, '顶栏显示后端实际端口');
 });

@@ -39,6 +39,8 @@ interface VersionInfo {
   version: string;
   finalForTechStack?: boolean;
   frontend?: 'react' | 'missing';
+  /** 当前请求实际连到的后端端口；Electron 本地模式为随机端口。 */
+  port?: number;
 }
 
 export default function Toolbar({
@@ -143,9 +145,11 @@ export default function Toolbar({
           </button>
           <TopbarPopover
             label="外观设置"
-            title="排版设置、主题编辑器与主题工作室"
+            title="管理端主题、排版设置、主题编辑器与主题工作室"
             closeOnSelect
           >
+            <AdminThemePicker inline />
+            <div className="appearance-menu-sep" />
             <button
               className="appearance-menu-item"
               type="button"
@@ -247,7 +251,11 @@ export default function Toolbar({
         />
         <span>{connected ? '已连接' : '断开'}</span>
       </span>
-      <AdminThemePicker />
+      {version?.port ? (
+        <span className="app-port" title={'当前后端服务端口：' + version.port}>
+          端口 {version.port}
+        </span>
+      ) : null}
       {version && (
         <span
           className="app-version"

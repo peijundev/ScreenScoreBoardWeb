@@ -3,6 +3,7 @@ import type { Settings } from '../../shared/types';
 import {
   clamp,
   cloneCard,
+  effectDuration,
   hideOriginalCard,
   injectSpotDelta,
   prefersReducedMotion,
@@ -64,7 +65,7 @@ function themeDuration(s: Settings, override?: number): number {
   const n = Number(override);
   if (Number.isFinite(n) && n > 0) return clamp(n, 200, 10000);
   if ((s.spotlightTheme || 'pop') === 'pop') {
-    return Math.max(1200, Number(s.scoreEffectDuration) + 600);
+    return Math.max(1200, effectDuration(s) + 600);
   }
   return clamp(Number(s.spotlightReturnDuration) || 1600, 600, 6000);
 }

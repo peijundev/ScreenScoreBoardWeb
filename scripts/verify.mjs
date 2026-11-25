@@ -270,6 +270,7 @@ async function main() {
   assert(verData.finalForTechStack === false, '不再标记为原技术栈最终版');
   assert(verData.frontend === 'react' || verData.frontend === 'missing', '版本接口返回当前前端类型');
   assert(typeof verData.buildId === 'string' && verData.buildId.length > 0, '版本接口返回构建标识');
+  assert(verData.port === PORT, '版本接口返回实际后端端口');
 
   console.log('头像上传:');
   r = await authFetch('/api/avatar', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: PNG });

@@ -10,6 +10,7 @@ import {
   assignRanks,
   buildItems,
   clearPersistentSpotlights,
+  effectDuration,
   interruptSpotlights,
   playScoreSound,
   prefersReducedMotion,
@@ -38,6 +39,34 @@ const projectParam = params.get('project');
 const viewParam = params.get('view');
 const isEdit = params.get('edit') === '1';
 const inPreviewFrame = window.parent !== window;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
+ * 主题工作室通过 postMessage 发来的预览主题必须做结构校验：
+ * 显示端没有 ErrorBoundary，缺 meta/canvas/layers/widgets 会直接白屏。
+ */
+function isPreviewTheme(value: unknown): value is ThemeV2 {
+  if (!isRecord(value)) return false;
+  if (!isRecord(value.meta) || typeof value.meta.baseStyle !== 'string') return false;
+  if (!isRecord(value.canvas) || !isRecord(value.canvas.background)) return false;
+  if (!Number.isFinite(Number(value.canvas.width)) || !Number.isFinite(Number(value.canvas.height))) {
+    return false;
+  }
+  if (!Array.isArray(value.layers) || !value.layers.every((layer) => (
+    isRecord(layer)
+    && Array.isArray(layer.nodes)
+    && layer.nodes.every((node) => (
+      isRecord(node) && (node.type !== 'path' || Array.isArray(node.points))
+    ))
+  ))) return false;
+  if (!Array.isArray(value.widgets) || !value.widgets.every((widget) => isRecord(widget))) {
+    return false;
+  }
+  return isRecord(value.settings);
+}
 // 卡片很多时跳过 FLIP（逐卡读布局会明显拖低帧率）
 const FLIP_MAX_ITEMS = 300;
 const themeSpecCache = new Map<string, ThemeV2>();
@@ -56,6 +85,11 @@ function teamSpotlightEl(
   const captain = settings.teamSpotlightCard === 'captain' && team.captainId
     ? project.people[team.captainId] || null
     : null;
+  // 先取真实团队卡位置：离屏测量用的代理卡要让动画从真实位置起飞，
+  // 否则 fly / genie / squeeze / 并列模式的起点会固定在 -10000px。
+  const realTeamCard = board.querySelector<HTMLElement>(
+    '.card[data-kind="team"][data-id="' + team.id + '"]',
+  );
   const card = document.createElement('div');
   card.className = 'card team-card spotlight-team-card';
   card.dataset.kind = 'team';
@@ -70,7 +104,7 @@ function teamSpotlightEl(
   name.className = 'team-name';
   name.textContent = captain ? captain.name : team.name;
   head.append(img, name);
-  if (captain) {
+  if (captain && settings.featureTeamCaptain !== false) {
     const badge = document.createElement('span');
     badge.className = 'captain-badge';
     badge.textContent = settings.teamCaptainLabel || '队长';
@@ -90,6 +124,18 @@ function teamSpotlightEl(
   card.style.top = '0';
   card.style.width = '360px';
   board.appendChild(card);
+  const probeRect = card.getBoundingClientRect();
+  if (realTeamCard) {
+    const realRect = realTeamCard.getBoundingClientRect();
+    if (realRect.width > 0 && realRect.height > 0) {
+      card.getBoundingClientRect = () => new DOMRect(
+        realRect.left,
+        realRect.top,
+        probeRect.width,
+        probeRect.height,
+      );
+    }
+  }
   setTimeout(() => card.remove(), 0);
   return card;
 }
@@ -142,7 +188,7 @@ export default function App(): JSX.Element {
     return {
       ...baseSettings,
       ...previewTheme.settings,
-      displayStyle: previewTheme.meta.baseStyle,
+      displayStyle: previewTheme.meta.baseStyle || baseSettings.displayStyle || 'guofeng',
     } as Settings;
   }, [baseSettings, previewTheme]);
   const [appliedTheme, setAppliedTheme] = useState<ThemeV2 | null>(null);
@@ -389,7 +435,12 @@ export default function App(): JSX.Element {
           const el = board.querySelector<HTMLElement>(
             '.card[data-kind="' + it.kind + '"][data-id="' + id + '"]',
           );
-          if (el) el.classList.add(rank < prev ? 'rank-up' : 'rank-down');
+          if (el) {
+            el.classList.remove('rank-up', 'rank-down');
+            void el.offsetWidth;
+            el.classList.add(rank < prev ? 'rank-up' : 'rank-down');
+            window.setTimeout(() => el.classList.remove('rank-up', 'rank-down'), 700);
+          }
         }
         prevRanks.current[id] = rank;
       });
@@ -431,7 +482,7 @@ export default function App(): JSX.Element {
         if (!d || (settings.scoreEffectOnlyPositive && d < 0)) continue;
         const id = it.kind === 'person' && it.person ? it.person.id : it.team?.id;
         const el = board.querySelector<HTMLElement>('[data-kind="' + it.kind + '"][data-id="' + id + '"]');
-        if (el) spawnConfetti(el, colors, settings.scoreEffectDuration);
+        if (el) spawnConfetti(el, colors, effectDuration(settings));
       }
     }
 
@@ -506,6 +557,14 @@ export default function App(): JSX.Element {
         if (!delta) continue;
         const el = board.querySelector<HTMLElement>('.score-num[data-person-score="' + personId + '"]');
         if (el) rollNumber(el, Number(el.textContent) - delta, Number(el.textContent));
+      }
+      for (const team of Object.values(project.teams)) {
+        const teamDelta = Object.values(project.people)
+          .filter((p) => p.teamId === team.id)
+          .reduce((sum, p) => sum + (deltas.get(p.id) || 0), 0);
+        if (!teamDelta) continue;
+        const el = board.querySelector<HTMLElement>('.score-num[data-team-score="' + team.id + '"]');
+        if (el) rollNumber(el, Number(el.textContent) - teamDelta, Number(el.textContent));
       }
     }
 
@@ -633,7 +692,8 @@ export default function App(): JSX.Element {
       const src = '/' + String(settings.bgmFile);
       if (audio.getAttribute('src') !== src) audio.src = src;
       audio.loop = settings.bgmLoop !== false;
-      audio.volume = Math.max(0, Math.min(1, Number(settings.bgmVolume)));
+      const volume = Number(settings.bgmVolume);
+      audio.volume = Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : 0.3;
       void audio.play().catch(() => {});
     } else {
       audio.pause();
@@ -657,8 +717,7 @@ export default function App(): JSX.Element {
     function onMessage(e: MessageEvent): void {
       if (e.origin !== location.origin) return;
       if (!e.data || e.data.type !== 'theme-preview') return;
-      const t = e.data.theme;
-      setPreviewTheme(t && typeof t === 'object' ? (t as ThemeV2) : null);
+      setPreviewTheme(isPreviewTheme(e.data.theme) ? e.data.theme : null);
     }
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
@@ -693,10 +752,15 @@ export default function App(): JSX.Element {
     return () => window.removeEventListener('message', onMessage);
   }, [settings]);
 
-  // 切换项目/卸载时清掉正在播放的并列会话，避免残留卡片
+  // 切换项目/卸载时清掉普通突显，避免旧项目卡片继续覆盖新项目；
+  // 锁定突显由抢答 effect 单独管理，避免这里清掉新项目刚创建的赢家。
   useEffect(() => {
     resetSpotlightParallel();
-    return () => resetSpotlightParallel();
+    interruptSpotlights(0);
+    return () => {
+      resetSpotlightParallel();
+      interruptSpotlights(0);
+    };
   }, [project?.id]);
 
   if (!project) {

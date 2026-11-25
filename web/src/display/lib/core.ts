@@ -6,6 +6,12 @@ import { spotlightMetrics } from '../../shared/spotlightMetrics';
 export const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, v));
 export const round2 = (v: number): number => Math.round(v * 100) / 100;
 
+/** 特效时长：非法/非正数回退到默认值，避免 WAAPI duration 变成 NaN。 */
+export function effectDuration(s: Settings, fallback = 700): number {
+  const n = Number(s.scoreEffectDuration);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
 export function scoreClass(n: number): string {
   return n > 0 ? 'score-pos' : n < 0 ? 'score-neg' : 'score-zero';
 }
@@ -183,8 +189,10 @@ export function applyAppearance(s: Settings): void {
   }
 
   const themeCard = s.theme === 'light' ? '#ffffff' : '#1a1f26';
-  const baseCard = s.cardBg || themeCard;
   const cardMode = s.cardBgMode || 'auto';
+  // auto 模式必须完全忽略残留的自定义底色，否则 UI 禁用后旧颜色仍会生效
+  const configuredCardBg = cardMode === 'auto' ? '' : (s.cardBg || '');
+  const baseCard = configuredCardBg || themeCard;
   body.dataset.cardSurface = cardMode;
   // 突显卡片的实心底色：半透明/亚克力放大后背后是遮罩，会发灰，需要还原成原卡片观感
   body.style.setProperty('--card-solid', baseCard);
@@ -195,18 +203,17 @@ export function applyAppearance(s: Settings): void {
     body.style.setProperty('--card', baseCard);
     body.style.removeProperty('--card-blur');
   } else {
-    if (s.cardBg) body.style.setProperty('--card', s.cardBg);
-    else body.style.removeProperty('--card');
+    body.style.removeProperty('--card');
     body.style.removeProperty('--card-blur');
   }
 
   body.dataset.cardStyle = s.cardStyle;
-  const glassBase = s.cardBg || themeCard;
+  const glassBase = configuredCardBg || themeCard;
   body.style.setProperty('--glass-bg', hexToRgba(glassBase, s.glassOpacity));
   body.style.setProperty('--glass-blur', s.glassBlur + 'px');
 
   body.dataset.scoreEffect = s.scoreEffect;
-  root.style.setProperty('--fx-duration', s.scoreEffectDuration + 'ms');
+  root.style.setProperty('--fx-duration', effectDuration(s) + 'ms');
   if (s.scoreEffectColor) root.style.setProperty('--fx-color', s.scoreEffectColor);
   else root.style.removeProperty('--fx-color');
 
@@ -846,7 +853,7 @@ function spawnSpotlightPop(
   options: { persistent?: boolean } = {},
 ): void {
   const persistent = options.persistent === true;
-  const total = spotlightTotal(durationOverride, Math.max(1200, Number(s.scoreEffectDuration) + 600));
+  const total = spotlightTotal(durationOverride, Math.max(1200, effectDuration(s) + 600));
   const overlay = document.createElement('div');
   overlay.className = 'spotlight-overlay' + (persistent ? ' spotlight-locked' : '');
   if (!persistent) overlay.style.setProperty('--spot-duration', total + 'ms');
@@ -914,7 +921,7 @@ function spawnSpotlightZoom(
   durationOverride?: number,
   setup?: (total: number) => () => void,
 ): void {
-  const total = spotlightTotal(durationOverride, Math.max(1200, Number(s.scoreEffectDuration) + 600));
+  const total = spotlightTotal(durationOverride, Math.max(1200, effectDuration(s) + 600));
   const extraCleanup = setup ? setup(total) : undefined;
   const overlay = document.createElement('div');
   overlay.className = 'spotlight-overlay spotlight-zoom-overlay';
@@ -998,7 +1005,7 @@ export function spawnSpotlight(
 }
 
 export function spawnHighlight(els: HTMLElement[], s: Settings): void {
-  const total = Math.max(1000, Number(s.scoreEffectDuration) + 400);
+  const total = Math.max(1000, effectDuration(s) + 400);
   const scrim = document.createElement('div');
   scrim.className = 'highlight-scrim';
   document.body.appendChild(scrim);

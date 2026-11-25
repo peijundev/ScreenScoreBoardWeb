@@ -207,3 +207,29 @@ test('团队突显使用独立团队/队长大卡片，抢答开始提示可开�
   );
   assert.match(dialog, /buzzShowStartPrompt/);
 });
+
+test('特效空引用与「显示不跟设置」修复契约', () => {
+  const app = readFileSync(path.join(root, 'web/src/display/App.tsx'), 'utf8');
+  const core = readFileSync(path.join(root, 'web/src/display/lib/core.ts'), 'utf8');
+  const css = readFileSync(path.join(root, 'public/display.css'), 'utf8');
+  const canvas = readFileSync(path.join(root, 'web/src/display/theme/ThemeCanvas.tsx'), 'utf8');
+  const codec = readFileSync(path.join(root, 'web/src/admin/theme/codec.ts'), 'utf8');
+  const preview = readFileSync(path.join(root, 'web/src/admin/components/PreviewPanel.tsx'), 'utf8');
+
+  assert.match(app, /function isPreviewTheme/, '预览主题结构校验存在');
+  assert.match(app, /setPreviewTheme\(isPreviewTheme/, '非法预览主题不会进入渲染');
+  assert.match(app, /realTeamCard/, '团队突显读取真实团队卡位置');
+  assert.match(app, /new DOMRect\(/, '团队突显起点使用真实卡片坐标');
+  assert.match(app, /interruptSpotlights\(0\)/, '切换项目清理普通突显');
+  assert.match(app, /'rank-up', 'rank-down'\)/, '名次动画结束后移除 class');
+  assert.match(app, /data-team-score/, '团队总分参与滚动数字');
+  assert.match(app, /Number\.isFinite\(volume\)/, '背景音乐音量非法值有回退');
+  assert.match(core, /export function effectDuration/, '特效时长统一校验');
+  assert.match(core, /effectDuration\(s\)/, '特效时长使用统一校验');
+  assert.match(core, /configuredCardBg/, 'auto 卡片底色忽略残留自定义颜色');
+  assert.match(css, /data-score-effect="float"/, '飘浮数字有独立动画');
+  assert.doesNotMatch(css, /data-display-style="custom"\] \.rank/, '自由配置不再强制隐藏名次');
+  assert.match(canvas, /Array\.isArray\(theme\.layers\)/, '主题画布对缺字段主题降级');
+  assert.match(codec, /assertV2Theme/, '主题导入校验 v2 结构');
+  assert.match(preview, /function writeStorage/, '预览面板 localStorage 写入有异常保护');
+});

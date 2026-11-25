@@ -395,6 +395,8 @@ function routeRequest(req, res) {
       frontend: REACT_BUILT ? 'react' : 'missing',
       // 前端构建标识：显示端据此发现新版本并自动刷新
       buildId: frontendBuildId(),
+      // 当前请求实际连到的后端端口（Electron 本地模式端口是随机分配的）
+      port: req.socket && req.socket.localPort ? req.socket.localPort : 0,
     }), { 'Content-Type': 'application/json' });
   }
   if (req.method === 'GET' && p === '/api/export') {

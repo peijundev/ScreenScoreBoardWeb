@@ -26,8 +26,20 @@ const RESOLUTIONS: Array<{ value: string; label: string }> = [
 ];
 
 function readNumber(key: string, fallback: number): number {
-  const raw = Number(localStorage.getItem(key));
-  return Number.isFinite(raw) && raw > 0 ? raw : fallback;
+  try {
+    const raw = Number(localStorage.getItem(key));
+    return Number.isFinite(raw) && raw > 0 ? raw : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStorage(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // 隐私模式 / 禁用存储时忽略
+  }
 }
 
 /** 把设置值映射回下拉选项：预设命中预设项，其余自定义尺寸归入「自定义…」。 */
@@ -105,11 +117,11 @@ export default function PreviewPanel({
   }, [project.id, project.settings.displayResolutionScale]);
 
   useEffect(() => {
-    localStorage.setItem('previewZoom', String(zoom));
+    writeStorage('previewZoom', String(zoom));
   }, [zoom]);
   useEffect(() => {
-    localStorage.setItem('previewCustomW', String(customW));
-    localStorage.setItem('previewCustomH', String(customH));
+    writeStorage('previewCustomW', String(customW));
+    writeStorage('previewCustomH', String(customH));
   }, [customW, customH]);
 
   function saveResolution(value: string): void {

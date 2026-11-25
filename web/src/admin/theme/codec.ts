@@ -30,6 +30,22 @@ function upgradeV1(raw: Record<string, unknown>): ThemeV2 {
   };
 }
 
+/** v2 主题的最小结构校验：显示端与主题工作室都直接消费这些字段。 */
+function assertV2Theme(raw: Record<string, unknown>): void {
+  if (!isObject(raw.meta)) throw new Error('主题缺少 meta 信息');
+  if (!isObject(raw.canvas) || !isObject(raw.canvas.background)) {
+    throw new Error('主题缺少 canvas / canvas.background');
+  }
+  if (!Array.isArray(raw.layers)) throw new Error('主题缺少 layers 数组');
+  for (const layer of raw.layers) {
+    if (!isObject(layer) || !Array.isArray(layer.nodes)) {
+      throw new Error('主题图层结构非法（layer.nodes 必须是数组）');
+    }
+  }
+  if (!Array.isArray(raw.widgets)) throw new Error('主题缺少 widgets 数组');
+  if (!isObject(raw.settings)) throw new Error('主题缺少 settings 对象');
+}
+
 export function parseThemeText(text: string): ParsedTheme {
   const trimmed = text.trim();
   if (!trimmed) throw new Error('主题内容为空');
@@ -54,6 +70,7 @@ export function parseThemeText(text: string): ParsedTheme {
   const version = Number(raw.version);
   if (version === 1) return { theme: upgradeV1(raw), format };
   if (version !== THEME_VERSION) throw new Error('主题版本不受支持（需要 version 2）');
+  assertV2Theme(raw);
   return { theme: raw as unknown as ThemeV2, format };
 }
 

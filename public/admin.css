@@ -292,6 +292,16 @@ body {
   color: var(--text-dim);
   white-space: nowrap;
 }
+.app-port {
+  flex: 0 0 auto;
+  padding: 1px 7px;
+  border: 1px solid var(--card-border);
+  border-radius: 999px;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 .app-version {
   font-size: 12px;
   color: var(--text-dim);
@@ -2167,6 +2177,39 @@ body[data-theme^="adwaita"] ::-webkit-scrollbar-thumb {
 .admin-theme-picker.mobile-wide select {
   flex: 1;
   min-height: var(--touch-target, 44px);
+}
+/* 内嵌到「外观设置」顶栏面板：平铺主题、开关外观与涟漪参数 */
+.admin-theme-picker.inline {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 2px 2px 6px;
+  white-space: normal;
+}
+.admin-theme-picker.inline .admin-theme-picker-label {
+  justify-content: space-between;
+}
+.admin-theme-picker.inline select {
+  flex: 1;
+  min-width: 0;
+}
+.admin-theme-subsection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--card-border);
+}
+.admin-theme-subsection h3 {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+}
+.appearance-menu-sep {
+  margin: 2px 0;
+  border-top: 1px solid var(--card-border);
 }
 
 /* 顶栏偏好面板：开关外观（始终显示）与 Android 涟漪（仅 Android 主题） */

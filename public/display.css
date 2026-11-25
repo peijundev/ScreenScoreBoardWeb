@@ -1157,6 +1157,13 @@ body[data-score-effect="shake"] .fx { animation: fx-shake var(--fx-duration, 700
   80% { transform: translateX(3px); }
 }
 
+body[data-score-effect="float"] .fx { animation: fx-float var(--fx-duration, 700ms) ease; }
+@keyframes fx-float {
+  0%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-10px); }
+  70% { transform: translateY(-4px); }
+}
+
 /* 彩带 */
 .confetti-layer {
   position: absolute;
@@ -1500,8 +1507,6 @@ body[data-display-style="kde"] .score-bar { height: 3px; }
 /* ---------- 自由配置：只保留基础排版，装饰元素交给现有设置 ---------- */
 body[data-display-style="custom"] .topbar::after { display: none; }
 body[data-display-style="custom"] .topbar h1 { font-size: var(--title-size, clamp(24px, 2.8vw, 38px)); }
-body[data-display-style="custom"] .rank,
-body[data-display-style="custom"] .score-bar { display: none; }
 
 /* ---------- 古风雅集：宣纸、宋楷标题、朱砂印章式标题线 ---------- */
 body[data-display-style="guofeng"][data-theme] {

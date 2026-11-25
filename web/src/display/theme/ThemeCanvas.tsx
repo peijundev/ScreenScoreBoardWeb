@@ -23,8 +23,10 @@ export default function ThemeCanvas({
   countdown: CountdownRuntime | null;
 }): JSX.Element | null {
   if (!theme) return null;
-  const { canvas, layers } = theme;
-  const bg = canvas.background;
+  const canvas = theme.canvas;
+  const bg = canvas?.background;
+  if (!canvas || !bg || !Array.isArray(theme.layers) || !Array.isArray(theme.widgets)) return null;
+  const layers = theme.layers;
   const widgets = theme.widgets.filter((w) => w.surface === 'canvas' && w.visible !== false);
   if (!layers.length && bg.type === 'none' && !widgets.length) return null;
   const ctx: WidgetContext = {
@@ -61,7 +63,8 @@ export default function ThemeCanvas({
         </foreignObject>
       ))}
       {layers.map((layer) => {
-        if (layer.visible === false) return null;
+        if (!layer || typeof layer !== 'object' || layer.visible === false) return null;
+        if (!Array.isArray(layer.nodes)) return null;
         const transform = [
           `translate(${layer.x} ${layer.y})`,
           layer.rotation ? `rotate(${layer.rotation})` : '',
@@ -74,7 +77,9 @@ export default function ThemeCanvas({
             style={{ mixBlendMode: layer.blendMode }}
             transform={transform || undefined}
           >
-            {layer.nodes.map((node) => <ThemeNodeShape key={node.id} node={node} />)}
+            {layer.nodes.map((node) => (
+              node ? <ThemeNodeShape key={node.id} node={node} /> : null
+            ))}
           </g>
         );
       })}

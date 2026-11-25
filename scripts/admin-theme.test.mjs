@@ -276,3 +276,22 @@ test('管理端入口包含首屏主题初始化脚本', () => {
   assert.match(html, /data-theme="macos-light"/);
   assert.match(html, /macos-light/);
 });
+
+test('管理端主题并入外观设置，顶栏显示后端端口', () => {
+  const toolbar = readFileSync(
+    path.join(root, 'web/src/admin/components/Toolbar.tsx'), 'utf8',
+  );
+  const picker = readFileSync(
+    path.join(root, 'web/src/admin/components/AdminThemePicker.tsx'), 'utf8',
+  );
+  const css = readFileSync(path.join(root, 'public/admin.css'), 'utf8');
+  assert.match(toolbar, /<AdminThemePicker inline \/>/, '主题选择器内嵌到外观设置');
+  assert.doesNotMatch(toolbar, /<AdminThemePicker \/>/, '顶栏不再保留独立主题选择器');
+  assert.match(toolbar, /appearance-menu-sep/, '外观设置面板含分隔线');
+  assert.match(picker, /inline = false/, '主题选择器支持内嵌模式');
+  assert.match(picker, /admin-theme-subsection/, '内嵌模式平铺开关外观参数');
+  assert.match(toolbar, /version\?\.port/, '顶栏读取后端端口');
+  assert.match(toolbar, /app-port/, '顶栏渲染端口徽标');
+  assert.match(css, /\.app-port/, '端口徽标样式存在');
+  assert.match(css, /\.admin-theme-picker\.inline/, '内嵌主题选择器样式存在');
+});

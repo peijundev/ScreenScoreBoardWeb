@@ -109,8 +109,8 @@ export default function ThemeScriptLayer({
   const active = Boolean(
     theme && script?.enabled === true && source.trim() && settings.themeScriptEnabled === true,
   );
-  const width = theme?.canvas.width || 1920;
-  const height = theme?.canvas.height || 1080;
+  const width = Number(theme?.canvas?.width) || 1920;
+  const height = Number(theme?.canvas?.height) || 1080;
   const fps = Math.max(1, Math.min(30, Number(settings.themeScriptFps) || 8));
   const timeoutMs = Math.max(20, Math.min(500, Number(settings.themeScriptTimeoutMs) || 120));
 

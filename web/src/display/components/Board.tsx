@@ -38,7 +38,7 @@ function cardStyle(entity: Person | Team, layout: Layout | null): CSSProperties 
 }
 
 function widgetFor(theme: ThemeV2 | null | undefined, surface: string, slot: string): ThemeWidget | undefined {
-  return theme?.widgets.find((w) => w.surface === surface && w.slot === slot && w.visible !== false);
+  return theme?.widgets?.find((w) => w.surface === surface && w.slot === slot && w.visible !== false);
 }
 
 function slotOr(

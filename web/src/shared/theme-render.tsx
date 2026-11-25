@@ -16,7 +16,7 @@ function fontStack(family: string): string {
 
 export function pathData(node: ThemeNode): string {
   const pts = node.points;
-  if (!pts.length) return '';
+  if (!Array.isArray(pts) || !pts.length) return '';
   const ox = node.x;
   const oy = node.y;
   const p = (n: number) => Math.round(n * 100) / 100;
