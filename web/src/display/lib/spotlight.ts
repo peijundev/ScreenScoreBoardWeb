@@ -6,9 +6,12 @@ import {
   effectDuration,
   hideOriginalCard,
   injectSpotDelta,
+  overlayStage,
   prefersReducedMotion,
   showOriginalCard,
   spotlightSize,
+  stageRect,
+  stageSize,
 } from './core';
 
 export interface SpotlightTarget {
@@ -88,7 +91,7 @@ function ensureSession(s: Settings): Session {
   if (s.spotlightScrimEnabled === false) scrim.style.display = 'none';
   scrim.style.opacity = '0';
   overlay.appendChild(scrim);
-  document.body.appendChild(overlay);
+  overlayStage().appendChild(overlay);
   scrim.animate([{ opacity: 0 }, { opacity: 1 }], { duration: SCRIM_FADE, fill: 'forwards' });
   session = {
     overlay,
@@ -97,7 +100,7 @@ function ensureSession(s: Settings): Session {
     transition: transitionOf(s),
     theme: String(s.spotlightTheme || 'pop'),
     squeezeCleanup: null,
-    reduced: prefersReducedMotion(),
+    reduced: prefersReducedMotion(s),
   };
   return session;
 }
@@ -116,7 +119,7 @@ function buildSlot(target: SpotlightTarget, s: Settings): Slot | null {
   let height = 0;
   for (const el of visible) {
     const size = spotlightSize(el, s);
-    const rect = el.getBoundingClientRect();
+    const rect = size.rect;
     const card = document.createElement('div');
     card.className = 'spotlight-parallel-card';
     card.style.width = size.width + 'px';
@@ -141,7 +144,7 @@ function buildSlot(target: SpotlightTarget, s: Settings): Slot | null {
   width += INNER_GAP * Math.max(0, cards.length - 1);
 
   // 初始占据原卡位置，随后由 layout 飞入居中。
-  const first = visible[0].getBoundingClientRect();
+  const first = stageRect(visible[0].getBoundingClientRect());
   group.style.left = Math.round(first.left) + 'px';
   group.style.top = Math.round(first.top) + 'px';
   group.style.width = Math.round(first.width) + 'px';
@@ -201,7 +204,8 @@ function layout(sess: Session, s: Settings): void {
   const live = sess.slots.filter((sl) => !sl.leaving);
   if (!live.length) return;
   const gap = clamp(Number(s.spotlightParallelGap) || 0, 0, 120);
-  const maxWidth = Math.max(240, window.innerWidth * 0.92);
+  const stage = stageSize();
+  const maxWidth = Math.max(240, stage.width * 0.92);
 
   const rawTotal =
     live.reduce((sum, sl) => sum + sl.baseWidth, 0) + gap * Math.max(0, live.length - 1);
@@ -221,8 +225,8 @@ function layout(sess: Session, s: Settings): void {
   );
   const totalWidth = widths.reduce((a, b) => a + b, 0) + gap * Math.max(0, live.length - 1);
   const maxHeight = Math.max(...heights);
-  let x = Math.round((window.innerWidth - totalWidth) / 2);
-  const top = Math.round((window.innerHeight - maxHeight) / 2);
+  let x = Math.round((stage.width - totalWidth) / 2);
+  const top = Math.round((stage.height - maxHeight) / 2);
 
   live.forEach((slot, i) => {
     const box: Box = { left: x, top, width: widths[i], height: heights[i] };
@@ -277,11 +281,11 @@ function leaveSlot(sess: Session, slot: Slot, s: Settings): void {
 function applySqueeze(sess: Session, board: HTMLElement, skip: Set<HTMLElement>, s: Settings): void {
   if ((s.spotlightTheme || 'pop') !== 'squeeze' || sess.squeezeCleanup) return;
   const anims: Animation[] = [];
-  const centerX = window.innerWidth / 2;
+  const centerX = stageSize().width / 2;
   const dur = Math.max(240, sess.transition);
   board.querySelectorAll<HTMLElement>('.card[data-kind], .member[data-person]').forEach((n) => {
     if (skip.has(n)) return;
-    const r = n.getBoundingClientRect();
+    const r = stageRect(n.getBoundingClientRect());
     if (!r.width || !r.height) return;
     const dir = r.left + r.width / 2 < centerX ? -1 : 1;
     const dist = Math.min(260, Math.max(70, Math.abs(centerX - (r.left + r.width / 2)) * 0.35));

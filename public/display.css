@@ -1,4 +1,10 @@
 /* 显示端样式：CSS 变量驱动主题 / 密度 / 背景 / 卡片 */
+/* Windows 白板触摸屏：禁止双指 pinch 缩放，避免破坏固定逻辑分辨率画布 */
+html,
+body {
+  touch-action: pan-x pan-y;
+}
+
 :root {
   --cols: 4;
   --accent: #e8a33d;
@@ -688,8 +694,8 @@ body.countdown-fullscreen .overlay-clock { display: none !important; }
   50% { opacity: 0.25; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .marquee[data-effect="scroll"] span { animation: none; }
-  .marquee[data-effect="blink"] span { animation: none; }
+  html:not([data-force-motion="on"]) .marquee[data-effect="scroll"] span { animation: none; }
+  html:not([data-force-motion="on"]) .marquee[data-effect="blink"] span { animation: none; }
 }
 
 /* ---- 欢迎幕布 ---- */
@@ -1265,7 +1271,7 @@ body[data-score-effect="float"] .fx { animation: fx-float var(--fx-duration, 700
   100% { opacity: 0; transform: translate(-50%, -46px) scale(1.14); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .spot-delta { animation: none; display: none; }
+  html:not([data-force-motion="on"]) .spot-delta { animation: none; display: none; }
 }
 
 /* 原位聚光灯：背景压暗 + 目标卡片光晕 */
@@ -1287,7 +1293,7 @@ body[data-score-effect="float"] .fx { animation: fx-float var(--fx-duration, 700
   to { opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .highlight-scrim { display: none; }
+  html:not([data-force-motion="on"]) .highlight-scrim { display: none; }
 }
 
 /* 名次升降动画 */
@@ -1368,11 +1374,16 @@ body[data-score-effect="float"] .fx { animation: fx-float var(--fx-duration, 700
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .fx, .dot.connecting, .countdown-big.ended .countdown-ring { animation: none !important; }
-  .ink-art { animation: none !important; }
-  .ink-petals { display: none !important; }
-  .fx-delta, .confetti-layer, .spotlight-overlay, .spotlight-return-overlay,
-  .spotlight-parallel-overlay { display: none; }
+  html:not([data-force-motion="on"]) .fx,
+  html:not([data-force-motion="on"]) .dot.connecting,
+  html:not([data-force-motion="on"]) .countdown-big.ended .countdown-ring { animation: none !important; }
+  html:not([data-force-motion="on"]) .ink-art { animation: none !important; }
+  html:not([data-force-motion="on"]) .ink-petals { display: none !important; }
+  html:not([data-force-motion="on"]) .fx-delta,
+  html:not([data-force-motion="on"]) .confetti-layer,
+  html:not([data-force-motion="on"]) .spotlight-overlay,
+  html:not([data-force-motion="on"]) .spotlight-return-overlay,
+  html:not([data-force-motion="on"]) .spotlight-parallel-overlay { display: none; }
 }
 
 /* ============================================================

@@ -2,6 +2,7 @@
 import type { Layout, Person, Project, Settings, Team } from '../../shared/types';
 import { playPresetSound, playSoundFile } from '../../shared/sound';
 import { spotlightMetrics } from '../../shared/spotlightMetrics';
+import { isElectronRuntime } from '../../shared/platform';
 
 export const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, v));
 export const round2 = (v: number): number => Math.round(v * 100) / 100;
@@ -65,14 +66,23 @@ export function fontStackOf(s: Settings, fontKey: string, customKey: string): st
   return '';
 }
 
-export function prefersReducedMotion(): boolean {
-  return Boolean(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+export function prefersReducedMotion(s?: Settings): boolean {
+  const systemReduce = Boolean(
+    window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  );
+  // 项目明确关闭「强制播放特效」时跟随系统；否则浏览器与 Electron 都强制播放。
+  if (s && s.forceMotion === false) return systemReduce;
+  if (isElectronRuntime()) return false;
+  return systemReduce;
 }
 
 /** 应用全部外观设置（body data-* + CSS 变量），移植自 applyAppearance */
 export function applyAppearance(s: Settings): void {
   const root = document.documentElement;
   const body = document.body;
+
+  // 「强制播放特效」：同时影响 JS 与 CSS 的 reduced-motion 分支
+  root.dataset.forceMotion = s.forceMotion === false ? 'off' : 'on';
 
   // featureMobileAdmin / adminTouchTargetSize 只影响管理端布局与触控目标，
   // 显示端没有对应语义，明确跳过（设置仍走完整校验、契约与持久化链路）。
@@ -607,14 +617,51 @@ function applySpotlightCardStyle(clone: HTMLElement, s: Settings): void {
   }
 }
 
-export function spotlightSize(el: HTMLElement, s: Settings): { width: number; height: number; rect: DOMRect } {
-  const rect = el.getBoundingClientRect();
+export interface StageRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+/** 特效 overlay 的挂载点：固定分辨率时放在缩放画布内，坐标/尺寸才与卡片一致。 */
+export function overlayStage(): HTMLElement {
+  const canvas = document.querySelector<HTMLElement>('.display-canvas');
+  return canvas && canvas.offsetWidth > 0 ? canvas : document.body;
+}
+
+/** 特效 overlay 挂在画布内，坐标必须是画布本地坐标系而不是视口坐标系。 */
+export function stageSize(): { width: number; height: number } {
+  const stage = overlayStage();
+  return {
+    width: stage.offsetWidth || window.innerWidth,
+    height: stage.offsetHeight || window.innerHeight,
+  };
+}
+
+export function stageRect(rect: DOMRect): StageRect {
+  const stage = overlayStage();
+  const stageRectBox = stage.getBoundingClientRect();
+  const layout = stageSize();
+  const sx = stageRectBox.width > 0 && layout.width > 0 ? stageRectBox.width / layout.width : 1;
+  const sy = stageRectBox.height > 0 && layout.height > 0 ? stageRectBox.height / layout.height : 1;
+  return {
+    left: (rect.left - stageRectBox.left) / sx,
+    top: (rect.top - stageRectBox.top) / sy,
+    width: rect.width / sx,
+    height: rect.height / sy,
+  };
+}
+
+export function spotlightSize(el: HTMLElement, s: Settings): { width: number; height: number; rect: StageRect } {
+  const rect = stageRect(el.getBoundingClientRect());
+  const stage = stageSize();
   const metrics = spotlightMetrics(s);
   if (metrics.proportional) {
     // 原卡片整体等比放大：按目标宽度计算比例，超过屏幕宽/高上限时再等比缩小
-    let width = Math.min(metrics.width, window.innerWidth * 0.9);
+    let width = Math.min(metrics.width, stage.width * 0.9);
     let height = rect.height * (width / rect.width);
-    const maxHeight = window.innerHeight * 0.8;
+    const maxHeight = stage.height * 0.8;
     if (height > maxHeight) {
       const ratio = maxHeight / height;
       width *= ratio;
@@ -625,7 +672,7 @@ export function spotlightSize(el: HTMLElement, s: Settings): { width: number; he
   const width = metrics.width;
   let height = metrics.height;
   if (!height) height = rect.height * (width / rect.width);
-  height = Math.min(Math.max(height, 120), window.innerHeight * 0.8);
+  height = Math.min(Math.max(height, 120), stage.height * 0.8);
   return { width, height, rect };
 }
 
@@ -634,14 +681,15 @@ function buildSpotlightItems(
   s: Settings,
   delta: number | undefined,
   boxClass: string,
-): Array<{ el: HTMLElement; box: HTMLElement; rect: DOMRect; width: number; height: number; target?: { left: number; top: number; width: number; height: number } }> {
+): Array<{ el: HTMLElement; box: HTMLElement; rect: StageRect; width: number; height: number; target?: { left: number; top: number; width: number; height: number } }> {
   const items = [];
   for (const el of els) {
-    const rect = el.getBoundingClientRect();
+    const measured = spotlightSize(el, s);
+    const rect = measured.rect;
     if (!rect.width || !rect.height) continue;
     const clone = cloneCard(el, s);
     injectSpotDelta(clone, delta, s);
-    const { width, height } = spotlightSize(el, s);
+    const { width, height } = measured;
     if (s.spotlightSizeMode === 'scale') {
       // 保持原卡片布局与宽高比，用整体缩放放大，而不是拉宽卡片
       const ratio = width / rect.width;
@@ -666,10 +714,11 @@ function centerTargets(
   items: Array<{ width: number; height: number; target?: { left: number; top: number; width: number; height: number } }>,
 ): void {
   const gap = 20;
+  const stage = stageSize();
   const totalW = items.reduce((sum, it) => sum + it.width, 0) + gap * (items.length - 1);
-  let x = (window.innerWidth - totalW) / 2;
+  let x = (stage.width - totalW) / 2;
   for (const it of items) {
-    it.target = { left: x, top: (window.innerHeight - it.height) / 2, width: it.width, height: it.height };
+    it.target = { left: x, top: (stage.height - it.height) / 2, width: it.width, height: it.height };
     x += it.width + gap;
   }
 }
@@ -706,7 +755,7 @@ function spawnSpotlightReturn(
   centerTargets(items);
   items.forEach((it) => overlay.appendChild(it.box));
 
-  document.body.appendChild(overlay);
+  overlayStage().appendChild(overlay);
   items.forEach((it) => {
     hideOriginalCard(it.el);
   });
@@ -764,7 +813,7 @@ function spawnSpotlightGenie(
   centerTargets(items);
   items.forEach((it) => overlay.appendChild(it.box));
 
-  document.body.appendChild(overlay);
+  overlayStage().appendChild(overlay);
   items.forEach((it) => {
     hideOriginalCard(it.el);
   });
@@ -806,12 +855,12 @@ function spawnSpotlightGenie(
 
 /** 联动避开：让非目标卡片向两侧退让，返回取消函数。 */
 function runSqueezeAway(board: HTMLElement, els: HTMLElement[], total: number): () => void {
-  const boardRect = board.getBoundingClientRect();
+  const boardRect = stageRect(board.getBoundingClientRect());
   const centerX = boardRect.left + boardRect.width / 2;
   const awayAnims: Animation[] = [];
   board.querySelectorAll<HTMLElement>('.card[data-kind], .member[data-person]').forEach((n) => {
     if (els.includes(n)) return;
-    const r = n.getBoundingClientRect();
+    const r = stageRect(n.getBoundingClientRect());
     const dir = r.left + r.width / 2 < centerX ? -1 : 1;
     const dist = Math.min(260, Math.max(70, Math.abs(centerX - (r.left + r.width / 2)) * 0.35));
     const away = 'translateX(' + Math.round(dir * dist) + 'px) scale(0.8)';
@@ -890,7 +939,7 @@ function spawnSpotlightPop(
     stack.appendChild(box);
   }
   overlay.appendChild(stack);
-  document.body.appendChild(overlay);
+  overlayStage().appendChild(overlay);
   if (persistent) {
     // 锁定突显：隐藏原卡，赢家一直停留在中央，直到结束抢答
     els.forEach((el) => hideOriginalCard(el));
@@ -926,7 +975,7 @@ function spawnSpotlightZoom(
   const overlay = document.createElement('div');
   overlay.className = 'spotlight-overlay spotlight-zoom-overlay';
   overlay.style.setProperty('--spot-duration', total + 'ms');
-  document.body.appendChild(overlay);
+  overlayStage().appendChild(overlay);
 
   const items = buildSpotlightItems(els, s, delta, 'spotlight-item');
   if (!items.length) {
@@ -989,7 +1038,7 @@ export function spawnSpotlight(
   durationOverride?: number,
 ): void {
   const theme = s.spotlightTheme || (s.spotlightReturnToOrigin ? 'fly' : 'pop');
-  if (!prefersReducedMotion()) {
+  if (!prefersReducedMotion(s)) {
     // 原卡片按比例放大：统一使用图片式缩放（从原位置放大、停留、缩回）
     if (s.spotlightSizeMode === 'scale') {
       const setup = theme === 'squeeze'
@@ -1008,7 +1057,7 @@ export function spawnHighlight(els: HTMLElement[], s: Settings): void {
   const total = Math.max(1000, effectDuration(s) + 400);
   const scrim = document.createElement('div');
   scrim.className = 'highlight-scrim';
-  document.body.appendChild(scrim);
+  overlayStage().appendChild(scrim);
 
   for (const el of els) {
     el.classList.add('highlighting');

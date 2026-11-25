@@ -117,6 +117,11 @@ function attachZoom(win) {
   const wc = win.webContents;
   wc.setZoomMode('manual');
   wc.setZoomFactor(1);
+  // Windows 白板常见触摸屏：禁用 pinch / 视觉缩放，避免双指缩放破坏固定逻辑分辨率
+  try { wc.setVisualZoomLevelLimits(1, 1); } catch (_) {}
+  wc.on('did-finish-load', () => {
+    if (!wc.isDestroyed()) wc.setZoomFactor(1);
+  });
   const apply = (command) => {
     wc.setZoomFactor(nextZoom(wc.getZoomFactor(), command));
   };

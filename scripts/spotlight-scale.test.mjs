@@ -232,4 +232,9 @@ test('特效空引用与「显示不跟设置」修复契约', () => {
   assert.match(canvas, /Array\.isArray\(theme\.layers\)/, '主题画布对缺字段主题降级');
   assert.match(codec, /assertV2Theme/, '主题导入校验 v2 结构');
   assert.match(preview, /function writeStorage/, '预览面板 localStorage 写入有异常保护');
+  assert.match(core, /dataset\.forceMotion/, '强制播放特效写入根元素标记');
+  assert.match(core, /prefersReducedMotion\(s\)/, '特效判断使用项目开关');
+  assert.match(css, /html:not\(\[data-force-motion="on"\]\)/, 'reduced-motion CSS 受项目开关控制');
+  const schema = readFileSync(path.join(root, 'web/src/admin/settings/schema.ts'), 'utf8');
+  assert.match(schema, /k: 'forceMotion'/, '管理端提供强制播放特效开关');
 });

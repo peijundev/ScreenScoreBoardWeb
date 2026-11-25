@@ -65,6 +65,7 @@ const DEFAULT_SETTINGS = {
   scoreEffectDuration: 700, // 特效时长 ms（200–3000）
   scoreEffectColor: '',     // '' = 自动（加分绿/减分红）；或 #rrggbb
   scoreEffectOnlyPositive: false, // 仅加分触发特效
+  forceMotion: true,          // 忽略系统「减少动态效果」，始终播放动画特效
   // 主题脚本：默认关闭；脚本运行在不透明源沙箱里，只能返回受限绘制指令
   themeScriptEnabled: false, // 是否允许执行主题脚本
   themeScriptFps: 8,         // 主题脚本刷新率 1–30 fps
@@ -497,6 +498,7 @@ const SETTINGS_VALIDATORS = {
     return /^#[0-9a-fA-F]{6}$/.test(v) ? v : (() => { throw new OpError('特效颜色须为 #rrggbb 或留空'); })();
   },
   scoreEffectOnlyPositive: (v) => Boolean(v),
+  forceMotion: (v) => boolStrict(v, '强制播放特效开关'),
   themeScriptEnabled: (v) => boolStrict(v, '主题脚本开关'),
   themeScriptFps: (v) => intRange(v, 1, 30, '主题脚本帧率须为 1–30'),
   themeScriptTimeoutMs: (v) => intRange(v, 20, 500, '主题脚本单帧超时须为 20–500 ms'),

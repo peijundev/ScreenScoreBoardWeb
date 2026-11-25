@@ -355,6 +355,7 @@ export const SETTINGS_GROUPS: Group[] = [
       },
       { t: 'range', k: 'scoreEffectDuration', label: '特效时长', min: 200, max: 3000, step: 50, fmt: 'num', unit: ' ms' },
       { t: 'check', k: 'scoreEffectOnlyPositive', label: '仅加分时触发特效/声音' },
+      { t: 'check', k: 'forceMotion', label: '强制播放特效（忽略系统「减少动态效果」）' },
       { t: 'colorToggle', k: 'scoreEffectColor', label: '自定义特效颜色' },
       { t: 'check', k: 'soundEnabled', label: '记分音效（在显示端点一下页面即可解锁声音）' },
       { t: 'range', k: 'soundVolume', label: '音效音量', min: 0, max: 1, step: 0.05, fmt: 'pct', unit: '%' },

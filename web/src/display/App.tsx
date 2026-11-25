@@ -376,7 +376,7 @@ export default function App(): JSX.Element {
 
     // 只在「按分数排序 + 卡片顺序真的变化」时读布局，避免每次广播都强制 reflow
     const canFlip = settings.sortAnimation && settings.displayStyle !== 'trueage' &&
-      settings.sortBy === 'score' && items.length <= FLIP_MAX_ITEMS && !free && !prefersReducedMotion();
+      settings.sortBy === 'score' && items.length <= FLIP_MAX_ITEMS && !free && !prefersReducedMotion(settings);
     if (!canFlip) {
       prevRects.current = new Map();
       prevOrderKey.current = orderKey;
@@ -425,7 +425,7 @@ export default function App(): JSX.Element {
     if (!board) return;
 
     // 名次升降动画
-    if (settings.rankChangeAnimation && settings.displayStyle !== 'trueage' && ranked && !prefersReducedMotion()) {
+    if (settings.rankChangeAnimation && settings.displayStyle !== 'trueage' && ranked && !prefersReducedMotion(settings)) {
       items.forEach((it, i) => {
         const id = it.kind === 'person' && it.person ? it.person.id : it.team?.id;
         const rank = ranks[i];
@@ -522,7 +522,7 @@ export default function App(): JSX.Element {
           }))
           .filter((t) => t.els.length > 0);
         if (targets.length) {
-          if (mode === 'parallel' && !prefersReducedMotion()) {
+          if (mode === 'parallel' && !prefersReducedMotion(settings)) {
             playSpotlightParallel(board, targets, settings);
           } else {
             if (mode === 'interrupt') {
@@ -549,10 +549,10 @@ export default function App(): JSX.Element {
           board.querySelector<HTMLElement>('.card[data-kind="person"][data-id="' + p.id + '"]');
         if (el) els.push(el);
       }
-      if (els.length && !prefersReducedMotion()) spawnHighlight(els, settings);
+      if (els.length && !prefersReducedMotion(settings)) spawnHighlight(els, settings);
     }
 
-    if (settings.scoreRolling && settings.displayStyle !== 'trueage' && !prefersReducedMotion()) {
+    if (settings.scoreRolling && settings.displayStyle !== 'trueage' && !prefersReducedMotion(settings)) {
       for (const [personId, delta] of deltas) {
         if (!delta) continue;
         const el = board.querySelector<HTMLElement>('.score-num[data-person-score="' + personId + '"]');
@@ -618,7 +618,7 @@ export default function App(): JSX.Element {
       .filter((target) => target.els.length > 0);
     if (!targets.length) return;
 
-    if (mode === 'parallel' && !prefersReducedMotion()) {
+    if (mode === 'parallel' && !prefersReducedMotion(settings)) {
       playSpotlightParallel(board, targets, settings);
       return;
     }

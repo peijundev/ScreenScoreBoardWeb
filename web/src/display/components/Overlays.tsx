@@ -131,7 +131,7 @@ export function Countdown({
     >
       {settings.countdownTheme === 'ink' && <InkScene text={text} settings={settings} />}
       {settings.countdownTheme === 'video' && !prompt && countdown && (
-        <VideoScene countdown={countdown} remaining={remaining} ended={ended} />
+        <VideoScene countdown={countdown} remaining={remaining} ended={ended} settings={settings} />
       )}
       <div className="countdown-stage">
         <div className="countdown-ring">
@@ -183,10 +183,12 @@ function VideoScene({
   countdown,
   remaining,
   ended,
+  settings,
 }: {
   countdown: CountdownRuntime;
   remaining: number;
   ended: boolean;
+  settings: Settings;
 }): JSX.Element {
   const ref = useRef<HTMLVideoElement>(null);
   const totalSec = Math.max(1, (countdown.durationMs || 10000) / 1000);
@@ -197,7 +199,7 @@ function VideoScene({
     const duration = video.duration || 10.1;
     const rate = Math.min(4, Math.max(0.25, duration / totalSec));
     video.playbackRate = rate;
-    const shouldPlay = countdown.state === 'running' && !ended && !prefersReducedMotion();
+    const shouldPlay = countdown.state === 'running' && !ended && !prefersReducedMotion(settings);
     if (shouldPlay) {
       if (video.paused) {
         const played = Math.max(0, Math.min(1, 1 - remaining / totalSec));

@@ -64,7 +64,7 @@ export const FEATURE_GROUPS: Group[] = [
         t: 'select',
         k: 'countdownTheme',
         label: '倒计时主题',
-        opts: [['classic', '经典'], ['ink', '水墨（静态画面）'], ['video', '水墨影片（原片）']],
+        opts: [['classic', '经典'], ['ink', '水墨（静态画面）（废案）'], ['video', '水墨影片（原片）（废案）']],
       },
       {
         t: 'select',

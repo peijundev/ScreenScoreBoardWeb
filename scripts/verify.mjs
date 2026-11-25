@@ -227,6 +227,7 @@ async function main() {
   st0 = await getState();
   assert(st0.projects[projectId].settings.title === '计分板', '项目默认设置正确');
   assert(st0.projects[projectId].settings.displayStyle === 'guofeng', '默认显示风格为古风雅集');
+  assert(st0.projects[projectId].settings.forceMotion === true, '默认强制播放特效（兼容 Windows 关闭动画）');
   r = await fetch(BASE + '/../etc/passwd');
   assert(r.status === 400 || r.status === 404, '路径穿越被拒绝');
   r = await fetch(BASE + '/admin.css');
@@ -638,11 +639,17 @@ async function main() {
       cardStyle: 'neon', glassBlur: 18, glassOpacity: 0.4,
       scoreEffect: 'confetti', scoreEffectDuration: 1200, scoreEffectColor: '#ff8800',
       scoreEffectOnlyPositive: true, soundEnabled: true, soundPreset: 'chime', soundVolume: 0.6,
+      forceMotion: false,
     },
   });
   s = await viewer.waitState((st) => P(st).settings.cardStyle === 'neon');
   assert(P(s).settings.scoreEffect === 'confetti' && P(s).settings.soundPreset === 'chime' &&
     P(s).settings.soundVolume === 0.6, '卡片样式/特效/内置音效/音效同步');
+  s = await viewer.waitState((st) => P(st).settings.forceMotion === false);
+  assert(true, '强制播放特效开关同步');
+  await adminOp('updateSettings', { patch: { forceMotion: 'yes' } }).catch((e) => {
+    assert(/布尔/.test(e.message), '非法强制播放特效开关被拒绝');
+  });
 
   await adminOp('updateSettings', { patch: { customSound: namedSound.path } });
   s = await viewer.waitState((st) => P(st).settings.customSound === namedSound.path);
@@ -1724,7 +1731,8 @@ async function main() {
   assert(Object.keys(restored.projects).length === 1, '重启后项目列表恢复');
   assert(rp.settings.featureRankTies === true && rp.settings.rankTieMode === 'competition' &&
     rp.settings.featureLeaderboard === true && rp.settings.displayView === 'leaderboard' &&
-    rp.settings.featureCountdown === false, '重启后新功能开关恢复');
+    rp.settings.featureCountdown === false && rp.settings.forceMotion === false,
+    '重启后新功能开关恢复');
   assert(rp.settings.featureMobileAdmin === false && rp.settings.adminTouchTargetSize === 52,
     '重启后管理端移动布局与触控目标尺寸恢复');
   assert(rp.settings.featureMemberConsole === true &&

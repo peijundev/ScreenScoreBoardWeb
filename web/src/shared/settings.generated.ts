@@ -61,6 +61,7 @@ export interface SettingsFields {
   scoreEffectDuration: number;
   scoreEffectColor: string;
   scoreEffectOnlyPositive: boolean;
+  forceMotion: boolean;
   themeScriptEnabled: boolean;
   themeScriptFps: number;
   themeScriptTimeoutMs: number;
